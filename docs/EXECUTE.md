@@ -103,7 +103,7 @@ DB_NAME=social_visualizer_db   # db/schema.sql 이 생성하는 이름과 일치
 
 - <b>오픈 AI 사용</b>
 각 모델 서버(Llama/Qwen/BGE-M3/FLUX)를 직접 설치·실행하는 방법은
-[`llama-finetune/serving/gpu_server_ops.md`](./llama-finetune/serving/gpu_server_ops.md)를 참고한다.
+[`llama-finetune/serving/gpu_server_ops.md`](../llama-finetune/serving/gpu_server_ops.md)를 참고한다.
 이때 표준 로컬 구성(포트 8001~8005)을 그대로 쓴다면 수정하지 않아도 되며, `LLM_API_KEY` 는 값 검증을 하지 않지만 줄 자체를 지우면 KeyError가 발생하므로 `dummy` 로 둔다.<br><br>
 
 - <b>상용 API 사용</b>
