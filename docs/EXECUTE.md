@@ -1,4 +1,4 @@
-e# 설치 및 실행 가이드
+# 설치 및 실행 가이드
 
 ## To-do list
 - [ ] Python 3.11 · Node.js 20.19+ · MySQL 설치
