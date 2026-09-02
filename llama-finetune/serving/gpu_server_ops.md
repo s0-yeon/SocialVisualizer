@@ -75,8 +75,6 @@ CUDA_VISIBLE_DEVICES=2 vllm serve /workspace/models/socialvisualizer-llama-v5-me
 - Model: `socialvisualizer-llama-index`
 - 용도: `extract_graph`, `community_reports`
 
----
-
 ### 2. BGE-M3 임베딩 서버
 
 GPU3에서 임베딩 모델을 실행한다.
@@ -96,8 +94,6 @@ CUDA_VISIBLE_DEVICES=3 vllm serve BAAI/bge-m3 \
 - Model: `BAAI/bge-m3`
 - 용도: 텍스트 임베딩
 
----
-
 ### 3. Qwen2.5-7B-Instruct
 
 GPU3에서 서브태스크용 모델을 실행한다.
@@ -116,8 +112,6 @@ CUDA_VISIBLE_DEVICES=3 vllm serve Qwen/Qwen2.5-7B-Instruct \
 - Model: `Qwen2.5-7B-Instruct`
 - 용도: 서브태스크용 서빙
 
----
-
 ### 4. FLUX 이미지 생성 서버
 
 GPU3에서 이미지/아바타 생성 서버를 실행한다. Llama 서빙용 venv가 아니라
@@ -134,8 +128,6 @@ CUDA_VISIBLE_DEVICES=3 python flux_server.py
 - GPU: `3`
 - venv: `/workspace/flux-venv` (Llama 서빙용과 별도)
 - 용도: 이미지/아바타 생성
-
----
 
 ### 5. Query 모델
 

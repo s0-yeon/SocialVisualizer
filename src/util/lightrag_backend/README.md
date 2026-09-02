@@ -1,12 +1,12 @@
 # LightRAG 사용 가이드
 
+본 문서는 SocialVisualizer의 지식 그래프 생성 기법을 **기본 GraphRAG에서 LightRAG로 전환·설정**하고, 나아가 같은 패턴으로 **제3의 RAG 엔진**을 붙이거나 **LightRAG 자체 웹 UI**를 별도로 띄우는 방법을 안내하는 **개발자용 가이드**이다.
+
 ---
 
-## LightRAG 기능 켜기
+## 🔌 LightRAG 기능 켜기
 
 SocialVisualizer는 기본적으로 GraphRAG로 동작한다. 인덱싱/질의 엔진을 LightRAG로 바꾸고 싶을 때만 아래를 추가로 진행하면 된다. 진행하지 않으면 GraphRAG 그대로 동작하니 건너뛰어도 무방하다.
-
----
 
 ### 1. LightRAG 클론
 
@@ -22,8 +22,6 @@ LightRAG는 pip 패키지로 설치하지 않고 소스를 그대로 클론해�
 git clone https://github.com/HKUDS/LightRAG.git
 ```
 
----
-
 ### 2. LightRAG 엔진 전환
 
 `src/config/settings.py`의 `RAG_ENGINE` 값을 바꾼다.
@@ -34,33 +32,21 @@ RAG_ENGINE = "lightrag"   # 기본값은 "graphrag"
 
 ---
 
-## RAG 사용자 편의/프롬프트 설정
-
----
+## ⚙️ RAG 사용자 편의/프롬프트 설정
 
 ### 1. 사용자 편의 설정 (인덱싱/질의/통계 추출)
 
 - `src/util/graphrag_*.py` — GraphRAG 엔진 전용 로직
-
 - `src/util/jobs/job_run_graphrag.py` — GraphRAG 인덱싱 파이프라인
-
 - `src/graphrag_parquet2json.py` — GraphRAG 그래프 시각화용 JSON 변환기
-
 - `src/util/lightrag_backend/*.py` — LightRAG 엔진 전용 로직
-
 - `src/util/jobs/job_run_lightrag.py` — LightRAG 인덱싱 파이프라인
-
 - `src/util/extract_statics.py` — 통계 추출 (GraphRAG/LightRAG 공용)
-
----
 
 ### 2. 프롬프트 설정
 
 프롬프트를 수정하거나 설계해서 사용하고 싶다면 다음과 같은 프롬프트 내용을 참고해라.
-
 LightRAG는 라이브러리 내 기본 프롬프트를 사용하고 있으니, 프롬프트를 수정하여 사용하는 것을 권장한다.
-
----
 
 #### 2-1. LightRAG 프롬프트
 
@@ -86,19 +72,15 @@ GraphRAG는 인덱싱과 질의(LocalSearch/GlobalSearch) 프롬프트를 프로
 
 ---
 
-## 다른 RAG 엔진을 붙이고 싶을 때
+## 🧩 다른 RAG 엔진을 붙이고 싶을 때
 
 GraphRAG/LightRAG 두 엔진이 비슷한 패턴으로 설계되어 있으니, 세 번째 엔진(예: 다른 RAG 프레임워크)도 같은 패턴을 따라가면 된다.
 아래 순서를 참고해라.
-
----
 
 ### 1. 엔진 이름 등록
 
 `src/config/settings.py`의 `SUPPORTED_RAG_ENGINES`에 새 엔진 이름을 추가한다(안 하면 앱 시작 시
 ValueError로 막힌다).
-
----
 
 ### 2. 전용 패키지 만들기
 
@@ -116,8 +98,6 @@ ValueError로 막힌다).
 - `<엔진명>_progress.py` — 인덱싱 진행률 표시
 - `<엔진명>_loop.py` — 동기 코드에서 async 질의를 실행하는 공용 백그라운드 이벤트 루프
 
----
-
 ### 3. 인덱싱 job 작성
 
 `src/util/jobs/job_run_<엔진명>.py`를 만들고 `job_run_lightrag.py`/`job_run_graphrag.py`와 같은
@@ -129,8 +109,6 @@ ValueError로 막힌다).
 - `build_graph_json`
   함수 이름을 동일하게 작성하면 app.py는 `RAG_ENGINE` 값에 따라 import 경로만 바꿔서 그대로 재사용할 수 있다.
 
----
-
 ### 4. 경로 세그먼트 추가
 
 `src/util/user_path.py`에 새로운 엔진 전용 작업 디렉터리 경로를 추가한다
@@ -139,8 +117,6 @@ ValueError로 막힌다).
 - `GRAPH_JSON_PATH`/ `LIGHTRAG_GRAPH_JSON_PATH`처럼 `<엔진명>_GRAPH_JSON_PATH`
   `_account_indexed()` 함수에도 `elif RAG_ENGINE == "<엔진명>":` 분기를 추가한다 (안 하면
   새 엔진으로 인덱싱해도 계정 목록에 "인덱싱 안 됨"으로 표시됨).
-
----
 
 ### 5. `app.py`에 분기 추가
 
@@ -154,8 +130,6 @@ ValueError로 막힌다).
 - `/graph-data` 라우트 — 그래프 JSON 경로 선택
 - `/upload-attachments` 라우트, `util/attachment_manager.py` — 첨부파일 반영 업데이트 함수 선택
 
----
-
 ### 6. DB 저장은 대부분 그대로 재사용 가능
 
 `src/util/database/db_writer.py`의 `save_query_to_db`, `save_mail_summarize_to_db` 등은 엔진에
@@ -164,17 +138,13 @@ ValueError로 막힌다).
 `extract_graph` 등)를 하드코딩하고 있어서 GraphRAG 전용이다 — 새 엔진에서 인덱싱 비용/통계를
 집계하고 싶다면 이 함수의 엔진별 버전을 따로 만들어야 한다.
 
----
-
 ### 7. 프롬프트
 
 위 섹션 중 `RAG 사용자 편의/프롬프트 설정`의 2번 `프롬프트 설정`을 참고해라.
 
 ---
 
-## LightRAG 자체 웹 UI 따로 띄우기 (선택)
-
----
+## 🖥️ LightRAG 자체 웹 UI 따로 띄우기 (선택)
 
 ### 1. uv 설치
 
@@ -203,8 +173,6 @@ uv --version
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
----
-
 ### 2. 전용 가상환경(`lightrag-venv`) 생성 + 의존성 설치
 
 `socialvisualizer-venv`와 별도로 `lightrag-venv`를 하나 더 만든다(uv가 자체적으로 관리하는 전용 가상환경).
@@ -224,15 +192,11 @@ uv sync --extra test --extra offline
 echo 'export UV_PROJECT_ENVIRONMENT=lightrag-venv' >> ~/.bashrc
 ```
 
----
-
 ### 3. 가상환경 활성화
 
 ```bash
 source lightrag-venv/Scripts/activate
 ```
-
----
 
 ### 4. 웹 UI 빌드
 
@@ -249,16 +213,11 @@ bun run build
 cd ..
 ```
 
----
-
 ### 5. 설정 파일(.env) 생성
 
 ```bash
 cp env.example .env
 ```
-
----
-
 
 ### 6. 서버 실행
 

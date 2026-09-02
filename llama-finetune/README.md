@@ -102,6 +102,8 @@ Adapter 하나의 용량은 약 335.6MB이다.
 
 Base Model과 LoRA Adapter를 결합하여 사용할 수 있으며, 본 프로젝트에서는 병합된 모델을 vLLM을 통해 OpenAI-compatible API 형태로 서빙한다.
 
+---
+
 ## 📌 4. 요구 환경
 
 파인튜닝 및 모델 서빙에는 NVIDIA GPU 환경을 권장한다.
@@ -135,6 +137,8 @@ Llama 3.1 8B 모델의 파인튜닝 및 서빙에는 충분한 GPU VRAM이 필�
 - 파인튜닝 설정
 
 따라서 본 프로젝트의 개발 환경과 다른 GPU 환경에서는 관련 설정을 조정해야 할 수 있다.
+
+---
 
 ## 📌 5. 빠른 시작
 
@@ -193,6 +197,8 @@ CUDA_VISIBLE_DEVICES=<GPU_ID> vllm serve <MODEL_PATH> \
 
 > GPU 번호, 모델 경로, 포트 및 GPU 메모리 사용량 관련 설정은 사용자의 실행 환경에 맞게 변경해야 한다.
 
+---
+
 ## 📌 6. SocialVisualizer 연결
 
 SocialVisualizer에서는 그래프 인덱싱과 질의응답에 서로 다른 모델을 사용.
@@ -227,6 +233,8 @@ extract_graph   community_reports   local_search    global_search
 ```
 
 임베딩 모델이나 기타 모델 서버를 함께 사용하는 경우 해당 endpoint도 별도로 설정해야 한다.
+
+---
 
 ## 📌 7. 직접 파인튜닝하기
 
@@ -286,6 +294,8 @@ training_configs/query_lora.yaml
 training_configs/query_merge.yaml
 ```
 
+---
+
 ## 📌 8. 데이터 구축 전제조건
 
 SFT 데이터 구축 스크립트를 실행하기 전에 GraphRAG 파이프라인을 통해 필요한 중간 산출물을 준비해야 한다.
@@ -316,6 +326,8 @@ community_reports.parquet
 ```
 
 SFT 데이터 구축 스크립트는 이러한 GraphRAG 산출물이 이미 존재하는 것을 전제로 동작한다.
+
+---
 
 ## 📌 9. 디렉터리 구조
 
@@ -361,6 +373,8 @@ llama-finetune/
     └── gpu_server_ops.md
 ```
 
+---
+
 ## 📌 10. QA 데이터 세트
 
 `eval/` 디렉터리에는 합성 데이터를 기반으로 작성한 QA 세트를 제공한다.
@@ -372,6 +386,8 @@ eval/
 ```
 
 이 QA 세트는 `query` adapter의 `local_search` SFT 학습 데이터를 만드는 데 사용한 원본으로(`sft_data_construction/query/build_local_sft.py` 참고), 143문항 전체가 train(129)/val(14)로 분할되어 학습 과정에 직접 사용됐다. 따라서 완전히 분리된 held-out 평가셋은 아니며, 질문·정답 형식과 프로덕션 응답 스타일을 확인하는 참고 자료로 제공한다.
+
+---
 
 ## 📌 11. 제한사항 및 재현성
 
@@ -386,6 +402,8 @@ eval/
 - 원본 합성 데이터 및 일부 중간 산출물은 저장소에 포함하지 않는다.
 - GPU 및 라이브러리 버전에 따라 학습 및 서빙 결과가 달라질 수 있다.
 
+---
+
 ## 📌 12. 서빙 운영 문서
 
 본 프로젝트의 개발 GPU 서버에서 사용했던 구체적인 tmux 세션, GPU 번호, 디렉터리 경로 등의 운영 명령은 [`serving/gpu_server_ops.md`](./serving/gpu_server_ops.md)에 정리되어 있다.
@@ -397,6 +415,8 @@ eval/
 - 가상환경 경로
 - 포트
 - tmux 세션 이름
+
+---
 
 ## 📌 13. 라이선스
 
