@@ -445,6 +445,7 @@ def generate_person_descriptions(paths) -> dict:
 {topics_text}
 
 아래 형식으로만 출력하세요. 다른 텍스트는 절대 포함하지 마세요.
+한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 마세요. 문장은 존댓말로 통일하고 반말을 섞지 마세요.
 "관계:" 줄은 반드시 대괄호 태그 [관계: <카테고리>]로 시작해야 합니다. <카테고리>는 가족, 연인, 친구, 동료, 사제, 지인, 기업 중 하나만 사용하세요. 대괄호를 빼먹거나 다른 단어를 쓰면 안 됩니다.
 
 카테고리 판단 기준(위에서부터 순서대로 확인):
@@ -468,40 +469,66 @@ def generate_person_descriptions(paths) -> dict:
         person_prompts.append((person_email, name, prompt))
 
     # 사람 한 명의 프롬프트를 LLM에 넘겨 (이메일, description, relation_label)을 반환한다
+    # LLM 출력에서 관계/내용을 파싱해 (relationship, content, relation_label)로 반환한다
+    def _parse_relation_output(llm_output):
+        rel_m     = re.search(r'관계:\s*(.+)',            llm_output)
+        content_m = re.search(r'자주 주고 받은 내용:\s*(.+)', llm_output)
+        relationship = rel_m.group(1).strip()     if rel_m     else ''
+        content      = content_m.group(1).strip() if content_m else ''
+
+        # [관계: 카테고리] 태그 파싱  person.relation_label 컬럼으로 분리 저장한다
+        tag_m = re.match(r'^\[관계:\s*([^\]]+?)\]\s*', relationship)
+        relation_label = tag_m.group(1).strip() if tag_m else None
+        if tag_m:
+            relationship = relationship[tag_m.end():].strip()
+        return relationship, content, relation_label
+
     def _call_llm(person_email, name, prompt):
-        try:
-            result = client.chat.completions.create(
-                model=os.getenv("SUB_TASK_CHAT_MODEL"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 이메일 데이터를 분석해 인물 관계를 한국어로 간결하게 요약하는 AI입니다."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3
-            )
-            llm_output = result.choices[0].message.content.strip()
-            rel_m     = re.search(r'관계:\s*(.+)',            llm_output)
-            content_m = re.search(r'자주 주고 받은 내용:\s*(.+)', llm_output)
-            relationship = rel_m.group(1).strip()     if rel_m     else ''
-            content      = content_m.group(1).strip() if content_m else ''
+        last_parsed = None
+        feedback = None
+        for attempt in range(1, 4):
+            try:
+                user_content = prompt
+                if feedback:
+                    user_content += f"\n\n[이전 시도 오류] 방금 답변에 다음 문제가 있었습니다: {feedback}. 반드시 한국어(한글)만 사용해서 다시 작성하세요."
+                result = client.chat.completions.create(
+                    model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 이메일 데이터를 분석해 인물 관계를 한국어로 간결하게 요약하는 AI입니다. 반드시 한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 않으며, 존댓말로 통일하고 반말을 섞지 않습니다."
+                        },
+                        {"role": "user", "content": user_content}
+                    ],
+                    temperature=min(0.3 + 0.2 * (attempt - 1), 0.7)
+                )
+                llm_output = result.choices[0].message.content.strip()
+                relationship, content, relation_label = _parse_relation_output(llm_output)
+                last_parsed = (relationship, content, relation_label)
 
-            # [관계: 카테고리] 태그 파싱  person.relation_label 컬럼으로 분리 저장한다
-            tag_m = re.match(r'^\[관계:\s*([^\]]+?)\]\s*', relationship)
-            relation_label = tag_m.group(1).strip() if tag_m else None
-            if tag_m:
-                relationship = relationship[tag_m.end():].strip()
+                issue = _has_disallowed_foreign_text(relationship) or _has_disallowed_foreign_text(content)
+                if issue is None:
+                    description = (
+                        f"이름: {name if name else '알 수 없음'}\n"
+                        f"관계: {relationship}\n"
+                        f"자주 주고 받은 내용: {content}"
+                    )
+                    return person_email, description, relation_label
+                feedback = issue
+                print(f"[PROFILES] 형식 검증 실패 ({person_email}, {attempt}/3번째 시도): {llm_output!r} ({issue})")
+            except Exception as e:
+                print(f"[PROFILES] LLM 호출 실패 ({person_email}, {attempt}/3번째 시도): {e}")
 
+        # 3번 다 검증에 실패해도 완전히 비우는 것보다는 마지막 결과라도 반환한다.
+        if last_parsed:
+            relationship, content, relation_label = last_parsed
             description = (
                 f"이름: {name if name else '알 수 없음'}\n"
                 f"관계: {relationship}\n"
                 f"자주 주고 받은 내용: {content}"
             )
             return person_email, description, relation_label
-        except Exception as e:
-            print(f"[PROFILES] LLM 호출 실패 ({person_email}): {e}")
-            return person_email, None, None
+        return person_email, None, None
 
     with ThreadPoolExecutor(max_workers=min(len(person_prompts), 15)) as executor:
         futures = {executor.submit(_call_llm, email, name, prompt): email
@@ -517,6 +544,41 @@ def generate_person_descriptions(paths) -> dict:
 
     print(f"[PROFILES] 총 {len(descriptions)}명 프로필 생성 완료")
     return descriptions
+
+
+# 텍스트에 부적절한 한자/영어가 섞였는지 검사한다. 영어는 이름/도메인/아이디처럼 보이는 것만
+# 허용(도메인, 대문자가 하나라도 섞인 단어 — Google, iPhone, eBay 등, 또는 csi10186처럼 숫자가
+# 섞인 식별자) 하고 "serta"처럼 순수 소문자로만 된 일반 단어가 섞이면 차단한다. 한자는 무조건 차단.
+# 문제없으면 None, 있으면 사유 문자열을 반환한다.
+_DOMAIN_RE = re.compile(r'[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.(?:com|net|org|co\.kr|kr|io|ai)', re.IGNORECASE)
+_LATIN_WORD_RE = re.compile(r'[A-Za-z][A-Za-z0-9]*')
+_HAN_CHAR_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]')
+# 한국어 존댓말 평서형은 대부분 "~습니다/~입니다/~합니다/~갑니다"처럼 "니다"로 끝난다.
+# 어간을 일일이 나열하는 대신 이 공통 어미로 판별한다.
+_POLITE_ENDING_RE = re.compile(r'니다\.?\s*$')
+
+
+def _has_disallowed_foreign_text(text: str):
+    if not text:
+        return None
+    text_wo_domains = _DOMAIN_RE.sub('', text)
+    for word in _LATIN_WORD_RE.findall(text_wo_domains):
+        if any(ch.isupper() for ch in word) or any(ch.isdigit() for ch in word):
+            continue
+        return f"허용되지 않는 영어 단어 포함: {word!r}"
+    if _HAN_CHAR_RE.search(text):
+        return "한자(중국어 문자) 포함"
+    return None
+
+
+def _is_clean_korean_polite_sentence(text: str) -> bool:
+    if not text:
+        return False
+    if _has_disallowed_foreign_text(text) is not None:
+        return False
+    if not _POLITE_ENDING_RE.search(text):
+        return False
+    return True
 
 
 # generate_person_descriptions() 결과({이메일: {description, relation_label}})를 2차 LLM 호출로 한 문장 소개(short_bio)로 압축해 {이메일: 문장}으로 반환한다
@@ -540,28 +602,42 @@ def generate_person_short_bios(descriptions: dict) -> dict:
 {description}
 
 위 내용을 바탕으로, 이 사람을 다른 사람에게 소개하듯 자연스러운 한국어 한 문장으로 요약하세요.
-- 문장은 반드시 "~입니다."로 끝나야 합니다.
+- 문장은 반드시 "~습니다." 또는 "~입니다."로 끝나야 합니다. 반말(~야, ~해, ~지 등)은 절대 쓰지 마세요.
+- 한국어(한글)만 사용하세요. 영어 단어나 한자(중국어 문자)를 절대 섞지 마세요.
 - 성격이나 관계의 특징이 드러나는 짧은 소개 문장으로 쓰세요.
 - 예시: "꼼꼼하고 계획적인 성격의 친구입니다.", "함께 프로젝트를 진행하는 믿음직한 동료입니다."
 - 다른 설명, 따옴표, 접두어 없이 문장 하나만 출력하세요.""".strip()
 
     def _call_llm(email, description, relation_label):
-        try:
-            result = client.chat.completions.create(
-                model=os.getenv("SUB_TASK_CHAT_MODEL"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 인물 설명을 한 문장의 자연스러운 한국어 소개글로 압축하는 AI입니다."
-                    },
-                    {"role": "user", "content": _build_prompt(description, relation_label)}
-                ],
-                temperature=0.3
-            )
-            return email, result.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"[SHORT_BIO] LLM 호출 실패 ({email}): {e}")
-            return email, None
+        last_bio = None
+        feedback = None
+        for attempt in range(1, 4):
+            try:
+                user_content = _build_prompt(description, relation_label)
+                if feedback:
+                    user_content += f"\n\n[이전 시도 오류] 방금 답변에 다음 문제가 있었습니다: {feedback}. 반드시 한국어(한글)만 사용하고 \"~습니다.\"/\"~입니다.\"로 끝나도록 다시 작성하세요."
+                result = client.chat.completions.create(
+                    model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 인물 설명을 한 문장의 자연스러운 한국어 소개글로 압축하는 AI입니다. 반드시 한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 않으며, 존댓말(습니다/입니다체)로 통일하고 반말을 섞지 않습니다."
+                        },
+                        {"role": "user", "content": user_content}
+                    ],
+                    temperature=min(0.3 + 0.2 * (attempt - 1), 0.7)
+                )
+                bio = result.choices[0].message.content.strip()
+                last_bio = bio
+                issue = _has_disallowed_foreign_text(bio)
+                if issue is None and _POLITE_ENDING_RE.search(bio):
+                    return email, bio
+                feedback = issue or "존댓말(~습니다/~입니다) 종결이 아님"
+                print(f"[SHORT_BIO] 형식 검증 실패 ({email}, {attempt}/3번째 시도): {bio!r} ({feedback})")
+            except Exception as e:
+                print(f"[SHORT_BIO] LLM 호출 실패 ({email}, {attempt}/3번째 시도): {e}")
+        # 3번 다 검증에 실패해도 완전히 비우는 것보다는 마지막 결과라도 반환한다.
+        return email, last_bio
 
     short_bios: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=min(len(targets), 15)) as executor:

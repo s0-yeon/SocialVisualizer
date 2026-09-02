@@ -14,43 +14,56 @@ from util.database.chatroom_db_writer import save_message_summarize_to_db
 load_dotenv("src/parquet/.env")
 
 
+# 프롬프트가 모델의 컨텍스트 길이(대략 32K 토큰)를 넘기지 않도록 입력 텍스트에 거는 안전장치.
+_MAX_SUMMARY_INPUT_CHARS = 24000
+
+
 # 대화 목록을 LLM에 넘겨 해당 기간 요약과 관련 참여자 목록을 JSON으로 받아온다
 def _summarize_with_llm(text, period_label, contacts):
+    if len(text) > _MAX_SUMMARY_INPUT_CHARS:
+        print(f"[message_summary] 입력이 너무 길어서 잘라냄 ({period_label}): {len(text)}자 → {_MAX_SUMMARY_INPUT_CHARS}자")
+        text = text[:_MAX_SUMMARY_INPUT_CHARS]
+
     client = openai.OpenAI(
         api_key=os.environ.get("LLM_API_KEY"),
         base_url=os.environ.get("SUB_TASK_API_BASE") or None,
     )
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv("SUB_TASK_CHAT_MODEL"),
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "주어진 채팅 대화 목록을 분석하여 아래 JSON 형식으로만 응답하세요.\n"
-                        "{\n"
-                        '  "summary": "해당 기간의 주요 대화 내용을 3~5문장으로 한국어 요약( ~입니다. 어미로 통일)",\n'
-                        '  "contacts": ["요약 내용과 관련된 대화 참여자 이름 목록"]\n'
-                        "}\n"
-                        "contacts는 아래 제공된 참여자 목록 중에서만 골라주세요."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": f"[{period_label}] 참여자 목록: {contacts}\n\n대화 목록:\n\n{text}"
-                }
-            ],
-            max_completion_tokens=1000 
-        )
-        result = json.loads(response.choices[0].message.content)
-        return {
-            "summary":  result.get("summary", ""),
-            "contacts": result.get("contacts", []),
-        }
-    except Exception as e:
-        print(f"[message_summary] LLM 오류 ({period_label}): {e}")
-        return {"summary": "", "contacts": []}
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            response = client.chat.completions.create(
+                model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                response_format={"type": "json_object"},
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "주어진 채팅 대화 목록을 분석하여 아래 JSON 형식으로만 응답하세요.\n"
+                            "{\n"
+                            '  "summary": "해당 기간의 주요 대화 내용을 3~5문장으로 한국어 요약( ~입니다. 어미로 통일)",\n'
+                            '  "contacts": ["요약 내용과 관련된 대화 참여자 이름 목록"]\n'
+                            "}\n"
+                            "contacts는 아래 제공된 참여자 목록 중에서만 골라주세요."
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"[{period_label}] 참여자 목록: {contacts}\n\n대화 목록:\n\n{text}"
+                    }
+                ],
+                max_completion_tokens=1000 
+            )
+            result = json.loads(response.choices[0].message.content)
+            return {
+                "summary":  result.get("summary", ""),
+                "contacts": result.get("contacts", []),
+            }
+        except Exception as e:
+            last_error = e
+            print(f"[message_summary] LLM 오류 ({period_label}, {attempt}/3번째 시도): {e}")
+
+    print(f"[message_summary] {period_label} 요약 {attempt}번 모두 실패, 빈 값으로 대체: {last_error}")
+    return {"summary": "", "contacts": []}
 
 
 # 대화 블록을 월별/연별로 묶어 LLM 요약을 만들고 JSON 저장 및 message_summarize 테이블 저장
@@ -111,21 +124,52 @@ def generate_message_summaries(paths):
             names |= e["contacts"]
         return sorted(names)
 
-    # 기간 그룹 하나를 LLM 요약해 (kind, period, 요약결과)를 반환한다
+    # 기간 그룹 하나를 원본 대화 그대로 LLM 요약해 (kind, period, 요약결과)를 반환한다
     def _summarize_group(kind, period, group):
         print(f"[message_summary] {kind} 요약 중: {period} ({len(group)}개 블록)")
         return kind, period, _summarize_with_llm(_build_text(group), period, _collect_contacts(group))
 
-    jobs = [("monthly", month, group) for month, group in monthly_groups.items()] + \
-           [("yearly", year, group) for year, group in yearly_groups.items()]
-
+    # 1단계: 월별 요약을 먼저 만든다. 연도별 요약이 이 결과를 재료로 쓰기 때문에 반드시 먼저 끝나야 한다.
     monthly_summaries = {}
-    yearly_summaries = {}
-    with ThreadPoolExecutor(max_workers=min(len(jobs), 15)) as executor:
-        futures = [executor.submit(_summarize_group, kind, period, group) for kind, period, group in jobs]
+    with ThreadPoolExecutor(max_workers=min(len(monthly_groups), 15)) as executor:
+        futures = [executor.submit(_summarize_group, "monthly", month, group) for month, group in monthly_groups.items()]
         for future in as_completed(futures):
-            kind, period, summary = future.result()
-            (monthly_summaries if kind == "monthly" else yearly_summaries)[period] = summary
+            _, period, summary = future.result()
+            monthly_summaries[period] = summary
+            
+    def _build_yearly_text(year):
+        months_in_year = sorted(m for m in monthly_summaries if m.startswith(f"{year}-"))
+        parts = [
+            f"{m}: {monthly_summaries[m].get('summary')}"
+            for m in months_in_year
+            if monthly_summaries[m].get("summary")
+        ]
+        return "\n".join(parts)
+
+    def _collect_yearly_contacts(year):
+        names = set()
+        for m, summary in monthly_summaries.items():
+            if m.startswith(f"{year}-"):
+                names |= set(summary.get("contacts") or [])
+        # 월별 요약에 참여자가 하나도 안 잡혔으면(전부 실패 등) 원본 그룹에서 대신 모은다.
+        return sorted(names) if names else _collect_contacts(yearly_groups.get(year, []))
+
+    # 연도 하나를 (월별 요약 기반으로) LLM 요약해 (period, 요약결과)를 반환한다
+    def _summarize_year(year):
+        text = _build_yearly_text(year)
+        if not text:
+            # 월별 요약이 전부 비어있으면(전부 실패 등) 마지막 수단으로 원본 대화를 그대로 쓴다.
+            text = _build_text(yearly_groups[year])
+        print(f"[message_summary] yearly 요약 중: {year} (월별 요약 {len(text.splitlines())}개월 기반)")
+        return year, _summarize_with_llm(text, year, _collect_yearly_contacts(year))
+
+    # 2단계: 월별 요약이 다 끝난 뒤, 그걸 재료로 연도별 요약을 만든다.
+    yearly_summaries = {}
+    with ThreadPoolExecutor(max_workers=min(len(yearly_groups), 15)) as executor:
+        futures = [executor.submit(_summarize_year, year) for year in yearly_groups]
+        for future in as_completed(futures):
+            year, summary = future.result()
+            yearly_summaries[year] = summary
 
     result = {
         "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),

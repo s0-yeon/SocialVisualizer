@@ -38,37 +38,44 @@ def _summarize_with_llm(text, period_label, contacts):
         api_key=os.environ.get("LLM_API_KEY"),
         base_url=os.environ.get("SUB_TASK_API_BASE") or None,
     )
-    try:
-        response = client.chat.completions.create(
-            model=os.getenv("SUB_TASK_CHAT_MODEL"),
-            response_format={"type": "json_object"},
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "주어진 이메일 목록을 분석하여 아래 JSON 형식으로만 응답하세요.\n"
-                        "{\n"
-                        '  "summary": "해당 기간의 주요 메일 내용을 3~5문장으로 한국어 요약",\n'
-                        '  "contacts": ["요약 내용과 관련된 메일을 주고받은 이메일 주소 목록"]\n'
-                        "}\n"
-                        "contacts는 아래 제공된 이메일 목록 중에서만 골라주세요."
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": f"[{period_label}] 이메일 목록: {contacts}\n\n메일 목록:\n\n{text}"
-                }
-            ],
-            max_completion_tokens=1000 
-        )
-        result = json.loads(response.choices[0].message.content)
-        return {
-            "summary":  result.get("summary", ""),
-            "contacts": result.get("contacts", []),
-        }
-    except Exception as e:
-        print(f"[mail_summary] LLM 오류 ({period_label}): {e}")
-        return {"summary": "", "contacts": []}
+    system_prompt = (
+        "주어진 이메일 목록을 분석하여 아래 JSON 형식으로만 응답하세요.\n"
+        "{\n"
+        '  "summary": "해당 기간의 주요 메일 내용을 3~5문장으로 한국어 요약",\n'
+        '  "contacts": ["요약 내용과 관련된 메일을 주고받은 이메일 주소 목록"]\n'
+        "}\n"
+        "contacts는 아래 제공된 이메일 목록 중에서만 골라주세요."
+    )
+    user_prompt = f"[{period_label}] 이메일 목록: {contacts}\n\n메일 목록:\n\n{text}"
+
+    # response_format=json_object여도 응답이 max_completion_tokens 한도에 걸려 중간에
+    # 끊기면 JSON이 안 닫힌 채로 잘려서 json.loads가 실패함(실측 사례: 2023년치가
+    # char 3707 지점에서 끊김 — 기존 한도 1000에 거의 다 채운 지점이라 토큰 한도 초과가
+    # 원인으로 보임). 한도를 넉넉히 늘리고, 그래도 실패하면 최대 2번 더 재시도함(같은
+    # 입력이어도 응답이 매번 조금씩 달라질 수 있어 다음 시도에서 정상적으로 끝날 수 있음).
+    last_error = None
+    for attempt in range(1, 4):
+        try:
+            response = client.chat.completions.create(
+                model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                response_format={"type": "json_object"},
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_completion_tokens=2000
+            )
+            result = json.loads(response.choices[0].message.content)
+            return {
+                "summary":  result.get("summary", ""),
+                "contacts": result.get("contacts", []),
+            }
+        except Exception as e:
+            last_error = e
+            print(f"[mail_summary] LLM 오류 ({period_label}, {attempt}/3번째 시도): {e}")
+
+    print(f"[mail_summary] {period_label} 요약 {attempt}번 모두 실패, 빈 값으로 대체: {last_error}")
+    return {"summary": "", "contacts": []}
 
 
 # text_units.parquet을 파싱해 월별/연별 메일 요약을 만들고 JSON 저장 및 mail_summarize 테이블 저장까지 수행한다
