@@ -42,12 +42,13 @@ VAL_RATIO = 0.1
 REDUCE_MIN_VAL = 2  # REDUCE 그룹은 표본이 적어 각 그룹 최소 val 2개 보장
 
 
+# 4개 그룹(mail_map/msg_map/mail_reduce/msg_reduce)별로 층화된 train/val 분할을 수행함
 def stratified_split(groups: dict[str, list[dict]], val_ratio: float, min_val: dict[str, int], rng: random.Random):
     train, val = [], []
     for group_name, examples in groups.items():
         shuffled = examples[:]
         rng.shuffle(shuffled)
-        n_val = max(min_val.get(group_name, 1), round(len(shuffled) * val_ratio))
+        n_val = max(min_val.get(group_name, 1), round(len(shuffled) * val_ratio))  # 비율(9:1) 기반 개수와 그룹별 최소 val 개수 중 큰 값 사용
         n_val = min(n_val, len(shuffled))  # 그룹 크기를 넘지 않도록 가드
         val.extend(shuffled[:n_val])
         train.extend(shuffled[n_val:])
@@ -55,6 +56,7 @@ def stratified_split(groups: dict[str, list[dict]], val_ratio: float, min_val: d
     return train, val
 
 
+# MAP 태스크와 실제 모델 응답을 합쳐 ShareGPT 포맷 예제로 만들고 mail_map/msg_map 그룹으로 나눔
 def build_map_examples(map_results_dir: Path, map_tasks_jsonl: Path) -> dict[str, list[dict]]:
     """extract_global_batches.py가 만든 태스크(system_prompt 포함) + 실제 모델 응답을 합쳐
     ShareGPT 예제로 변환. 도메인별로 mail_map / msg_map 그룹에 나눠 담는다."""
@@ -79,6 +81,7 @@ def build_map_examples(map_results_dir: Path, map_tasks_jsonl: Path) -> dict[str
     return groups
 
 
+# REDUCE 입력과 실제 답변을 합쳐 ShareGPT 포맷 예제로 만들고 mail_reduce/msg_reduce 그룹으로 나눔
 def build_reduce_examples(reduce_inputs_jsonl: Path, reduce_results_dir: Path, reduce_prompt_template: str) -> dict[str, list[dict]]:
     reduce_inputs = [json.loads(line) for line in reduce_inputs_jsonl.read_text(encoding="utf-8").splitlines() if line.strip()]
 
@@ -106,6 +109,7 @@ def build_reduce_examples(reduce_inputs_jsonl: Path, reduce_results_dir: Path, r
     return groups
 
 
+# CLI 진입점: MAP/REDUCE 예제를 조립하고 4개 그룹별 층화 분할 후 train/val jsonl로 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--map-tasks", type=Path, required=True)

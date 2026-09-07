@@ -1,7 +1,6 @@
-# src/util/database/chatroom_reader.py
-# db_reader.py의 메신저(카카오톡) 버전. chatroom/chatroom_people/message_block/participant
-# 테이블과 GraphRAG graph_data.json을 읽어 "My People" 통계(기간별 메시지 수, 사람 간 관계,
-# 참여자 상세)를 만든다. 쓰기는 chatroom_db_writer.py가 담당.
+# 메신저 대화방의 목록·참여자·관계·키워드·분위기·메시지·요약 등을 DB에서 조회해 반환한다.
+
+# Utility functions that read and return messenger chatroom data — room lists, participants, relationships, keywords, mood, messages, and summaries — from the database.
 
 import calendar
 import json
@@ -11,15 +10,8 @@ from util.database.chatroom_db_writer import get_latest_chatroom
 from util.user_path import list_accounts, UserPaths
 
 
+# 모든 단톡방의 이름·메시지 수·참여자 수·참여자 목록을 모아 반환한다 (인덱싱 중인 방도 indexed:False로 포함, 기간 지정 시 그 기간 집계)
 def list_indexed_chatrooms(base_dir: str, start_date: str = None, end_date: str = None):
-    """messenger 계정(msg_xxx = 단톡방 1개)마다 방 이름·메시지 수·참여자 수·전체
-    참여자 이름(메시지 많은 순, 카드 아바타를 참여자 수만큼 분할한 이니셜로 채우는 용도)을
-    모아 반환. 메신저 탭의 "단톡방 목록" 화면에서 사용. 아직 인덱싱 중인 방도 메일과
-    동일하게 목록에 포함하고(indexed: False), 프런트가 "생성 중" 배지로 표시한다.
-
-    start_date/end_date를 주면(타임슬라이더로 기간이 선택된 경우) 전체 기간 대신 그 기간의
-    message_block/participant 집계로 message_count/participant_count/top_participants를
-    계산하고, 그 기간에 메시지가 하나도 없는 방은 목록에서 아예 제외한다."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -27,12 +19,7 @@ def list_indexed_chatrooms(base_dir: str, start_date: str = None, end_date: str 
         for acc in list_accounts(base_dir, "messenger"):
             chatroom_id = acc["user_id"]
 
-            # 요청 — 메일처럼 아직 인덱싱 중인 방도 목록에 넣고 "생성 중" 배지로 보여준다
-            # (예전엔 여기서 통째로 skip해서 완료 전까진 사이드바 어디에도 안 보였음).
-            # chatroom_name은 DB에 아직 없지만, 업로드 시점에 사용자가 입력/추측한 이름을
-            # account.json에 저장해뒀으므로(list_accounts의 room_name) 그걸 먼저 쓰고,
-            # 그마저 없으면 chatroom_id로 폴백한다. 기간 필터가 걸린 조회(타임슬라이더)는
-            # 어차피 집계할 메시지가 없으므로 그 경우에만 계속 제외한다.
+            # 인덱싱 중인 채팅방도 목록에 넣고 "생성 중" 배지로 보여준다
             if not acc["indexed"]:
                 if start_date and end_date:
                     continue
@@ -139,11 +126,8 @@ def list_indexed_chatrooms(base_dir: str, start_date: str = None, end_date: str 
         conn.close()
 
 
+# 인덱싱된 모든 단톡방을 통틀어 가장 이른/늦은 메시지 날짜를 반환한다 (인덱싱된 방 없으면 둘 다 None)
 def get_messenger_date_range(base_dir: str):
-    """인덱싱된 모든 단톡방을 통틀어 가장 오래된/최근 메시지 날짜를 반환. message_block.
-    block_date의 전체 MIN/MAX(방마다 latest index_date 스냅샷 기준). 메신저 탭 타임라인이
-    특정 방과 무관하게 항상 같은 범위를 보여주도록(방을 오가도 슬라이더가 안 바뀌게) 인덱싱된
-    방이 없으면 first_date/last_date 모두 None."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -179,9 +163,43 @@ def get_messenger_date_range(base_dir: str):
         conn.close()
 
 
+# 가장 최근 인덱싱의 메시지 수·소요 시간·날짜를 반환한다 (인덱싱 기록 없으면 0/None)
+def get_chatroom_sync_stats(chatroom_id: str):
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT message_count, index_time, index_date
+            FROM chatroom
+            WHERE chatroom_id = %s
+            ORDER BY index_date DESC
+            LIMIT 1
+            """,
+            (chatroom_id,),
+        )
+        row = cursor.fetchone()
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not row:
+        return {
+            "message_count": 0,
+            "sync_time": None,
+            "sync_update_date": None,
+        }
+
+    index_date = row["index_date"]
+    return {
+        "message_count": row["message_count"],
+        "sync_time": row["index_time"],
+        "sync_update_date": index_date.strftime("%Y-%m-%d") if index_date is not None else None,
+    }
+
+
+# 인덱싱 전 방을 위해 account.json에 저장된 room_name을 읽어 반환한다 (실패 시 None)
 def _room_name_from_account_meta(chatroom_id: str):
-    """DB에 아직 이름이 없는(인덱싱 전) 방을 위해, 업로드 시점에 account.json에
-    저장해둔 room_name을 읽어본다(user_path.set_account_room_name 참고). 실패하면 None."""
     try:
         from config.settings import BASE_DIR
         from util.user_path import UserPaths
@@ -194,10 +212,8 @@ def _room_name_from_account_meta(chatroom_id: str):
         return None
 
 
+# chatroom_id로 방 이름만 조회한다 (DB에 없으면 account.json의 이름으로 폴백)
 def get_chatroom_name(chatroom_id: str):
-    """chatroom_id 하나로 chatroom_name만 조회. 프론트가 목록 화면을 거치지 않고
-    chatroom_id만 들고 있을 때 방 이름을 해석하는 용도. 인덱싱 전이라 DB에 아직
-    없으면, 업로드 시점에 저장해둔 이름(account.json)으로 폴백한다."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return _room_name_from_account_meta(chatroom_id)
@@ -221,9 +237,8 @@ def get_chatroom_name(chatroom_id: str):
         conn.close()
 
 
+# 채팅방의 참여자 전체 목록(id/이름/누적 메시지 수/설명)을 기간과 무관하게 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_people(chatroom_id: str):
-    """chatroom_id의 참여자 전체 목록을 기간과 무관하게 반환(chatroom_people 테이블 그대로 —
-    message_count도 전체 히스토리 누적값). chatroom_id가 인덱싱된 적 없으면 None."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -234,7 +249,7 @@ def get_chatroom_people(chatroom_id: str):
     try:
         cursor.execute(
             """
-            SELECT participant_id, chatroom_people_name AS name, message_count, description
+            SELECT participant_id, chatroom_people_name AS name, message_count, description, short_bio
             FROM chatroom_people
             WHERE chatroom_id = %s AND index_date = %s AND user_id = %s
             ORDER BY message_count DESC
@@ -252,14 +267,14 @@ def get_chatroom_people(chatroom_id: str):
             "name": row["name"],
             "message_count": int(row["message_count"] or 0),
             "description": row["description"],
+            "short_bio": row["short_bio"],
         }
         for row in rows
     ]
 
 
+# 채팅방 참여자별로 지정 기간에 보낸 메시지 수와 프로필 설명을 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_people_stats(chatroom_id: str, start_date: str, end_date: str):
-    """chatroom_id의 참여자별로 start_date~end_date 기간에 보낸 메시지 수 + 프로필 설명을 반환.
-    chatroom_id가 인덱싱된 적 없으면 None."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -303,11 +318,40 @@ def get_chatroom_people_stats(chatroom_id: str, start_date: str, end_date: str):
     ]
 
 
+# chatroom_relationship 테이블의 실제 저장된 관계만 relation_label별로 집계해 count 내림차순으로 반환한다
+def get_chatroom_relationship_stats(chatroom_id: str):
+    latest = get_latest_chatroom(chatroom_id)
+    if not latest:
+        return None
+    index_date, user_id = latest["index_date"], latest["user_id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT relation_label, COUNT(*) AS count
+            FROM chatroom_relationship
+            WHERE chatroom_id = %s AND index_date = %s AND user_id = %s
+            GROUP BY relation_label
+            ORDER BY count DESC
+            """,
+            (chatroom_id, index_date, user_id),
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    relationships = [{"relation_label": row["relation_label"], "count": int(row["count"] or 0)} for row in rows]
+    return {
+        "total": sum(r["count"] for r in relationships),
+        "relationships": relationships,
+    }
+
+
+# chatroom_relationship 테이블에서 이 채팅방의 사람-사람 관계 중 양쪽 다 active_names에 속한 것만 반환한다
 def get_chatroom_relationships(paths, active_names: set) -> list:
-    """chatroom_relationship 테이블에서 이 채팅방의 사람-사람 관계 중 양쪽 다 active_names에
-    속한 것만 반환. 예전엔 매 요청마다 graph_data.json 전체를 읽어 스캔했지만, 인덱싱 시점에
-    chatroom_relationship 테이블로 옮겨 저장하면서(save_chatroom_relationships_to_db) 조회만
-    하도록 바꿨다 — 방향 병합(무방향 취급, 같은 쌍은 하나로 합침)도 저장 시점에 이미 끝나 있다."""
     latest = get_latest_chatroom(paths.USER_ID)
     if not latest:
         return []
@@ -327,13 +371,27 @@ def get_chatroom_relationships(paths, active_names: set) -> list:
         cursor.close()
         conn.close()
 
-    return [row for row in rows if row["source"] in active_names and row["target"] in active_names]
+    existing = {
+        (row["source"], row["target"]): row
+        for row in rows
+        if row["source"] in active_names and row["target"] in active_names
+    }
+
+    names = sorted(active_names)
+    result = []
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            result.append(existing.get((a, b)) or {
+                "source": a,
+                "target": b,
+                "relation_label": "채팅방 참여자",
+                "description": None,
+            })
+    return result
 
 
+# 채팅방 참여자 명단(participant_id 지정 시 그 한 명)의 프로필 설명과 기간 내 메시지 수를 반환한다 (기간 0건도 포함)
 def get_chatroom_person_detail(chatroom_id: str, start_date: str, end_date: str, participant_id: str = None):
-    """chatroom_id의 참여자 명단(participant_id를 주면 그 사람만)에 대해 프로필 설명 +
-    start_date~end_date 기간 메시지 수를 반환. 그 기간에 메시지가 0개인 참여자도 message_count: 0
-    으로 명단에서 빠지지 않고 나온다. 방이 없거나, participant_id를 줬는데 그 참여자가 없으면 None."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -360,8 +418,7 @@ def get_chatroom_person_detail(chatroom_id: str, start_date: str, end_date: str,
     if not roster:
         return None
 
-    # 기간 내 메시지 수: get_chatroom_people_stats는 그 기간에 실제로 메시지를 보낸 사람만
-    # 담고 있으므로, 명단에는 있지만 이 딕셔너리에 없는 사람은 기간 내 메시지가 0개인 것이다.
+    # 기간 내 메시지 수
     period_counts = {
         row["name"]: row["message_count"]
         for row in (get_chatroom_people_stats(chatroom_id, start_date, end_date) or [])
@@ -378,11 +435,8 @@ def get_chatroom_person_detail(chatroom_id: str, start_date: str, end_date: str,
     ]
 
 
+# 채팅방의 지정 기간에 걸치는 월별/연별 분위기 점수·설명을 message_mood 테이블에서 읽어 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_mood(chatroom_id: str, start_date: str, end_date: str):
-    """chatroom_id의 start_date~end_date 기간에 걸치는 월별/연별 분위기 점수+설명을 반환.
-    message_mood.generate_message_mood()가 저장한 message_mood 테이블을 읽는다.
-    chatroom_id가 인덱싱된 적 없으면 None."""
-
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -423,10 +477,8 @@ def get_chatroom_mood(chatroom_id: str, start_date: str, end_date: str):
     return {"monthly": monthly, "yearly": yearly}
 
 
+# 특정 참여자가 지정 기간에 사용한 키워드별 언급 횟수를 반환한다 (미인덱싱 방이면 None, 명단에 없으면 False)
 def get_chatroom_keywords_by_person(chatroom_id: str, start_date: str, end_date: str, participant_id: str):
-    """chatroom_id의 participant_id가 start_date~end_date 기간에 사용한 키워드별 언급 횟수를
-    반환. chatroom_id가 인덱싱된 적 없으면 None. participant_id가 그 채팅방 명단에 없으면 False.
-    참여자는 있지만 그 기간에 키워드가 없으면 빈 리스트."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -467,10 +519,65 @@ def get_chatroom_keywords_by_person(chatroom_id: str, start_date: str, end_date:
     return [{"word": row["word"], "count": int(row["count"] or 0)} for row in rows]
 
 
+# 채팅방 전체(모든 참여자·전체 기간 합산)의 키워드별 총 언급 수를 count 내림차순으로 반환한다
+def get_chatroom_keyword_stats(chatroom_id: str):
+    latest = get_latest_chatroom(chatroom_id)
+    if not latest:
+        return None
+    index_date, user_id = latest["index_date"], latest["user_id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT keyword_name AS word, SUM(mention_count) AS count
+            FROM message_keyword
+            WHERE chatroom_id = %s AND index_date = %s AND user_id = %s
+            GROUP BY keyword_name
+            ORDER BY count DESC
+            """,
+            (chatroom_id, index_date, user_id),
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    return {"keywords": [{"word": row["word"], "count": int(row["count"] or 0)} for row in rows]}
+
+
+# 채팅방 전체(모든 참여자 합산)의 월별 메시지 수를 [{month, count}]로 반환한다 (미인덱싱 방이면 None)
+# 단톡방은 발신/수신 구분이 없는 그룹 대화라 "송수신 횟수" = 그 달에 오간 전체 메시지 수로 집계한다.
+def get_chatroom_monthly_message_stats(chatroom_id: str):
+    latest = get_latest_chatroom(chatroom_id)
+    if not latest:
+        return None
+    index_date, user_id = latest["index_date"], latest["user_id"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT DATE_FORMAT(block_date, '%Y-%m') AS month, SUM(message_count) AS count
+            FROM message_block
+            WHERE chatroom_id = %s AND index_date = %s AND user_id = %s
+            GROUP BY month
+            ORDER BY month
+            """,
+            (chatroom_id, index_date, user_id),
+        )
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    return [{"month": row["month"], "count": int(row["count"] or 0)} for row in rows]
+
+
+# 채팅방 전체(모든 참여자 합산)의 월별 키워드 목록·언급 수를 {월: [{word, count}]}로 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_keyword_monthly_stats(chatroom_id: str, start_date: str = None, end_date: str = None):
-    """chatroom_id 전체(모든 참여자 합산)의 월별 키워드 목록+언급 수를 반환.
-    start_date/end_date를 주면 그 기간만, 안 주면 전체 기간. chatroom_id가 인덱싱된 적
-    없으면 None."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -505,10 +612,8 @@ def get_chatroom_keyword_monthly_stats(chatroom_id: str, start_date: str = None,
     return monthly
 
 
+# 채팅방 전체가 특정 월에 날짜별로 언급한 키워드 목록·횟수를 {날짜: [{word, count}]}로 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_keyword_daily_stats(chatroom_id: str, month: str):
-    """chatroom_id 전체(모든 참여자 합산)가 특정 월(month, "YYYY-MM")에 날짜별로 언급한
-    키워드 목록+횟수를 반환. 월별 그래프에서 달을 클릭했을 때 "일별 목록" 화면용.
-    chatroom_id가 인덱싱된 적 없으면 None."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -547,11 +652,8 @@ def get_chatroom_keyword_daily_stats(chatroom_id: str, month: str):
     return daily
 
 
+# 특정 날짜에 특정 키워드를 언급한 참여자별 횟수를 count 내림차순 목록으로 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_keyword_mentioners(chatroom_id: str, date: str, keyword: str):
-    """chatroom_id에서 특정 날짜(date, "YYYY-MM-DD")에 특정 키워드(keyword)를 언급한
-    참여자별 횟수를 반환. 인원 수 제한 없음, count 내림차순. chatroom_id가 인덱싱된 적
-    없으면 None. avatar_url은 여기서 채우지 않고 app.py에서 chatroom avatar 캐시를
-    붙인다(기존 /chatroom-people 패턴과 동일)."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -583,11 +685,8 @@ def get_chatroom_keyword_mentioners(chatroom_id: str, date: str, keyword: str):
     return [{"participant_id": r["participant_id"], "name": r["participant_id"], "count": int(r["count"] or 0)} for r in rows]
 
 
+# 특정 참여자가 월별로 보낸 메시지 수와 총합을 집계해 반환한다 (미인덱싱 방이면 None, 명단에 없으면 False)
 def get_chatroom_person_monthly_stats(chatroom_id: str, participant_id: str, start_date: str = None, end_date: str = None):
-    """chatroom_id에서 participant_id가 월별로 보낸 메시지 수를 집계. start_date/end_date를
-    주면(타임슬라이더 기간) 그 기간만, 안 주면 전체 기간. 상세보기 통계 탭의 월별
-    그래프용. chatroom_id가 인덱싱된 적 없으면 None, participant_id가 그 채팅방 명단에
-    없으면 False."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -631,10 +730,8 @@ def get_chatroom_person_monthly_stats(chatroom_id: str, participant_id: str, sta
     return {"monthly": monthly, "total": total}
 
 
+# 특정 참여자가 특정 월에 날짜별로 보낸 메시지 수를 집계해 반환한다 (미인덱싱 방이면 None, 명단에 없으면 False)
 def get_chatroom_person_daily_stats(chatroom_id: str, participant_id: str, month: str):
-    """chatroom_id에서 participant_id가 특정 월(month, "YYYY-MM")에 날짜별로 보낸 메시지
-    수를 집계. 상세보기 통계 탭에서 월 막대를 클릭했을 때 "일별 목록" 화면용. chatroom_id가
-    인덱싱된 적 없으면 None, participant_id가 그 채팅방 명단에 없으면 False."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None
@@ -687,12 +784,8 @@ def get_chatroom_person_daily_stats(chatroom_id: str, participant_id: str, month
     return {"days": days}
 
 
+# 채팅방의 특정 날짜 하루치 대화 원문 메시지를 parquet에서 파싱해 시간순으로 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_day_messages(base_dir: str, chatroom_id: str, date: str):
-    """chatroom_id의 date("YYYY-MM-DD") 하루치 대화 원문을 반환. DB에는 집계만 있고
-    원문은 없어서, text_units.parquet을 그때그때 파싱하는 _parse_message_blocks_from_parquet()
-    (기존에 어조 분석용으로만 쓰이던 함수)를 재사용해 그 날짜에 해당하는 블록들의 메시지를
-    시간순으로 합침(하루가 청크 크기 때문에 여러 블록으로 쪼개진 경우 대비). chatroom_id가
-    인덱싱된 적 없으면 None, 그 날짜에 메시지가 없으면 빈 리스트."""
     from util.message_statics import _parse_message_blocks_from_parquet
 
     latest = get_latest_chatroom(chatroom_id)
@@ -712,10 +805,8 @@ def get_chatroom_day_messages(base_dir: str, chatroom_id: str, date: str):
     return messages
 
 
+# 채팅방의 월별/연별 LLM 요약을 기간 오름차순으로 반환한다 (미인덱싱 방이면 None)
 def get_chatroom_summaries(chatroom_id: str, summarize_unit: str):
-    """chatroom_id의 summarize_unit("monthly"/"yearly") 단위 LLM 요약을 summary_period
-    오름차순으로 반환. chatroom_id가 인덱싱된 적 없으면 None. 요약이 아직 생성되지 않았으면
-    빈 리스트."""
     latest = get_latest_chatroom(chatroom_id)
     if not latest:
         return None

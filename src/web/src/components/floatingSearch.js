@@ -1,12 +1,16 @@
 // floatingSearch.js
-//
-// 모든 페이지 우측 하단에 떠 있는 검색 버튼 + 팝업. search.html(search.js)과 완전히
-// 같은 검색(메일/메신저 GraphRAG 질의 → /run-query-async → /job-status 폴링)을
-// 그대로 재사용해서, 어느 페이지에서든 실제 검색 페이지와 동일한 결과를 즉시 볼 수 있게 한다.
-// main-app.js에서 side-effect import되므로, main-app.js를 쓰는 모든 페이지(로그인 페이지
-// 제외)에 자동으로 뜬다 — 페이지마다 따로 붙일 필요 없음.
+/**
+모든 페이지 우측 상단에 떠 있는 플로팅 검색 버튼 + 팝업 .
+search.js와 동일한 GraphRAG 질의 (/run-query-async → /job-status 폴링)를 재사용해서 어느 페이지에서든 같은 검색 결과를 즉시 보여준다.
+main-app.js에서 side-effect import되어 이 파일을 불러오는 모든 페이지에 자동으로 뜬다.
+
+Floating search button + popup shown on every page.
+Reuses the same GraphRAG query flow as search.js (/run-query-async then polling /job-status) so results match the dedicated search page.
+Auto-mounted on every page that imports main-app.js, via that file's side-effect import.
+ */
 import { getApiBase } from "../utils/apiBase.js";
 
+// XSS 방지용 최소 HTML 이스케이프
 function escapeHtml(str) {
   return String(str || "")
     .replace(/&/g, "&amp;")
@@ -14,20 +18,15 @@ function escapeHtml(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+// XSS 방지용 최소 속성값 이스케이프
 function escapeAttr(str) {
   return String(str || "")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
-async function pollJob(
-  FLASK_URL,
-  jobId,
-  onDone,
-  onError,
-  interval = 2000,
-  maxTries = 60,
-) {
+// jobId의 처리 상태를 일정 간격으로 폴링하다 완료/실패 시 콜백 호출(최대 maxTries회)
+async function pollJob(FLASK_URL, jobId, onDone, onError, interval = 2000, maxTries = 60) {
   for (let i = 0; i < maxTries; i++) {
     await new Promise((r) => setTimeout(r, interval));
     try {
@@ -72,15 +71,14 @@ const TABS = [
   },
 ];
 
-// search.html처럼 메일/메신저 탭이 입력창·최근검색·결과영역을 각자 독립적으로 갖는다
-// (하나를 공유하면 두 탭의 이벤트 리스너가 같은 input/버튼에 겹쳐 붙어서 검색이
-// 동시에 두 번 실행되는 문제가 생김 — 그래서 탭마다 완전히 별도의 서브패널을 둔다).
+// search.html처럼 메일/메신저 탭이 입력창·최근검색·결과영역을 각자 독립적으로 갖는다 (하나를 공유하면 두 탭의 이벤트 리스너가 같은 input/버튼에 겹쳐 붙어서 검색이 동시에 두 번 실행되는 문제가 생김 — 그래서 탭마다 완전히 별도의 서브패널을 둔다).
+// 검색 팝업(탭 + 입력창 + 결과 영역)의 HTML 마크업 문자열 생성
 function buildPanelHtml() {
   const tabBtns = TABS.map(
     (t, i) => `
       <button type="button" class="gwfs-tab-btn${i === 0 ? " active" : ""}" data-tab="${t.key}">
         <i class="${t.icon}"></i><span>${t.label}</span>
-      </button>`,
+      </button>`
   ).join("");
 
   const tabPanels = TABS.map(
@@ -93,7 +91,7 @@ function buildPanelHtml() {
         </div>
         <div class="gwfs-recent"></div>
         <div class="gwfs-result"></div>
-      </div>`,
+      </div>`
   ).join("");
 
   return `
@@ -105,10 +103,9 @@ function buildPanelHtml() {
   `;
 }
 
+// 검색창 하나(메일/메신저 탭)의 입력 제출, 질의 요청, 폴링, 결과 렌더링을 담당하는 컨트롤러 생성
 function createTabController(tab, root, FLASK_URL) {
-  const panelEl = root.querySelector(
-    `.gwfs-tab-panel[data-tab-panel="${tab.key}"]`,
-  );
+  const panelEl = root.querySelector(`.gwfs-tab-panel[data-tab-panel="${tab.key}"]`);
   const inputEl = panelEl.querySelector(".gwfs-input");
   const btnEl = panelEl.querySelector(".gwfs-search-btn");
   const recentEl = panelEl.querySelector(".gwfs-recent");
@@ -128,10 +125,7 @@ function createTabController(tab, root, FLASK_URL) {
     localStorage.setItem(tab.recentKey, JSON.stringify(recents));
   }
   function removeRecent(q) {
-    localStorage.setItem(
-      tab.recentKey,
-      JSON.stringify(getRecents().filter((r) => r !== q)),
-    );
+    localStorage.setItem(tab.recentKey, JSON.stringify(getRecents().filter((r) => r !== q)));
     renderRecents();
   }
 
@@ -147,7 +141,7 @@ function createTabController(tab, root, FLASK_URL) {
         <span class="gwfs-recent-tag" data-q="${escapeAttr(r)}">
           <i class="fas fa-history"></i>${escapeHtml(r)}
           <span class="gwfs-tag-del" data-del="${escapeAttr(r)}">×</span>
-        </span>`,
+        </span>`
       )
       .join("");
     recentEl.querySelectorAll(".gwfs-recent-tag").forEach((tagEl) => {
@@ -173,22 +167,6 @@ function createTabController(tab, root, FLASK_URL) {
   }
   function showResult(q, text, sourceIds) {
     let sourceHtml = "";
-    // 요청 — "근거 계정" 표시 안 함(주석처리, 로직은 그대로 남겨둠).
-    // if (sourceIds && sourceIds.length > 0) {
-    //   const countByAccount = new Map();
-    //   sourceIds.forEach((src) => {
-    //     const account =
-    //       (typeof src === "string" ? null : src.account) || "알 수 없음";
-    //     countByAccount.set(account, (countByAccount.get(account) || 0) + 1);
-    //   });
-    //   const items = Array.from(countByAccount.entries())
-    //     .map(
-    //       ([account, count]) =>
-    //         `<span class="gwfs-source-chip"><i class="${tab.icon}"></i>${escapeHtml(account)}${count > 1 ? `<span class="gwfs-source-count">${count}</span>` : ""}</span>`,
-    //     )
-    //     .join("");
-    //   sourceHtml = `<div class="gwfs-source-wrap"><div class="gwfs-source-label">근거 계정</div><div class="gwfs-source-btns">${items}</div></div>`;
-    // }
     resultEl.innerHTML = `
       <div class="gwfs-query-label">검색어: <strong>${escapeHtml(q)}</strong></div>
       <div class="gwfs-result-card">${escapeHtml(text)}</div>
@@ -228,7 +206,7 @@ function createTabController(tab, root, FLASK_URL) {
         FLASK_URL,
         data.jobId,
         (text, sourceIds) => showResult(q, text, sourceIds),
-        (msg) => showError(q, msg),
+        (msg) => showError(q, msg)
       );
     } catch (e) {
       showError(q, "서버에 연결할 수 없습니다.");
@@ -241,9 +219,7 @@ function createTabController(tab, root, FLASK_URL) {
     runSearch(q);
   }
 
-  // stopPropagation: 이 클릭/엔터가 document까지 버블링되면 아래 outside-click
-  // 닫기 로직과 맞물릴 수 있어서(검색 버튼을 눌렀는데 패널이 닫혀버리는 문제),
-  // 패널 안에서 일어나는 검색 액션은 버블링 자체를 여기서 끊어버린다.
+  // stopPropagation: 이 클릭/엔터가 document까지 버블링되면 아래 outside-click 닫기 로직과 맞물릴 수 있어서(검색 버튼을 눌렀는데 패널이 닫혀버리는 문제), 패널 안에서 일어나는 검색 액션은 버블링 자체를 여기서 끊어버린다.
   btnEl.addEventListener("click", (e) => {
     e.stopPropagation();
     doSearch();
@@ -260,9 +236,9 @@ function createTabController(tab, root, FLASK_URL) {
   return { inputEl, placeholder: tab.placeholder };
 }
 
+// 플로팅 버튼 + 팝업 DOM을 body에 주입하고 열기/닫기, 탭 전환 이벤트를 바인딩
 function mountFloatingSearch() {
-  // login.html처럼 헤더 자체가 없는 페이지에서는 검색 대상 데이터도 없으므로 스킵.
-  // (main-app.js를 안 쓰는 페이지는 애초에 이 모듈이 로드되지 않음)
+  // main-app.js를 안 쓰는 페이지는 애초에 이 모듈이 로드되지 않으므로, 중복 마운트 방지만 체크.
   if (document.getElementById("gwfs-btn")) return; // 중복 마운트 방지
 
   const FLASK_URL = getApiBase();
@@ -277,8 +253,7 @@ function mountFloatingSearch() {
   btn.setAttribute("data-tooltip", "궁금한 것을 언제든지 질문해주세요.");
 
   // 돋보기 아이콘을 키움 (font-size 속성 추가)
-  btn.innerHTML =
-    '<i class="fas fa-search" style="font-size: 1.5rem; line-height: 1;"></i>';
+  btn.innerHTML = '<i class="fas fa-search" style="font-size: 1.5rem; line-height: 1;"></i>';
 
   document.body.appendChild(btn);
 
@@ -309,10 +284,7 @@ function mountFloatingSearch() {
   function openPanel() {
     panel.classList.add("open");
     btn.classList.add("open");
-    setTimeout(
-      () => panel.querySelector(".gwfs-tab-panel.active .gwfs-input")?.focus(),
-      50,
-    );
+    setTimeout(() => panel.querySelector(".gwfs-tab-panel.active .gwfs-input")?.focus(), 50);
   }
   function closePanel() {
     panel.classList.remove("open");
@@ -325,10 +297,7 @@ function mountFloatingSearch() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closePanel();
   });
-  // 패널 내부에서 일어나는 클릭은 무엇이든(검색 버튼, 탭, 최근검색 태그 등) 절대
-  // document까지 버블링되지 않게 원천 차단 — 개별 버튼마다 stopPropagation을
-  // 빠짐없이 챙기는 대신 여기 한 곳에서 확실하게 막는다(검색 버튼을 눌렀는데
-  // 곧바로 패널이 닫혀버리던 문제의 근본 원인).
+  // 패널 내부에서 일어나는 클릭은 무엇이든(검색 버튼, 탭, 최근검색 태그 등) 절대 document까지 버블링되지 않게 원천 차단 — 개별 버튼마다 stopPropagation을 빠짐없이 챙기는 대신 여기 한 곳에서 확실하게 막는다(검색 버튼을 눌렀는데 곧바로 패널이 닫혀버리던 문제의 근본 원인).
   panel.addEventListener("click", (e) => e.stopPropagation());
   document.addEventListener("click", (e) => {
     if (!panel.classList.contains("open")) return;

@@ -1,17 +1,6 @@
-# src/util/message_mood.py
-#
-# message_summary.py와 같은 원본 대화 블록(_parse_message_blocks_from_parquet)을 써서
-# 월별/연별 "분위기 점수(mood_score)"와 "분위기 설명(mood_description)"을 계산하고
-# message_mood 테이블에 저장한다.
-#
-# MoodScore = ContentJudge(35%) + Tone(35%) + Activity(15%) + ResponseSpeed(15%)
-#   - ContentJudge: 원본 대화 텍스트를 LLM이 읽고 "사적 대화 비율(%)"을 직접 산출
-#   - Tone: 느낌표/텍스트 이모티콘(^^,ㅠㅠ 등)/유니코드 이모지/카카오톡 이모티콘 전송/
-#     ㅋㅋㅎㅎ 반복 강도 + 문장 끝 말투(반말·애교체는 가점, 격식체는 감점) (통계, LLM 호출 없음)
-#   - Activity: 대화량(같은 계정의 다른 채팅방들과 비교) × 참여 균형(엔트로피)
-#     새 채팅방이 인덱싱될 때마다 recompute_all_message_moods()가 그 계정의 모든 채팅방을
-#     다시 계산해서, 비교 기준(pool)이 항상 최신 상태를 반영하도록 한다.
-#   - ResponseSpeed: 메시지 시간 간격의 역수 (같은 방의 다른 기간들과 비교)
+# 대화 블록의 말투·응답속도·참여 균형 등을 분석해 채팅방의 월별/연별 분위기 점수와 설명을 계산하고 저장한다.
+
+# Analyzes message tone, response speed, and participation balance in conversation blocks to compute and save each chatroom's monthly/yearly mood scores and descriptions.
 
 import os
 import re
@@ -27,7 +16,7 @@ from util.database.chatroom_db_writer import save_message_mood_to_db, _resolve_c
 
 load_dotenv("src/parquet/.env")
 
-# 가중치 — 튜닝할 때 이 값들만 조정하면 됨
+# 가중치
 WEIGHT_CONTENT_JUDGE  = 0.35
 WEIGHT_TONE           = 0.35
 WEIGHT_ACTIVITY       = 0.15
@@ -40,15 +29,14 @@ _TEXT_EMOTICON_RE = re.compile(r'\^\^|ㅠ{2,}|ㅜ{2,}|-_-|;;')
 _LAUGH_RE = re.compile(r'[ㅋㅎ]{2,}')
 _LAUGH_SCORE_CAP = 5  # ㅋㅋㅋㅋㅋ 이상은 더 이상 가점 안 늘림
 
-# 문장 끝 어미 기반 말투 휴리스틱 (완벽한 문법 분석은 아니고, 자주 쓰이는 어미 패턴 매칭)
+# 문장 끝 어미 기반 말투 휴리스틱 
 # 반말/애교체 어미 → 가점(친밀한 말투), 격식체 어미 → 감점(사무적인 말투)
 _CASUAL_ENDING_RE = re.compile(r'(야|다|지|냐|거든|잖아|었어|았어|해|줘|봐|용|염|잉)[\s~.!?]*$')
 _FORMAL_ENDING_RE = re.compile(r'(습니다|합니다|입니다|십니다|세요|니다)[\s.!?]*$')
 
 
+# 메시지 하나의 느낌표·이모티콘·이모지·ㅋㅋㅎㅎ·문장 끝 말투를 합산한 톤 점수를 반환한다
 def _tone_marker_score(text: str) -> float:
-    # 느낌표/텍스트 이모티콘/유니코드 이모지/카카오톡 이모티콘 전송/ㅋㅋㅎㅎ 반복 강도 +
-    # 문장 끝 말투 점수를 합산한 원값 (한 메시지 기준)
     score = 0.0
     score += len(re.findall(r'!', text))
     score += len(_TEXT_EMOTICON_RE.findall(text))
@@ -66,8 +54,8 @@ def _tone_marker_score(text: str) -> float:
     return score
 
 
+# 대화 블록들을 block_date 기준 월별/연별 그룹으로 나눈다 (실제 발화가 있는 블록만)
 def _group_blocks_by_period(blocks):
-    # block_date 기준으로 월별/연별 그룹으로 나눔 (실제 발화가 있는 블록만 포함)
     monthly, yearly = {}, {}
     for block in blocks:
         if not block["block_date"]:
@@ -87,8 +75,8 @@ def _group_blocks_by_period(blocks):
     return monthly, yearly
 
 
+# 기간 그룹의 원본 대화를 날짜별로 이어붙인 텍스트를 만든다 (ContentJudge LLM 입력용)
 def _build_raw_text(group):
-    # 요약문이 아니라 원본 대화 그대로 (ContentJudge 입력용)
     lines = []
     for entry in sorted(group, key=lambda e: e["date"]):
         lines.append(f"날짜: {entry['date'].strftime('%Y-%m-%d')}")
@@ -97,8 +85,8 @@ def _build_raw_text(group):
     return "\n".join(lines)
 
 
+# 원본 대화 텍스트를 LLM에 넘겨 사적 대화 비율(%)과 기간 설명을 받아온다
 def _judge_mood_with_llm(text, period_label):
-    # 원본 대화 텍스트를 읽고 사적 대화 비율(%)과 설명을 함께 반환 (LLM 호출 1회)
     client = openai.OpenAI(
         api_key=os.environ.get("LLM_API_KEY"),
         base_url=os.environ.get("SUB_TASK_API_BASE") or None,
@@ -137,6 +125,7 @@ def _judge_mood_with_llm(text, period_label):
         return 50.0, ""
 
 
+# 한 블록(entry) 내 연속 메시지 사이 평균 간격을 분 단위로 계산한다 (메시지 2개 미만이면 None)
 def _avg_response_interval_minutes(entry):
     times = []
     for m in entry["real_messages"]:
@@ -151,6 +140,7 @@ def _avg_response_interval_minutes(entry):
     return sum(diffs) / len(diffs) if diffs else None
 
 
+# 기간 그룹에서 발화자별 메시지 수를 {발신자: 개수}로 집계한다
 def _speaker_message_counts(group):
     sent_by = {}
     for entry in group:
@@ -159,8 +149,8 @@ def _speaker_message_counts(group):
     return sent_by
 
 
+# 발화자별 메시지 점유율의 정규화 엔트로피를 반환한다 (0=한 명만 말함, 1=모두 고르게 대화)
 def _participation_balance(sent_by: dict) -> float:
-    # 발화자별 메시지 점유율의 정규화 엔트로피 (0=한 명만 말함, 1=모두 고르게 대화함)
     n = len(sent_by)
     if n <= 1:
         return 0.0
@@ -171,6 +161,7 @@ def _participation_balance(sent_by: dict) -> float:
     return entropy / math.log(n)
 
 
+# dict 값들을 min-max로 0~100 범위에 정규화한다 (모두 같으면 전부 50)
 def _minmax_normalize(raw: dict) -> dict:
     if not raw:
         return {}
@@ -181,6 +172,7 @@ def _minmax_normalize(raw: dict) -> dict:
     return {k: (v - lo) / (hi - lo) * 100 for k, v in raw.items()}
 
 
+# 값 하나를 pool_values의 min-max 범위 기준 0~100 점수로 환산한다 (범위 밖이면 clamp)
 def _minmax_score(value, pool_values):
     if not pool_values:
         return 50.0
@@ -191,8 +183,8 @@ def _minmax_score(value, pool_values):
     return max(0.0, min(100.0, (value - lo) / (hi - lo) * 100))
 
 
+# 같은 계정의 모든 채팅방·기간별 메시지량 목록을 DB에서 조회한다 (Activity 비교 기준 분포)
 def _fetch_cross_room_message_counts(user_id, unit):
-    # 같은 계정(user_id)이 가진 모든 채팅방의 기간별 메시지량 — Activity의 "다른 방과 비교" 기준 분포
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -224,8 +216,8 @@ def _fetch_cross_room_message_counts(user_id, unit):
     return [float(cnt) for _, _, cnt in rows if cnt is not None]
 
 
+# 기간별로 메시지량·응답속도·톤 빈도·참여 균형 원값을 계산해 {period: 통계}로 반환한다
 def _compute_group_stats(groups: dict) -> dict:
-    # period -> 원값(raw) 계산: 메시지량, 응답속도(간격 역수), 톤 표현 빈도, 참여 균형
     raw = {}
     for period, group in groups.items():
         sent_by = _speaker_message_counts(group)
@@ -250,6 +242,7 @@ def _compute_group_stats(groups: dict) -> dict:
     return raw
 
 
+# 한 채팅방의 월별/연별 분위기 점수·설명을 계산해 JSON 저장 및 message_mood 테이블 저장까지 수행한다
 def generate_message_mood(paths):
     blocks = _parse_message_blocks_from_parquet(paths)
     if not blocks:
@@ -267,6 +260,7 @@ def generate_message_mood(paths):
         print("[message_mood] 분석할 대화 없음")
         return
 
+    # 월/연 단위 그룹들에 대해 4개 지표를 가중합한 최종 mood_score와 설명을 계산한다
     def _score_unit(groups: dict, unit: str) -> dict:
         raw_stats = _compute_group_stats(groups)
         tone_norm = _minmax_normalize({p: s["tone_per_message"] for p, s in raw_stats.items()})
@@ -274,6 +268,7 @@ def generate_message_mood(paths):
 
         cross_room_pool = _fetch_cross_room_message_counts(user_id, unit)
 
+        # 기간 하나를 LLM으로 판단해 (period, (사적비율, 설명))을 반환한다
         def _judge(period, group):
             print(f"[message_mood] {unit} 분위기 분석 중: {period} ({len(group)}개 블록)")
             return period, _judge_mood_with_llm(_build_raw_text(group), period)
@@ -322,9 +317,8 @@ def generate_message_mood(paths):
     save_message_mood_to_db(paths)
 
 
+# 같은 계정의 모든 채팅방 분위기를 다시 계산한다 (Activity 비교 기준 pool을 최신으로 유지)
 def recompute_all_message_moods(paths):
-    # Activity가 같은 계정의 다른 채팅방들과 비교하는 방식이라, 새 채팅방이 인덱싱될 때마다
-    # 그 계정의 모든 채팅방 mood를 다시 계산해서 비교 기준(pool)을 최신 상태로 맞춘다.
     from util.user_path import UserPaths
     from config.settings import BASE_DIR
 
@@ -343,5 +337,9 @@ def recompute_all_message_moods(paths):
         conn.close()
 
     for chatroom_id in chatroom_ids:
+        if chatroom_id != paths.USER_ID:
+            room_dir = os.path.join(BASE_DIR, "user_data", "messenger", chatroom_id)
+            if not os.path.isdir(room_dir):
+                continue
         room_paths = paths if chatroom_id == paths.USER_ID else UserPaths(BASE_DIR, chatroom_id, "messenger")
         generate_message_mood(room_paths)

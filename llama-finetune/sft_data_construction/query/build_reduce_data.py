@@ -42,6 +42,7 @@ REDUCE_MAX_LENGTH = 2000  # global_search_reduce.txt에 넘기는 파라미터
 CL100K_ENCODING = "cl100k_base"
 
 
+# 특정 질문/도메인/방에 해당하는 MAP 결과 JSON 파일들을 모두 찾아 point 리스트로 합침
 def load_map_results(map_results_dir: Path, question_id: str, domain: str, room_id: str | None) -> list[dict]:
     """map_results/{domain}_{room_id or ''}_{question_id}_{batch_id}.json 파일들을 모두 읽어
     {"points": [{"description", "score"}, ...]} JSON을 파싱한다."""
@@ -58,6 +59,7 @@ def load_map_results(map_results_dir: Path, question_id: str, domain: str, room_
     return all_points
 
 
+# REDUCE의 report_data 문자열을 조립함: score 정렬 후 포맷팅하여 토큰 예산 내에서만 이어붙임
 def build_report_data(points: list[dict], max_data_tokens: int = MAX_DATA_TOKENS) -> tuple[str, int, int]:
     """score 내림차순 정렬(0점 제외) → 포맷 → 토큰 예산 내에서 이어붙임.
 
@@ -75,7 +77,7 @@ def build_report_data(points: list[dict], max_data_tokens: int = MAX_DATA_TOKENS
         chunk = f"----Analyst {i}----\nImportance Score: {point['score']}\n{point['description']}\n"
         chunk_tokens = len(enc.encode(chunk))
         if used_tokens + chunk_tokens > max_data_tokens:
-            break
+            break  # 예산 초과 시 이후 낮은 점수 포인트는 전부 드롭 (정렬돼 있으므로 여기서 중단해도 됨)
         chunks.append(chunk)
         used_tokens += chunk_tokens
         included += 1
@@ -84,6 +86,7 @@ def build_report_data(points: list[dict], max_data_tokens: int = MAX_DATA_TOKENS
     return "".join(chunks), included, dropped
 
 
+# CLI 진입점: 질문 목록을 읽어 질문별로 MAP 결과를 로드하고 REDUCE 입력을 jsonl로 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--map-results-dir", type=Path, required=True)

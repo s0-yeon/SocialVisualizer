@@ -1,19 +1,11 @@
 # src/util/lightrag_backend/lightrag_mail_parser.py
-#
-# LightRAG 다운스트림(통계/DB 저장) 코드들이 공통으로 쓰는 메일 파싱 헬퍼.
-#
-# 배경: GraphRAG 버전(extract_statics.py, database/db_writer.py, graphrag_mail_summary.py)은
-# 전부 GraphRAG가 만든 text_units.parquet을 pd.read_parquet()으로 읽어서 "text" 컬럼을
-# 정규식으로 파싱했다. LightRAG는 그 parquet을 만들지 않으므로, 대신 인덱싱 입력으로
-# 쓰는 원본 paths.MAIL_LATEST_PATH(모든 메일이 MAIL_BLOCK_SEP로 구분된 블록 형태로 저장된
-# 파일, imap_message.py가 씀)를 직접 읽어서 같은 정보를 뽑아낸다.
-#
-# GraphRAG 버전들은 text_units.parquet이 메일 하나당 여러 청크(행)로 쪼개질 수 있어서
-# document_ids 기준으로 그룹핑하는 워크어라운드가 있었는데(예: db_writer.save_mail_folder_to_db),
-# mail_latest.txt는 애초에 메일 하나 = 블록 하나라서 그 워크어라운드가 필요 없다.
-#
-# 이 모듈은 파싱만 담당한다. LLM 호출(키워드 추출, 어조 판별, 요약 등)은 각자 파일에서
-# extract_statics.py의 기존 헬퍼를 그대로 재사용한다.
+
+# LightRAG용 메일 원문 파서. 
+# mail_latest.txt에 쌓인 메일 블록 텍스트를 읽어 메일 한 통당 dict(id/date/subject/sender/receiver/direction/folder/body)로 분해하고, "이름 <이메일>" 형식 문자열에서 이메일 주소만 뽑아내는 기능을 제공한다. 
+# 통계 생성, DB 저장, 요약 등 LightRAG 하위 모듈들이 메일 텍스트를 다룰 때 공통으로 거치는 진입점이다.
+
+# Parses raw mail block text accumulated in mail_latest.txt for LightRAG into per-mail dicts (id/date/subject/sender/receiver/direction/folder/body), and extracts a bare email address out of "Name <email>" style strings. 
+# Shared entry point used by statics generation, DB writing, and summarization modules.
 
 import os
 import re
@@ -21,12 +13,7 @@ import re
 from config.settings import MAIL_BLOCK_SEP
 
 
-# mail_latest.txt를 읽어 메일 블록 하나당 dict 하나로 변환한 리스트를 반환한다.
-# 반환 필드:
-#   id, date(원문 "YYYY-MM-DD HH:MM:SS" 문자열), subject, sender(원문 "Name <email>"),
-#   receiver(원문), direction_raw("발신"/"수신"), folder(라벨 정보, 없으면 None), body
-# id가 없는 블록은 건너뛰고, 같은 id가 중복되면 먼저 나온 것만 남긴다(GraphRAG판의
-# seen_ids 처리와 동일한 안전장치 — 정상적인 mail_latest.txt라면 중복이 없어야 한다).
+# mail_latest.txt를 블록 구분자로 잘라 메일별 dict 리스트로 반환. id가 없거나 중복인 블록은 건너뛴다
 def parse_mail_blocks(paths) -> list[dict]:
     if not os.path.exists(paths.MAIL_LATEST_PATH):
         return []
@@ -42,11 +29,7 @@ def parse_mail_blocks(paths) -> list[dict]:
         if not block:
             continue
 
-        # 실제 mail_latest.txt는 "[ID] ...", "[날짜] ..." 같은 대괄호 형식을 쓰는데(폴더/본문
-        # 정규식은 원래부터 맞게 돼 있었음), 여기 여섯 필드만 콜론 형식("ID: ...")만 찾도록
-        # 돼 있어서 전부 항상 실패 → mail_id가 항상 None이라 모든 블록이 통째로 스킵되고
-        # parse_mail_blocks()가 매번 빈 리스트를 반환했다(= 통계/DB 저장/요약이 전부
-        # "mail_latest.txt 없음/비어있음"으로 오인돼 건너뛰어짐). 대괄호/콜론 둘 다 받도록 고쳤다.
+        # 대괄호/콜론 둘 다 가능
         id_m = re.search(r"^\s*(?:\[ID\]|ID:)\s*(.+?)\s*$", block, re.MULTILINE)
         mail_id = id_m.group(1).strip() if id_m else None
         if not mail_id or mail_id in seen_ids:
@@ -79,8 +62,7 @@ def parse_mail_blocks(paths) -> list[dict]:
     return records
 
 
-# "Name <email>" 형태에서 email만 뽑는다. GraphRAG 버전 여러 파일에 흩어져 있던
-# 동일한 정규식(_extract_sender_email/_extract_email)을 하나로 합쳤다.
+# "Name <email>" 형태 문자열에서 꺾쇠 안 이메일 주소만 소문자로 추출. 꺾쇠가 없으면 원문 전체를 소문자로 반환
 def extract_email(raw: str) -> str:
     if not raw:
         return ""

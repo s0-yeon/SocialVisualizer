@@ -2,6 +2,11 @@
 <html lang="ko">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <!--
+  자연어 검색 페이지 진입 HTML.
+
+  Entry HTML for the Naturallanguage search page.
+-->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
@@ -17,13 +22,9 @@
       http-equiv="Permissions-Policy"
       content="camera=(), microphone=(), geolocation=()"
     />
-    <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
-    <link
-      rel="apple-touch-icon"
-      href="images/apple-touch-icon.svg"
-      sizes="180x180"
-    />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" type="image/x-icon" />
+    <link rel="icon" href="/images/logos/socialvisualizer.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/images/logos/socialvisualizer.png" sizes="231x231" />
     <link rel="manifest" href="site.webmanifest" />
     <meta name="theme-color" content="rgb(42, 63, 84)" />
     <title>Social Visualizer</title>
@@ -47,114 +48,7 @@
   <body class="page-search">
     <div class="container body">
       <div class="main_container">
-        <div id="app-header"></div>
-
-        <!-- Page Content -->
-        <main
-          class="right_col"
-          role="main"
-          aria-label="Main content"
-          style="padding: 0"
-        >
-          <!-- ── 탭 전환 ── -->
-          <div class="gw-tabs" role="tablist">
-            <button
-              type="button"
-              class="gw-tab-btn active"
-              id="tab-btn-mail"
-              role="tab"
-              aria-selected="true"
-            >
-              <i class="bi bi-envelope"></i> 메일
-            </button>
-            <button
-              type="button"
-              class="gw-tab-btn"
-              id="tab-btn-message"
-              role="tab"
-              aria-selected="false"
-            >
-              <i class="bi bi-chat-dots"></i> 메신저
-            </button>
-          </div>
-
-          <!-- ═══ 메일 탭: 검색 패널 ═══ -->
-          <div id="panel-mail" class="gw-tab-panel active">
-            <div class="gw-search-top">
-              <div class="gw-search-box">
-                <input
-                  type="text"
-                  id="search-input"
-                  placeholder="메일에 대해 궁금한 것을 검색하세요..."
-                  autocomplete="off"
-                />
-                <button id="search-btn" type="button">
-                  <i class="fas fa-search"></i>
-                </button>
-              </div>
-              <div
-                class="gw-recent-searches"
-                id="recent-searches-bar"
-                style="display: none"
-              >
-                <span class="gw-recent-label"
-                  ><i class="fas fa-history me-1"></i>최근 검색:</span
-                >
-                <div id="recent-tags"></div>
-                <span class="gw-recent-clear" id="clear-recent">전체 삭제</span>
-              </div>
-            </div>
-            <div class="gw-result-wrapper">
-              <div id="result-container">
-                <div class="gw-empty">
-                  <i class="bi bi-search"></i>
-                  <p>검색어를 입력해 메일을 분석하세요.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- ═══ 메시지 탭: 카카오톡 대화 검색 ═══ -->
-          <div id="panel-message" class="gw-tab-panel">
-            <div class="gw-search-top">
-              <div class="gw-search-box">
-                <input
-                  type="text"
-                  id="message-search-input"
-                  placeholder="카카오톡 대화에 대해 궁금한 것을 검색하세요..."
-                  autocomplete="off"
-                />
-                <button id="message-search-btn" type="button">
-                  <i class="fas fa-search"></i>
-                </button>
-              </div>
-              <div
-                class="gw-recent-searches"
-                id="message-recent-searches-bar"
-                style="display: none"
-              >
-                <span class="gw-recent-label"
-                  ><i class="fas fa-history me-1"></i>최근 검색:</span
-                >
-                <div id="message-recent-tags"></div>
-                <span class="gw-recent-clear" id="message-clear-recent"
-                  >전체 삭제</span
-                >
-              </div>
-            </div>
-            <div class="gw-result-wrapper">
-              <div id="message-result-container">
-                <div class="gw-empty">
-                  <i class="bi bi-chat-dots"></i>
-                  <p>검색어를 입력해 카카오톡 대화를 분석하세요.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-        <!-- /Page Content -->
-
-        <footer id="app-footer"></footer>
+        <div id="search-app-root"></div>
       </div>
     </div>
   </body>

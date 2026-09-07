@@ -1,14 +1,15 @@
-# ============================================================
-# job_run_lightrag.py
-# job_run_graphrag.py(원본)의 복사본. 인덱싱/업데이트 엔진을 GraphRAG CLI에서 LightRAG 라이브러리
-# 직접 호출로 완전히 교체했다. GraphRAG subprocess, parquet 진행률 감시, GraphRAG용
-# settings.yaml 준비(user_graphrag_init) 등 GraphRAG 전용 코드는 이 파일에 남기지 않는다.
-#
-# 남겨둔 미해결 항목: build_graph_json()이 쓰던 graphrag_parquet2json.py는 GraphRAG의
-# entities.parquet/relationships.parquet 스키마를 전제로 하므로 LightRAG 결과로는
-# 그대로 못 쓴다. 그래프 시각화용 json을 LightRAG 데이터로 어떻게 만들지는 별도 작업으로
-# 남겨두고, 지금은 스킵하도록 되어 있다(아래 build_graph_json 참고).
-# ============================================================
+# src/util/jobs/job_run_lightrag.py
+
+# LightRAG 인덱싱/업데이트 전체 파이프라인을 실행하는 잡 모듈. 
+# mail_latest.txt/csv를 읽어 첨부 요약 병합, LightRAG 라이브러리로 실제 인덱싱(ainsert), 그래프 시각화 JSON 생성, 메일 통계·DB 저장까지 순서대로 실행하고 진행률을 job 로그와 SSE로 보고한다. 
+# GraphRAG CLI를 subprocess로 띄우는 대신 LightRAG 라이브러리를 코드에서 직접 호출하는 방식으로 동작한다.
+# 그래프 시각화 JSON은 GraphRAG의 entities/relationships parquet 스키마를 전제로 만들어져 있어 LightRAG 결과에 그대로 못 쓰므로, build_graph_json은 LightRAG 전용 변환기를 따로 쓴다.
+
+# Runs the full LightRAG indexing/update pipeline as a background job. 
+# Reads mail_latest.txt/csv, merges summarized attachments, indexes the mail via the LightRAG library (ainsert), builds the graph visualization JSON, and saves mail statistics/DB records, reporting progress through job logs and SSE. 
+# Calls the LightRAG library directly instead of spawning the GraphRAG CLI as a subprocess. 
+# Uses a LightRAG-specific converter for the graph JSON since GraphRAG's version assumes GraphRAG's own entities/relationships parquet schema.
+
 import os
 import sys
 import re
@@ -48,14 +49,6 @@ _EMBEDDING_DIMS = {
 from util.jobs.job_store import update_job, append_job_log, get_job
 from util.sse_broadcaster import broadcast
 from util.lightrag_backend.lightrag_progress import get_stage_progress
-
-# _extract_statics_pipeline / save_mail_folder_to_db / save_mail_to_db / generate_mail_summaries는
-# 전부 GraphRAG의 text_units.parquet을 가드 없이 읽어서 LightRAG에서는 죽는 함수들이라,
-# lightrag_extract_statics.py / lightrag_db_writer.py / lightrag_mail_summary.py에 새로 만든
-# raw-text(mail_latest.txt) 기반 버전으로 바꿔서 쓴다. 나머지(create_mail_account,
-# save_person_stats_to_db, save_keyword_stats_to_db, collect_indexing_stats,
-# update_mail_account_indexing_stats, save_graph_stats_to_db)는 이미 JSON/MySQL만 다루거나
-# 파일 존재 여부를 확인하고 우아하게 건너뛰므로 GraphRAG 버전 그대로 재사용한다.
 from util.extract_statics import start_timer,end_timer,format_elapsed_time
 from util.lightrag_backend.lightrag_extract_statics import _extract_statics_pipeline_lightrag
 from util.database.db_writer import create_mail_account,save_person_stats_to_db,save_keyword_stats_to_db, collect_indexing_stats, update_mail_account_indexing_stats, save_graph_stats_to_db
@@ -65,10 +58,10 @@ from util.lightrag_backend.lightrag_mail_summary import generate_mail_summaries_
 sys.path.insert(0, os.path.join(BASE_DIR, "parquet_template", "src"))
 from renderer import render_all_prompts
 
-# threading.Thread로 병렬 실행하되, 스레드 내부에서 발생한 예외를 join 이후
-# 메인 스레드에서 다시 raise한다 (기본 Thread는 예외를 조용히 삼켜 job이 "done"으로 남는 문제 방지)
+# (함수, 인자) 목록을 각각 스레드로 병렬 실행하고 모두 끝날 때까지 기다린다 (에러가 나면 첫 에러를 재발생)
 def _run_and_join(jobs):
     errors = []
+    # 함수를 실행하고 예외를 errors 리스트에 모은다
     def _wrap(fn, args):
         try:
             fn(*args)
@@ -81,15 +74,7 @@ def _run_and_join(jobs):
         raise errors[0]
 
 
-# LightRAG 폴더도 GraphRAG 결과 폴더(cache/input/logs/output)처럼 나누기 위한 보조 함수.
-# LightRAG 라이브러리 자체는 working_dir 하나만 지원해서 완전히 똑같이는 못 나누고(위
-# user_path.py의 LIGHTRAG_OUTPUT_DIR 주석 참고), logs/는 여기서 직접 채운다.
-# input/은 user_path.py에서 paths.MAIL_DIR 자체가 RAG_ENGINE==lightrag일 때 LIGHTRAG_INPUT_DIR을
-# 가리키도록 바뀌어서(=LightRAG는 GraphRAG의 parquet/input을 더 이상 공유하지 않음), 원본이
-# 처음부터 여기 저장되므로 따로 사본을 뜰 필요가 없어졌다.
-
-# job_store(job_store.py)는 로그를 메모리에만 들고 있고 파일로 안 남기므로, job이 끝나는
-# 시점에 그 로그를 logs/ 밑에 파일로 떠서 남긴다.
+# job_store의 메모리 로그를 LIGHTRAG_LOGS_DIR 밑에 파일로 떠서 남긴다
 def _write_lightrag_job_log(paths, job_id, label):
     try:
         os.makedirs(paths.LIGHTRAG_LOGS_DIR, exist_ok=True)
@@ -102,11 +87,7 @@ def _write_lightrag_job_log(paths, job_id, label):
         print(f"[JOB][lightrag] 로그 파일 저장 실패(무시): {e}")
 
 
-# working_dir(=kv_store_doc_status.json이 있는 곳)을 3초 간격으로 감시해 문서 처리 비율을
-# job 진행도에 반영한다. job_run_graphrag.py의 _watch_graphrag_output()과 같은 역할이지만
-# 감시 대상이 parquet 파일 존재 여부가 아니라 LightRAG의 문서 상태 JSON이라는 점이 다르다.
-# base_progress: ainsert() 실행 전 세팅된 초기 진행도 — 이보다 낮은 값으로 되돌리지 않음
-# stop_event가 세트되면 루프 종료 (build_lightrag_index/update 완료 시 호출)
+# working_dir의 문서 상태 JSON을 3초마다 감시해 문서 처리 비율을 job 진행도/SSE로 반영한다 (stop_event 세트 시 종료)
 def _watch_lightrag_progress(job_id, working_dir, start_time, stop_event, base_progress=30):
     current = base_progress
     while not stop_event.wait(3):
@@ -116,7 +97,7 @@ def _watch_lightrag_progress(job_id, working_dir, start_time, stop_event, base_p
             update_job(job_id, progress=prog, message=msg)
             broadcast({"type": "progress", "job_id": job_id, "progress": prog, "message": msg})
 
-# 첨부파일 텍스트 요약 (공백/줄바꿈 제외 500자 미만이면 원문 그대로 반환)
+# 첨부파일 텍스트를 LLM으로 요약해 반환한다 (짧으면 원문 그대로, 실패해도 원문 반환)
 def _summarize_attachment_text(text: str, paths, filename: str) -> str:
     pure_len = len(text.replace(" ", "").replace("\n", ""))
     if pure_len < 500:
@@ -147,7 +128,7 @@ def _summarize_attachment_text(text: str, paths, filename: str) -> str:
         print(f"[summarize_attachment error] {filename}: {e}")
         return text  # 실패하면 원문 그대로 반환
 
-# 요약된 첨부 텍스트를 mail_latest.txt 각 메일 블록 하단에 삽입
+# 요약된 첨부 텍스트를 mail_latest.txt의 각 메일 블록 끝에 삽입해 파일을 다시 쓴다
 def _merge_summarized_attachments(mail_latest_path: str, attachment_texts_by_mail: dict):
     if not os.path.exists(mail_latest_path):
         return
@@ -166,10 +147,7 @@ def _merge_summarized_attachments(mail_latest_path: str, attachment_texts_by_mai
         # 구분선 복원
         block_text = f"{MAIL_BLOCK_SEP}\n{block}\n{MAIL_BLOCK_SEP}"
 
-        # 블록에서 메일 ID 추출. 실제 메일 블록은 "[ID] ..." 형식(대괄호)을 쓰는데
-        # 예전엔 여기가 "ID:" 형식만 찾아서 정규식이 항상 실패 → mail_id가 항상 None이 되고
-        # "첨부 내용 없음"으로 취급돼 요약이 절대 안 들어갔다. mail_data_manager.py의
-        # _extract_mail_id_from_block()과 같은 패턴으로 두 형식 다 받도록 고쳤다.
+        # _extract_mail_id_from_block()과 같은 패턴으로 두 형식 다 받음.
         m = re.search(r"^\s*(?:\[ID\]|ID:)\s*(.+?)\s*$", block_text, re.MULTILINE)
         mail_id = m.group(1).strip() if m else None
 
@@ -199,10 +177,7 @@ def _merge_summarized_attachments(mail_latest_path: str, attachment_texts_by_mai
         f.write("\n".join(merged_blocks) + "\n")
 
 
-# LightRAG가 인덱싱하며 만든 graph_chunk_entity_relation.graphml(paths.LIGHTRAG_OUTPUT_DIR 밑)을
-# 읽어서 그래프 시각화용 json(paths.LIGHTRAG_GRAPH_JSON_PATH)으로 변환한다.
-# graphrag_parquet2json.py는 subprocess로 돌렸지만(GraphRAG CLI와 같은 방식), LightRAG는
-# 이미 파이썬 라이브러리를 직접 호출하는 구조라 변환기도 그냥 함수 호출로 처리한다.
+# LightRAG의 graphml을 그래프 시각화용 JSON으로 변환한다 (실패해도 파이프라인은 계속 진행)
 def build_graph_json(job_id, paths, env):
     from util.lightrag_backend.lightrag_graph_json import build_lightrag_graph_json
 
@@ -223,6 +198,7 @@ def build_graph_json(job_id, paths, env):
         update_job(job_id, progress=15, message="그래프 JSON 변환 실패 (건너뜀)")
 
 
+# mail_latest.txt(와 대응 CSV)를 최신 max_mails개 메일 블록만 남기고 잘라낸다
 def _trim_mail_latest(paths, max_mails, job_id):
     if not os.path.exists(paths.MAIL_LATEST_PATH):
         return
@@ -257,9 +233,7 @@ def _trim_mail_latest(paths, max_mails, job_id):
     append_job_log(job_id, f"[INFO] {msg}")
 
 
-# [LightRAG] mail_latest.csv(id, text 두 컬럼)를 읽어서 LightRAG.ainsert()에 넘길
-# (텍스트 리스트, id 리스트)로 변환한다. _build_mail_csv()가 build_lightrag_index()보다
-# 먼저 실행되어 이 CSV를 이미 만들어둔 상태라고 가정한다(app.py 업로드 흐름 참고).
+# mail_latest.csv(id, text)를 읽어 LightRAG.ainsert()에 넘길 (텍스트 리스트, id 리스트)로 반환한다
 def _load_mail_rows_for_indexing(paths) -> tuple[list[str], list[str]]:
     csv_path = paths.MAIL_LATEST_PATH.replace(".txt", ".csv")  # 기존 _trim_mail_latest()와 동일한 규칙(txt -> csv)
     if not os.path.exists(csv_path):
@@ -272,21 +246,7 @@ def _load_mail_rows_for_indexing(paths) -> tuple[list[str], list[str]]:
     return texts, ids
 
 
-# [LightRAG] 실제로 인덱싱을 수행하는 비동기 함수.
-# LightRAG는 GraphRAG처럼 별도 CLI 프로세스를 띄우지 않고, 파이썬 코드 안에서
-# 인스턴스를 만들고 ainsert()를 직접 호출하는 방식이라 이 함수가 곧 "인덱싱 엔진"이다.
-#
-# working_dir은 paths.LIGHTRAG_OUTPUT_DIR(=user_data/<email>/lightrag/<domain>/output)을 쓴다.
-# 예전엔 GraphRAG 때 쓰던 paths.GRAPHRAG_ROOT(=.../graphrag/<domain>/parquet)를 그대로
-# 재사용했는데, 그러면 LightRAG의 그래프/벡터/KV 저장소(rag_storage에 해당하는 파일들:
-# graph_chunk_entity_relation.graphml, kv_store_*.json, vdb_*.json 등)가 GraphRAG의
-# parquet 출력 폴더 안에 뒤섞여 저장됐다. 이제 user_path.py에서 완전히 분리된 경로를
-# 만들어주므로 여기서도 LIGHTRAG_OUTPUT_DIR을 쓴다(GraphRAG 결과 폴더처럼 output/로 한 번
-# 더 나눈 이유는 user_path.py의 LIGHTRAG_OUTPUT_DIR 정의부 주석 참고).
-#
-# 주의(다음 단계에서 손볼 부분): 지금은 호출할 때마다 LightRAG 인스턴스를 새로 만든다.
-# lightrag_engine.py의 get_lightrag_instance()가 담당하는 "유저별 인스턴스 캐싱"은
-# 질의(query) 경로에만 적용돼 있고, 인덱싱 경로는 아직 안 씀 — 다음 단계에서 옮길 예정.
+# LLM/임베딩 함수를 바인딩한 LightRAG 인스턴스를 만들어 texts/ids를 실제로 인덱싱(ainsert)한다
 async def _lightrag_ainsert(paths, texts: list[str], ids: list[str]):
     api_key = os.environ.get("LLM_API_KEY")
 
@@ -326,11 +286,7 @@ async def _lightrag_ainsert(paths, texts: list[str], ids: list[str]):
         await rag.finalize_storages()  # 저장소(파일 핸들 등) 정리
 
 
-# 백그라운드: 인덱싱 (job_run_graphrag.py의 GraphRAG CLI subprocess 대신 LightRAG 직접 호출)
-# job_run_graphrag.py의 build_graphrag_index()와 이름이 다르니, 둘 다 쓰는 쪽에서는
-#   from util.jobs.job_run_graphrag import build_graphrag_index           (GraphRAG)
-#   from util.jobs.job_run_lightrag import build_lightrag_index           (LightRAG)
-# 처럼 원하는 엔진의 함수를 이름으로 골라 import하면 된다.
+# mail_latest.csv를 읽어 LightRAG로 인덱싱하고 진행률을 감시한다 (동기 함수, 내부에서 asyncio.run 사용)
 def build_lightrag_index(job_id, paths, env, max_mails=None):
     print(f"[JOB][lightrag] START job_id={job_id}")
     print(f"[JOB][lightrag] cwd={os.getcwd()}")
@@ -389,9 +345,7 @@ def build_lightrag_index(job_id, paths, env, max_mails=None):
         _write_lightrag_job_log(paths, job_id, "index")
 
 
-# 백그라운드: 증분 업데이트. LightRAG는 ainsert()가 곧 upsert라서 이미 인덱싱된 id는
-# 알아서 스킵/갱신한다 — GraphRAG가 필요로 했던 별도 delta 그래프 병합 로직이 없어져서
-# build_lightrag_index()와 로직이 사실상 동일해졌고, _lightrag_ainsert()를 그대로 재사용한다.
+# mail_latest.csv 전체를 다시 LightRAG로 넣어 증분 업데이트한다 (ainsert가 upsert라 기존 id는 자동 스킵)
 def build_lightrag_update(job_id, paths, env):
     print(f"[JOB][lightrag-update] START job_id={job_id}")
     print(f"[JOB][lightrag-update] LIGHTRAG_OUTPUT_DIR={paths.LIGHTRAG_OUTPUT_DIR}")
@@ -440,7 +394,7 @@ def build_lightrag_update(job_id, paths, env):
         watcher.join(timeout=5)
 
 
-# 전체 파이프라인 실행 (index 기준)
+# 첨부 요약 → LightRAG 인덱싱 → 그래프 JSON → 통계/DB 저장까지 전체 인덱싱 파이프라인을 실행한다
 def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_count=0, max_mails=None, mail_platform="gmail"):
     print(f"[JOB][pipeline] START job_id={job_id}")
     append_job_log(job_id, "[START] run_graph_pipeline")
@@ -522,7 +476,7 @@ def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_
         traceback.print_exc()
 
 
-# 업데이트 파이프라인 실행
+# LightRAG 증분 업데이트 → 그래프 JSON → 통계/DB 저장까지 전체 업데이트 파이프라인을 실행한다
 def run_graph_update_pipeline(job_id, paths, env):
     print(f"[JOB][update-pipeline] START job_id={job_id}")
     append_job_log(job_id, "[START] run_graph_update_pipeline")
@@ -567,7 +521,7 @@ def run_graph_update_pipeline(job_id, paths, env):
         traceback.print_exc()
 
 
-# 백그라운드 전체 파이프라인 실행 (index 기준)
+# 인덱싱 파이프라인을 데몬 스레드로 백그라운드 실행하고 스레드 객체를 반환한다
 def start_graph_pipeline_background(job_id, paths, env, attachment_texts_by_mail=None, added_count=0, max_mails=None,  mail_platform="gmail"):
     print(f"[JOB][pipeline] BACKGROUND START job_id={job_id}")
     append_job_log(job_id, "[INFO] background thread starting")
@@ -585,7 +539,7 @@ def start_graph_pipeline_background(job_id, paths, env, attachment_texts_by_mail
     return t
 
 
-# 백그라운드 스레드 시작 - 업데이트
+# 업데이트 파이프라인을 데몬 스레드로 백그라운드 실행하고 스레드 객체를 반환한다
 def start_graph_update_pipeline_background(job_id,paths, env):
     print(f"[JOB][update-pipeline] BACKGROUND START job_id={job_id}")
     append_job_log(job_id, "[INFO] update background thread starting")

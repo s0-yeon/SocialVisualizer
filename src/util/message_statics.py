@@ -1,8 +1,6 @@
-# src/util/message_statics.py
-#
-# extract_statics.py의 메신저(카카오톡) 버전. text_units.parquet에 저장된 메시지 블록을
-# 파싱해서 chatroom_people/message_keyword용 중간 JSON을 만든다 (mail 쪽의
-# mail_contact_stats.json / mail_keyword_stats.json과 동일한 역할).
+# parquet의 대화 블록을 파싱해 어조를 판별하고, 참여자별 메시지 이력·LLM 프로필·키워드 통계를 병렬로 생성해 저장한다.
+
+# Parses conversation blocks from parquet to classify tone, then generates and saves per-participant message history, LLM profiles, and keyword statistics in parallel.
 
 import os
 import re
@@ -10,7 +8,7 @@ import json
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from util.extract_statics import _run_and_join
+from util.extract_statics import _run_and_join, _is_clean_korean_polite_sentence, _has_disallowed_foreign_text, _POLITE_ENDING_RE
 
 load_dotenv("src/parquet/.env")
 
@@ -19,7 +17,7 @@ client = OpenAI(
     base_url=os.getenv("SUB_TASK_API_BASE") or None,
 )
 
-# build_message_blocks()가 쓰는 대화 내용 줄 포맷과 정확히 대응:
+# build_message_blocks()가 쓰는 대화 내용 줄 포맷과 대응:
 #   "HH:MM 발신자: 메시지"          -> sender/text
 #   "HH:MM [알림] 메시지"           -> sys_text (입장/퇴장 등 시스템 메시지)
 _MSG_LINE_RE = re.compile(
@@ -27,9 +25,7 @@ _MSG_LINE_RE = re.compile(
 )
 
 
-# text_units.parquet의 모든 row를 훑어서 메시지 블록 단위로 파싱한다.
-# save_mail_to_db와 동일하게 [ID] 헤더가 있는 첫 청크만 사용(GraphRAG 청크 분할로 같은
-# 블록이 여러 row로 쪼개질 수 있음 — 헤더는 항상 첫 청크에 함께 있으므로 이 방식으로 충분).
+# documents.parquet을 훑어 대화 블록 하나당 dict(block_id/방이름/날짜/참여자/messages)로 파싱한 리스트를 반환한다
 def _parse_message_blocks_from_parquet(paths) -> list[dict]:
     import pandas as pd
 
@@ -68,8 +64,7 @@ def _parse_message_blocks_from_parquet(paths) -> list[dict]:
         body_match = re.search(r'\[대화 내용\]\s*\n(.*?)(?:\n=+|\Z)', text, re.DOTALL)
         body = body_match.group(1) if body_match else ""
 
-        # 한 메시지가 여러 줄일 수 있어(원본에 개행 포함) 새 "HH:MM ...:" 줄이 나올 때까지는
-        # 직전 메시지의 연속으로 본다 (message_parser.parse_message_export와 동일한 규칙).
+        #  새 "HH:MM ...:" 줄이 나올 때까지는 직전 메시지의 연속으로 본다
         messages = []
         for line in body.splitlines():
             m = _MSG_LINE_RE.match(line)
@@ -98,7 +93,7 @@ def _parse_message_blocks_from_parquet(paths) -> list[dict]:
     return blocks
 
 
-# LLM으로 대화 블록 전체의 어조 판별 (message_block.llm_tone)
+# 하루치 대화 텍스트를 LLM에 넘겨 어조를 friendly / not_friendly로 판별한다
 def _classify_message_tone_with_llm(text: str) -> str:
     if not text.strip():
         return "not_friendly"
@@ -137,7 +132,7 @@ def _classify_message_tone_with_llm(text: str) -> str:
     return "friendly" if answer == "friendly" else "not_friendly"
 
 
-# 참여자별 "언제 무슨 메시지를 보냈는지" 이력을 저장 (chatroom_people.description 생성용 원본 데이터)
+# 참여자별 메시지 이력(시간·내용)을 JSON으로 저장한다 (프로필 생성용 원본 데이터, rewrite/append)
 def _save_chatroom_people_messages(paths, mode: str = "rewrite"):
     blocks = _parse_message_blocks_from_parquet(paths)
 
@@ -177,8 +172,7 @@ def _save_chatroom_people_messages(paths, mode: str = "rewrite"):
     print(f"[MSG_STATS] ({mode}) 참여자 {len(people)}명 메시지 이력 저장 완료 → {paths.CHATROOM_PEOPLE_MESSAGES_PATH}")
 
 
-# chatroom_people_messages.json(참여자별 메시지 리스트) 합산
-# 시스템 메시지는 JSON에 안 들어가므로 자동 제외
+# chatroom_people_messages.json의 전체 메시지 수를 합산해 반환한다 (시스템 메시지 제외)
 def count_total_messages(paths) -> int:
     if not os.path.exists(paths.CHATROOM_PEOPLE_MESSAGES_PATH):
         return 0
@@ -187,7 +181,7 @@ def count_total_messages(paths) -> int:
     return sum(len(messages) for messages in people.values())
 
 
-# 참여자별 메시지 이력(시간 포함)을 근거로 LLM 프로필 문장 생성 (DB 저장은 호출자가 담당)
+# 참여자별 메시지 이력을 LLM에 넘겨 {이름: 프로필 문장} dict를 생성한다 (DB 저장은 호출자 담당)
 def generate_chatroom_people_descriptions(paths) -> dict:
     if not os.path.exists(paths.CHATROOM_PEOPLE_MESSAGES_PATH):
         print("[MSG_PROFILES] 참여자 메시지 이력 없음 → 프로필 생성 건너뜀")
@@ -200,6 +194,7 @@ def generate_chatroom_people_descriptions(paths) -> dict:
 
     MAX_MESSAGES_FOR_PROMPT = 80
 
+    # 참여자 한 명의 최근 메시지 이력으로 프로필 생성 프롬프트를 만든다
     def _build_prompt(name, messages):
         ordered = sorted(messages, key=lambda m: m["datetime"])
         sample = ordered[-MAX_MESSAGES_FOR_PROMPT:]
@@ -209,28 +204,43 @@ def generate_chatroom_people_descriptions(paths) -> dict:
 {history_text}
 
 위 메시지들만 근거로 아래 형식으로만 출력하세요. 다른 텍스트는 절대 포함하지 마세요. "~입니다." 체로 통일하세요.
+한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 마세요.
 참여 패턴: <대화에 얼마나 자주/활발히 참여하는지 한 문장으로>
 자주 하는 이야기: <주로 어떤 주제/내용의 메시지를 보내는지 한 문장으로>
 말투: <반말/존댓말, 이모티콘 사용 등 말투 특징을 한 문장으로>""".strip()
 
+    # 참여자 한 명의 프로필을 LLM으로 생성해 (이름, 설명)을 반환한다
     def _call_llm(name, messages):
-        try:
-            prompt = _build_prompt(name, messages)
-            result = client.chat.completions.create(
-                model=os.getenv("SUB_TASK_CHAT_MODEL"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 채팅 메시지 이력을 분석해 참여자 프로필을 한국어로 간결하게 요약하는 AI입니다."
-                    },
-                    {"role": "user", "content": prompt},
-                ],
-                temperature=0.3,
-            )
-            return name, result.choices[0].message.content.strip()
-        except Exception as e:
-            print(f"[MSG_PROFILES] LLM 호출 실패 ({name}): {e}")
-            return name, None
+        prompt = _build_prompt(name, messages)
+        last_desc = None
+        feedback = None
+        for attempt in range(1, 4):
+            try:
+                user_content = prompt
+                if feedback:
+                    user_content += f"\n\n[이전 시도 오류] 방금 답변에 다음 문제가 있었습니다: {feedback}. 반드시 한국어(한글)만 사용해서 다시 작성하세요."
+                result = client.chat.completions.create(
+                    model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 채팅 메시지 이력을 분석해 참여자 프로필을 한국어로 간결하게 요약하는 AI입니다. 반드시 한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 않으며, 존댓말로 통일하고 반말을 섞지 않습니다."
+                        },
+                        {"role": "user", "content": user_content},
+                    ],
+                    temperature=min(0.3 + 0.2 * (attempt - 1), 0.7),
+                )
+                desc = result.choices[0].message.content.strip()
+                last_desc = desc
+                issue = _has_disallowed_foreign_text(desc)
+                if issue is None:
+                    return name, desc
+                feedback = issue
+                print(f"[MSG_PROFILES] 형식 검증 실패 ({name}, {attempt}/3번째 시도): {desc!r} ({issue})")
+            except Exception as e:
+                print(f"[MSG_PROFILES] LLM 호출 실패 ({name}, {attempt}/3번째 시도): {e}")
+        # 3번 다 검증에 실패해도 완전히 비우는 것보다는 마지막 결과라도 반환한다.
+        return name, last_desc
 
     targets = [(name, msgs) for name, msgs in people.items() if msgs]
 
@@ -247,7 +257,71 @@ def generate_chatroom_people_descriptions(paths) -> dict:
     return descriptions
 
 
-# 참여자별·블록별 키워드 언급 횟수 저장 (message_keyword용 중간 JSON)
+# generate_chatroom_people_descriptions() 결과({이름: description})를 2차 LLM 호출로 한 문장 소개(short_bio)로 압축해 {이름: 문장}으로 반환한다
+def generate_chatroom_people_short_bios(descriptions: dict) -> dict:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    targets = [(name, desc) for name, desc in descriptions.items() if desc]
+    if not targets:
+        return {}
+
+    # 완성된 참여자 description으로 한 문장 소개 프롬프트를 만든다
+    def _build_prompt(name, description):
+        return f"""다음은 '{name}'님에 대해 이미 생성된 채팅 프로필입니다.
+
+{description}
+
+위 내용을 바탕으로, 이 사람을 다른 사람에게 소개하듯 자연스러운 한국어 한 문장으로 요약하세요.
+- 문장은 반드시 "~습니다." 또는 "~입니다."로 끝나야 합니다. 반말(~야, ~해, ~지 등)은 절대 쓰지 마세요.
+- 한국어(한글)만 사용하세요. 영어 단어나 한자(중국어 문자)를 절대 섞지 마세요.
+- 성격이나 대화 스타일의 특징이 드러나는 짧은 소개 문장으로 쓰세요.
+- 예시: "꼼꼼하고 계획적인 성격의 친구입니다.", "이모티콘을 자주 쓰는 유쾌한 성격입니다."
+- 다른 설명, 따옴표, 접두어 없이 문장 하나만 출력하세요.""".strip()
+
+    def _call_llm(name, description):
+        last_bio = None
+        feedback = None
+        for attempt in range(1, 4):
+            try:
+                user_content = _build_prompt(name, description)
+                if feedback:
+                    user_content += f"\n\n[이전 시도 오류] 방금 답변에 다음 문제가 있었습니다: {feedback}. 반드시 한국어(한글)만 사용하고 \"~습니다.\"/\"~입니다.\"로 끝나도록 다시 작성하세요."
+                result = client.chat.completions.create(
+                    model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 인물 설명을 한 문장의 자연스러운 한국어 소개글로 압축하는 AI입니다. 반드시 한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 않으며, 존댓말(습니다/입니다체)로 통일하고 반말을 섞지 않습니다."
+                        },
+                        {"role": "user", "content": user_content}
+                    ],
+                    temperature=min(0.3 + 0.2 * (attempt - 1), 0.7),
+                )
+                bio = result.choices[0].message.content.strip()
+                last_bio = bio
+                issue = _has_disallowed_foreign_text(bio)
+                if issue is None and _POLITE_ENDING_RE.search(bio):
+                    return name, bio
+                feedback = issue or "존댓말(~습니다/~입니다) 종결이 아님"
+                print(f"[MSG_SHORT_BIO] 형식 검증 실패 ({name}, {attempt}/3번째 시도): {bio!r} ({feedback})")
+            except Exception as e:
+                print(f"[MSG_SHORT_BIO] LLM 호출 실패 ({name}, {attempt}/3번째 시도): {e}")
+        # 3번 다 검증에 실패해도 완전히 비우는 것보다는 마지막 결과라도 반환한다.
+        return name, last_bio
+
+    short_bios: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=min(len(targets), 15)) as executor:
+        futures = {executor.submit(_call_llm, name, desc): name for name, desc in targets}
+        for future in as_completed(futures):
+            name, bio = future.result()
+            if bio:
+                short_bios[name] = bio
+
+    print(f"[MSG_SHORT_BIO] 총 {len(short_bios)}명 한줄소개 생성 완료")
+    return short_bios
+
+
+# 블록마다 참여자별 메시지에서 LLM 키워드를 뽑아 언급 횟수를 집계해 JSON으로 저장한다 (rewrite/append)
 def _save_message_keyword_stats(paths, mode: str = "rewrite"):
     from util.extract_statics import extract_keywords_with_llm
 
@@ -278,9 +352,8 @@ def _save_message_keyword_stats(paths, mode: str = "rewrite"):
             body = "\n".join(texts).strip()
             if not body:
                 continue
-            # extract_keywords_with_llm은 "이날 주요 키워드가 뭔지"만 중복 없이 뽑아준다 —
-            # 실제 언급 횟수는 이 사람이 이 블록에서 보낸 메시지 원문에서 직접 센다
-            # (조사가 붙어도 "나무를"/"나무가"처럼 부분 문자열로 그대로 들어있어 count()로 잡힘).
+
+            # 실제 키워드 언급 횟수는 이 사람이 이 블록에서 보낸 메시지 원문에서 직접 센다
             keywords = extract_keywords_with_llm(body)
             for kw in keywords:
                 occurrence = sum(text.count(kw) for text in texts)
@@ -305,9 +378,9 @@ def _save_message_keyword_stats(paths, mode: str = "rewrite"):
     print(f"[MSG_KEYWORD] ({mode}) 키워드 {len(keyword_stats)}개 저장 완료 → {paths.MESSAGE_KEYWORDS_PATH}")
 
 
+# 참여자 메시지 이력 저장과 키워드 통계 저장을 병렬로 실행하는 메신저 통계 파이프라인
 def _extract_message_statics_pipeline(paths, mode: str = "rewrite"):
     os.makedirs(paths.MAIL_STATICS_PATH, exist_ok=True)
-    # 서로 다른 출력 파일(people/keywords)에 쓰고 순서 의존성이 없어 병렬 실행
     _run_and_join([
         (_save_chatroom_people_messages, (paths, mode)),
         (_save_message_keyword_stats, (paths, mode)),

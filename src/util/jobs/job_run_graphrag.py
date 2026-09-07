@@ -1,3 +1,7 @@
+# 메일·카카오톡 원본을 정제한 뒤 GraphRAG 인덱싱을 실행하고, parquet 후처리·그래프 JSON 변환·DB 통계·요약·아바타 생성까지 하나의 백그라운드 잡으로 묶어 돌리는 GraphRAG 인덱싱 파이프라인 진입점.
+
+# Entry point of the GraphRAG indexing pipeline: cleans raw mail/KakaoTalk data, runs GraphRAG indexing, then chains parquet post-processing, graph-JSON conversion, DB stats, summaries, and avatar generation into a single background job.
+
 import time
 import os
 import sys
@@ -13,7 +17,6 @@ from util.jobs.job_store import update_job, append_job_log
 from util.graphrag_progress import get_stage_progress
 from util.sse_broadcaster import broadcast
 from util.user_path import user_graphrag_init
-# from config.settings import GRAPH_BUILD_SCRIPT, GRAPHRAG_ROOT, BASE_DIR
 
 from config.settings import MAIL_BLOCK_SEP, BASE_DIR
 from util.extract_statics import start_timer,end_timer,format_elapsed_time, _extract_statics_pipeline
@@ -35,10 +38,10 @@ from renderer import render_all_prompts     # reportMissingImports 발생한다�
 
 load_dotenv("src/parquet/.env")
 
-# threading.Thread로 병렬 실행하되, 스레드 내부에서 발생한 예외를 join 이후
-# 메인 스레드에서 다시 raise한다 (기본 Thread는 예외를 조용히 삼켜 job이 "done"으로 남는 문제 방지)
+# (함수, 인자) 목록을 각각 스레드로 병렬 실행하고 모두 끝날 때까지 기다린다 (에러가 나면 첫 에러를 재발생)
 def _run_and_join(jobs):
     errors = []
+    # 함수를 실행하고 예외를 errors 리스트에 모은다
     def _wrap(fn, args):
         try:
             fn(*args)
@@ -50,9 +53,7 @@ def _run_and_join(jobs):
     if errors:
         raise errors[0]
 
-# output 폴더를 3초 간격으로 감시해 인덱싱 단계 변화를 job 진행도에 반영
-# base_progress: subprocess 실행 전 세팅된 초기 진행도 — 이보다 낮은 값으로 되돌리지 않음
-# stop_event가 세트되면 루프 종료 (build_graphrag_index/update 완료 시 호출)
+# output 폴더를 3초마다 감시해 인덱싱 단계 변화를 job 진행도/SSE로 반영한다 (stop_event 세트 시 종료)
 def _watch_graphrag_output(job_id, output_dir, start_time, stop_event, base_progress=5):
     current = base_progress
     while not stop_event.wait(3):
@@ -64,11 +65,10 @@ def _watch_graphrag_output(job_id, output_dir, start_time, stop_event, base_prog
 
 
 # SUB_TASK_CHAT_MODEL(Qwen2.5-7B, max_model_len=32768)에 안전하게 들어가도록 첨부파일
-# 텍스트 길이를 문자 수 기준으로 보수적으로 제한. 한글은 토큰 효율이 낮아(문자당 최대 1토큰
-# 근접) 25000자면 시스템 프롬프트+출력(150토큰) 여유를 두고도 32768 안에 충분히 들어감.
+# 텍스트 길이를 문자 수 기준으로 제한한다 
 MAX_ATTACHMENT_CHARS = 25000
 
-# 첨부파일 텍스트 요약 (공백/줄바꿈 제외 500자 미만이면 원문 그대로 반환)
+# 첨부파일 텍스트를 LLM으로 요약해 반환한다 (짧으면 원문 그대로, 너무 길면 잘라서 요약)
 def _summarize_attachment_text(text: str, paths, filename: str) -> str:
     pure_len = len(text.replace(" ", "").replace("\n", ""))
     if pure_len < 500:
@@ -89,22 +89,20 @@ def _summarize_attachment_text(text: str, paths, filename: str) -> str:
     )
     try:
         response = client.chat.completions.create(
-            model=os.getenv("SUB_TASK_CHAT_MODEL"),  # 첨부파일 요약 = 보조 작업 (기존 RAG_CHAT_MODEL에서 변경)
+            model=os.getenv("SUB_TASK_CHAT_MODEL"), 
             messages=[
                 {"role": "system", "content": prompt},
                 {"role": "user", "content": f"파일명: {filename}\n\n{text}"}
             ],
-            max_completion_tokens=150  # 한글 약 300자 기준. gpt-5.4-mini(reasoning 모델)는 max_tokens 미지원이라 도입한 파라미터. vLLM도 호환 지원됨
+            max_completion_tokens=150  
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
         print(f"[summarize_attachment error] {filename}: {e}")
-        # 실패해도 요약 성공 시 규격(max_completion_tokens=150 ≈ 한글 300자)에 맞춰 반환.
-        # 원문(최대 25000자)을 그대로 내보내면 후속 extract_graph/embedding 단계에서
-        # 그 메일 하나만 컨텍스트가 비정상적으로 커져 같은 문제가 재발할 수 있음.
+        # 실패해도 요약 성공 시 규격(max_completion_tokens=150 ≈ 한글 300자)에 맞춰 반환한다
         return text[:300]
 
-# 요약된 첨부 텍스트를 mail_latest.txt 각 메일 블록 하단에 삽입
+# 요약된 첨부 텍스트를 mail_latest.txt의 각 메일 블록 끝에 삽입해 파일을 다시 쓴다
 def _merge_summarized_attachments(mail_latest_path: str, attachment_texts_by_mail: dict):
     if not os.path.exists(mail_latest_path):
         return
@@ -154,7 +152,7 @@ def _merge_summarized_attachments(mail_latest_path: str, attachment_texts_by_mai
         f.write("\n".join(merged_blocks) + "\n")
 
 
-# 백그라운드: 메일 텍스트를 그래프 데이터 JSON으로 변환
+# graphrag_parquet2json.py를 서브프로세스로 실행해 parquet을 그래프 시각화용 JSON으로 변환한다
 def build_graph_json(job_id, paths, env):
     print(f"[JOB][mail2json] START job_id={job_id}")
     print(f"[JOB][mail2json] cwd={os.getcwd()}")
@@ -202,6 +200,7 @@ def build_graph_json(job_id, paths, env):
         raise
 
 
+# mail_latest.txt(와 대응 CSV)를 최신 max_mails개 메일 블록만 남기고 잘라낸다
 def _trim_mail_latest(paths, max_mails, job_id):
     if not os.path.exists(paths.MAIL_LATEST_PATH):
         return
@@ -217,7 +216,7 @@ def _trim_mail_latest(paths, max_mails, job_id):
     with open(paths.MAIL_LATEST_PATH, 'w', encoding='utf-8') as f:
         f.write(result)
 
-    # CSV도 트리밍 (GraphRAG는 csv를 읽음)
+    # CSV 트리밍 (GraphRAG는 csv를 읽음)
     trimmed_ids = set()
     for block in trimmed:
         m = re.search(r'^\s*\[ID\]\s*(.+?)\s*$', block, re.MULTILINE)
@@ -237,16 +236,8 @@ def _trim_mail_latest(paths, max_mails, job_id):
     append_job_log(job_id, f"[INFO] {msg}")
 
 
-# extract_graph 프롬프트의 few-shot 예시(parquet_template/src/configs/mail.json 등)에 있는
-# 엔티티를, 파인튜닝된 로컬 모델이 실제 추출 결과인 것처럼 그래프에 섞어 넣는 경우가 있다
-# (8B 모델이 few-shot 예시와 실제 입력을 완전히 구분하지 못해서 생기는 현상 — OpenAI에선 거의
-# 안 나던 문제). 인덱싱 완료 직후 아래 목록과 정확히 일치하는 엔티티/관계를 결과 parquet에서 제거한다.
-#
-# ⚠️ config의 examples를 전부 자동으로 blocklist에 넣으면 안 됨 — mail.json/messenger.json의
-# 다른 예시들(최지유, 김예은, gpttitti@hansung.ac.kr 등)은 일부러 이 계정의 실제 반복 등장
-# 인물/패턴을 그대로 예시로 쓴 것이라, 그것들을 걸러내면 진짜 데이터까지 같이 지워짐.
-# 그래서 "완전 허구"였던 예시(Vocarush/Nexbloom)의 사람/이메일/첨부/토픽만 수동으로 등록한다.
-# (조직명 VOCARUSH는 실제로 사용자의 진짜 프로젝트명과 겹쳐서 blocklist에서 제외 — 실제 데이터임)
+# 인덱싱 완료 직후 아래 목록과 정확히 일치하는 엔티티/관계를 결과 parquet에서 제거한다.
+
 _FEWSHOT_LEAKAGE_BLOCKLIST = {
     # 이전 예시(Vocarush) — 이미 생성된 그래프에 남아있을 수 있어 계속 걸러냄
     "19D4DA32341500E4", "MINJUN.KIM@VOCARUSH.IO", "SEOYEON.PARK@VOCARUSH.IO",
@@ -256,16 +247,14 @@ _FEWSHOT_LEAKAGE_BLOCKLIST = {
     "NEXBLOOM", "3분기 로드맵 검토", "ROADMAP_Q3.PDF",
 }
 
-# messenger.json/mail.json의 grounding_rules에 "None/NULL/없음/- 같은 값은 엔티티 이름으로
-# 쓰지 마라"는 지시가 이미 있는데도, 8B 로컬 모델이 필드가 비어있을 때 이 규칙을 안정적으로
-# 못 지키고 "NONE" 같은 문자열을 그대로 엔티티 이름으로 만들어버리는 경우가 있어 도메인 공용으로
-# 한 번 더 걸러낸다 (ChatRoom 등 특정 타입에 국한된 문제가 아니라 타입 무관하게 발생 가능).
+# "None/NULL/없음/- 같은 값은 엔티티 이름으로 제외한다
 _NULL_VALUE_LITERALS = {"NONE", "NULL", "없음", "-"}
 
 
 _CHATROOM_HEADER_RE_TMPL = r"채팅방\s*:\s*{name}"
 
 
+# 엔티티 title에서 "채팅방:" 접두사와 "(채팅방)" 접미사를 떼어낸 순수 방 이름을 반환한다
 def _strip_chatroom_decorations(title: str) -> str:
     t = str(title).strip()
     if t.startswith("채팅방:"):
@@ -275,10 +264,8 @@ def _strip_chatroom_decorations(title: str) -> str:
     return t
 
 
+# 근거 청크에 '채팅방: <이름>'으로 등장하지 않는 ChatRoom 엔티티와 그 관계를 parquet에서 제거한다 (messenger 전용)
 def _filter_invalid_chatrooms(paths):
-    """ChatRoom 엔티티가 실제로 자기 근거 청크(text_unit)에 '채팅방: <이름>' 형태로
-    등장하는지 직접 대조 검증해서, 근거를 못 찾는 (청크 파편이든, 학습데이터 누출이든
-    원인 무관하게) ChatRoom을 제거한다. 연결된 relationship도 함께 정리한다."""
     if getattr(paths, "DOMAIN", None) != "messenger":
         return
 
@@ -345,9 +332,6 @@ _DATE_HEADER_RE_TMPL = r"\ub0a0\uc9dc\s*:\s*{date}"
 
 
 def _filter_invalid_dates(paths):
-    """Date \uc5d4\ud2f0\ud2f0\uac00 \uc2e4\uc81c\ub85c \uc790\uae30 \uadfc\uac70 \uccad\ud06c(text_unit)\uc5d0 '\ub0a0\uc9dc: <YYYY-MM-DD>' \ud615\ud0dc\ub85c
-    \ub4f1\uc7a5\ud558\ub294\uc9c0 \uc9c1\uc811 \ub300\uc870 \uac80\uc99d\ud574\uc11c, \uadfc\uac70\ub97c \ubabb \ucc3e\ub294 (\ud5e4\ub354 \uc5c6\ub294 \uc774\uc5b4\uc9c0\ub294 \uccad\ud06c\uc5d0\uc11c
-    \ubaa8\ub378\uc774 \ub0a0\uc9dc\ub97c \uc9c0\uc5b4\ub0b4\uac70\ub098 \uc7ac\uc0ac\uc6a9\ud55c) Date\ub97c \uc81c\uac70\ud55c\ub2e4. \uc5f0\uacb0\ub41c relationship\ub3c4 \ud568\uaed8 \uc815\ub9ac\ud55c\ub2e4."""
     if getattr(paths, "DOMAIN", None) != "messenger":
         return
 
@@ -419,6 +403,7 @@ _RECONNECT_ELIGIBLE_TYPES = {
 }
 
 
+# 후보 문자열과 일치하는 Person 엔티티 title을 대소문자 무시로 찾아 반환한다 (없으면 None)
 def _match_person_title(cand, person_titles):
     if cand in person_titles:
         return cand
@@ -429,6 +414,7 @@ def _match_person_title(cand, person_titles):
     return None
 
 
+# 메신저 근거 청크의 "HH:MM 이름:" 줄에서 Person 엔티티와 일치하는 발신자를 찾는다
 def _find_sender_messenger(text_lookup, tu_ids, person_titles):
     for tid in tu_ids:
         text = text_lookup.get(tid, "") or ""
@@ -440,6 +426,7 @@ def _find_sender_messenger(text_lookup, tu_ids, person_titles):
     return None
 
 
+# 메일 근거 청크(같은 문서의 앞 청크 포함)의 "[발신인] ... <email>"에서 일치하는 Person을 찾는다
 def _find_sender_mail(text_units, tu_ids, person_titles, tu_index, tu_doc):
     for tid in tu_ids:
         if tid not in tu_index:
@@ -458,9 +445,6 @@ def _find_sender_mail(text_units, tu_ids, person_titles, tu_index, tu_doc):
 
 
 def _reconnect_isolated_via_person(paths):
-    """Date/ChatRoom \uadfc\uac70 \uac80\uc99d \ud544\ud130\uac00 \uac00\uc9dc \uc5f0\uacb0\uc744 \uc9c0\uc6b0\uba74\uc11c \uace0\ub9bd\ub41c
-    \uc5d4\ud2f0\ud2f0\ub97c, \uadfc\uac70 \uccad\ud06c\uc5d0\uc11c \uc2e4\uc81c\ub85c \ud655\uc778\ub418\ub294 Person(\ubc1c\uc2e0\uc790)\uc5d0\uac8c
-    \uc790\ub3d9 \uc7ac\uc5f0\uacb0\ud55c\ub2e4. \uba54\uc2e0\uc800/\uba54\uc77c \ub458 \ub2e4 \uc9c0\uc6d0\ud55c\ub2e4."""
     domain = getattr(paths, "DOMAIN", None)
     if domain not in ("messenger", "mail"):
         return
@@ -558,6 +542,7 @@ def _reconnect_isolated_via_person(paths):
     print(f"[FILTER] \uace0\ub9bd \ub178\ub4dc {len(new_rows)}\uac1c\ub97c \ubc1c\uc2e0\uc790\uc5d0\uac8c \uc7ac\uc5f0\uacb0 (domain={domain})")
 
 
+# few-shot 예시 누출/NULL 리터럴 blocklist에 해당하는 엔티티·관계를 결과 parquet에서 제거한다
 def _filter_fewshot_leakage(paths):
     import pandas as pd
 
@@ -589,7 +574,7 @@ def _filter_fewshot_leakage(paths):
         print(f"[FILTER] few-shot 예시 누출 제거: 엔티티 {removed_entities}개, 관계 {removed_rels}개")
 
 
-# 백그라운드: GraphRAG 인덱싱
+# GraphRAG CLI(index)를 서브프로세스로 실행하고 진행률을 감시한 뒤 결과 parquet 정제 필터들을 적용한다
 def build_graphrag_index(job_id, paths, env, max_mails=None):
     print(f"[JOB][graphrag] START job_id={job_id}")
     print(f"[JOB][graphrag] cwd={os.getcwd()}")
@@ -684,7 +669,7 @@ def build_graphrag_index(job_id, paths, env, max_mails=None):
         watcher.join(timeout=5)
 
 
-# 백그라운드: GraphRAG 업데이트 (증분)
+# GraphRAG CLI(update)를 서브프로세스로 실행해 증분 인덱싱하고 delta graphml을 기존 그래프에 병합한다
 def build_graphrag_update(job_id,paths, env):
     print(f"[JOB][graphrag-update] START job_id={job_id}")
     print(f"[JOB][graphrag-update] cwd={os.getcwd()}")
@@ -776,7 +761,7 @@ def build_graphrag_update(job_id,paths, env):
         watcher.join(timeout=5)
 
 
-# 전체 파이프라인 실행 (index 기준)
+# 첨부 요약 → GraphRAG 인덱싱 → 그래프 JSON → 통계/DB 저장 → 아바타 생성까지 전체 인덱싱 파이프라인을 실행한다
 def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_count=0, max_mails=None, mail_platform="gmail"):
     print(f"[JOB][pipeline] START job_id={job_id}")
     append_job_log(job_id, "[START] run_graph_pipeline")
@@ -827,9 +812,6 @@ def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_
                 chatroom_name=chatroom_name,
                 ended_at=target_update_date,
                 index_time=formatted_time,
-                # added_count는 새로 추가된 블록(하루) 수라서 message_count로 쓰면 메시지 개수가
-                # 아니라 날짜 수가 들어간다 — chatroom_people_messages.json(참여자별 실제 메시지
-                # 리스트)을 합산해 진짜 메시지 개수를 쓴다.
                 message_count=count_total_messages(paths),
                 message_platform=mail_platform,
             )
@@ -837,30 +819,17 @@ def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_
             update_chatroom_indexing_stats(paths.USER_ID, target_update_date, indexing_stats)
             save_chatroom_graph_stats_to_db(paths, target_update_date)
 
-            # message_keyword는 participant에 대한 FK이므로, message_block(참여자 집계 포함)이
-            # 먼저 저장되어야 함 — mail 쪽에서 mail_folder → mail 순서를 지키는 것과 같은 이유.
             save_message_block_to_db(paths, target_update_date)
 
-            # 나머지 셋은 서로 독립적(participant 조회는 위에서 이미 끝남)이라 mail 쪽과 같이 병렬화
             _run_and_join([
                 (save_chatroom_people_to_db, (paths, target_update_date)),
                 (save_message_keyword_to_db, (paths, target_update_date)),
                 (generate_message_summaries, (paths,)),
             ])
 
-            # chatroom_relationship.person_a/person_b가 chatroom_people을 FK로 참조하므로,
-            # 위 병렬 블록에서 save_chatroom_people_to_db가 끝난 뒤에 순차로 실행해야 한다.
             save_chatroom_relationships_to_db(paths, target_update_date)
-
-            # Activity(다른 방과 비교)가 message_block 테이블을 조회하므로
-            # save_message_block_to_db가 끝난 뒤(위) 실행돼야 함.
-            # 이 방만 계산하지 않고 같은 계정의 모든 방을 다시 계산해서, 새 방이 추가될
-            # 때마다 Activity의 비교 기준(pool)이 항상 최신 상태를 반영하도록 한다.
             recompute_all_message_moods(paths)
 
-            # 참여자 아바타 생성은 chatroom_people.description이 DB에 커밋된 뒤(위
-            # save_chatroom_people_to_db 완료 후)에만 조회 가능하므로 여기서 실행한다.
-            # 실패해도 인덱싱 자체는 이미 끝났으므로 예외를 흡수하고 계속 진행한다.
             try:
                 generate_chatroom_people_avatars_batch(paths)
             except Exception as e:
@@ -879,12 +848,8 @@ def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_
             update_mail_account_indexing_stats(paths.USER_ID, None, indexing_stats)
             save_graph_stats_to_db(paths, target_update_date)
 
-            # mail.mail_folder_name은 mail_folder에 대한 FK이므로, mail INSERT 전에
-            # mail_folder row가 먼저 존재해야 함 (동시 스레드로 돌리면 FK 위반 위험)
             save_mail_folder_to_db(paths, target_update_date)
 
-            # mail_keyword는 person에 대한 FK이므로, person 저장이 끝난 뒤에 키워드를 넣어야
-            # valid_persons 조회가 비어서 키워드가 통째로 스킵되는 문제(FK 대상 없음)가 안 생김
             save_person_stats_to_db(paths, target_update_date)
 
             _run_and_join([
@@ -893,9 +858,6 @@ def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_
                 (generate_mail_summaries, (paths,)),
             ])
 
-            # 연락처 아바타 생성은 person.description이 DB에 커밋된 뒤(위
-            # save_person_stats_to_db 완료 후)에만 조회 가능하므로 여기서 실행한다.
-            # 실패해도 인덱싱 자체는 이미 끝났으므로 예외를 흡수하고 계속 진행한다.
             try:
                 generate_all_person_avatars(paths)
             except Exception as e:
@@ -916,7 +878,7 @@ def run_graph_pipeline(job_id, paths, env, attachment_texts_by_mail=None, added_
         traceback.print_exc()
 
 
-# 업데이트 파이프라인 실행
+# GraphRAG 증분 업데이트 → 그래프 JSON → 통계/DB 저장 → 아바타 생성까지 전체 업데이트 파이프라인을 실행한다
 def run_graph_update_pipeline(job_id, paths, env):
     print(f"[JOB][update-pipeline] START job_id={job_id}")
     append_job_log(job_id, "[START] run_graph_update_pipeline")
@@ -945,12 +907,8 @@ def run_graph_update_pipeline(job_id, paths, env):
                 (save_message_keyword_to_db, (paths,)),
             ])
 
-            # chatroom_relationship.person_a/person_b가 chatroom_people을 FK로 참조하므로,
-            # 위 병렬 블록에서 save_chatroom_people_to_db가 끝난 뒤에 순차로 실행해야 한다.
             save_chatroom_relationships_to_db(paths)
 
-            # 참여자 아바타 생성은 chatroom_people.description이 DB에 커밋된 뒤(위
-            # save_chatroom_people_to_db 완료 후)에만 조회 가능하므로 여기서 실행한다.
             try:
                 generate_chatroom_people_avatars_batch(paths)
             except Exception as e:
@@ -961,11 +919,8 @@ def run_graph_update_pipeline(job_id, paths, env):
             update_mail_account_indexing_stats(paths.USER_ID, None, indexing_stats)
             save_graph_stats_to_db(paths)
 
-            # mail.mail_folder_name은 mail_folder에 대한 FK이므로, mail INSERT 전에
-            # 새로 추가된 폴더가 먼저 존재해야 함
             save_mail_folder_to_db(paths)
 
-            # mail_keyword는 person에 대한 FK이므로, person 저장이 끝난 뒤에 키워드를 넣어야 함
             save_person_stats_to_db(paths)
 
             _run_and_join([
@@ -973,8 +928,6 @@ def run_graph_update_pipeline(job_id, paths, env):
                 (save_keyword_stats_to_db, (paths,)),
             ])
 
-            # 연락처 아바타 생성은 person.description이 DB에 커밋된 뒤(위
-            # save_person_stats_to_db 완료 후)에만 조회 가능하므로 여기서 실행한다.
             try:
                 generate_all_person_avatars(paths)
             except Exception as e:
@@ -994,7 +947,7 @@ def run_graph_update_pipeline(job_id, paths, env):
         traceback.print_exc()
 
 
-# 백그라운드 전체 파이프라인 실행 (index 기준)
+# 인덱싱 파이프라인을 데몬 스레드로 백그라운드 실행하고 스레드 객체를 반환한다
 def start_graph_pipeline_background(job_id, paths, env, attachment_texts_by_mail=None, added_count=0, max_mails=None,  mail_platform="gmail"):
     print(f"[JOB][pipeline] BACKGROUND START job_id={job_id}")
     append_job_log(job_id, "[INFO] background thread starting")
@@ -1012,7 +965,7 @@ def start_graph_pipeline_background(job_id, paths, env, attachment_texts_by_mail
     return t
 
 
-# 백그라운드 스레드 시작 - 업데이트
+# 업데이트 파이프라인을 데몬 스레드로 백그라운드 실행하고 스레드 객체를 반환한다
 def start_graph_update_pipeline_background(job_id,paths, env):
     print(f"[JOB][update-pipeline] BACKGROUND START job_id={job_id}")
     append_job_log(job_id, "[INFO] update background thread starting")

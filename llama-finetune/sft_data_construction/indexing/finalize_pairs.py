@@ -13,11 +13,13 @@ import os
 from collections import Counter
 from pathlib import Path
 
+# 렌더링된 프롬프트 템플릿(mail/messenger)이 위치한 기본 경로
 DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parents[3] / "parquet_template" / "rendered"
 
-MAX_REPORT_LENGTH = 2000
+MAX_REPORT_LENGTH = 2000  # 프롬프트에 삽입되는 gold community_reports 최대 길이 값
 
 
+# mail/messenger 도메인별 community_reports 프롬프트 템플릿 파일을 읽어옴
 def load_prompts(prompts_dir: Path):
     return {
         "mail": (prompts_dir / "mail" / "prompts" / "community_reports.txt").read_text(encoding="utf-8"),
@@ -25,6 +27,7 @@ def load_prompts(prompts_dir: Path):
     }
 
 
+# 정상 쌍(pairs_normal)과 예산 초과 커뮤니티의 수작업 gold를 합쳐 최종 SFT 쌍 파일을 생성함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--prompts-dir", default=str(DEFAULT_PROMPTS_DIR))
@@ -42,7 +45,7 @@ def main():
     for case in oversized_cases:
         cid = case["community"]
         rep = oversized_reports[str(cid)]
-        gold_json = json.dumps(rep, ensure_ascii=False, indent=4)
+        gold_json = json.dumps(rep, ensure_ascii=False, indent=4)  # indent=4로 gold 원본 포맷과 동일하게 직렬화
         prompt = prompts[case["domain"]].format(input_text=case["trimmed_context"], max_report_length=str(MAX_REPORT_LENGTH))
         pairs.append({
             "instruction": prompt,

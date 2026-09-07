@@ -68,6 +68,7 @@ SEED = 20260818
 REAL_DATA_MARKER = "-Real Data-"
 
 
+# settings.yaml에서 entity_types 리스트를 정규식으로 추출함
 def load_entity_types(settings_path: Path) -> list[str]:
     text = settings_path.read_text(encoding="utf-8")
     m = re.search(r"entity_types:\s*\[([^\]]*)\]", text)
@@ -76,6 +77,7 @@ def load_entity_types(settings_path: Path) -> list[str]:
     return [t.strip() for t in m.group(1).split(",") if t.strip()]
 
 
+# extract_graph.txt 렌더링본을 "-Real Data-" 마커 기준으로 system 고정부/human 템플릿으로 분할함
 def build_system_and_human_template(prompt_path: Path, settings_path: Path):
     """extract_graph.txt를 (system 고정 프리픽스, human 템플릿) 으로 분할.
 
@@ -104,6 +106,7 @@ def build_system_and_human_template(prompt_path: Path, settings_path: Path):
     return system_part.strip("\n"), human_template
 
 
+# sft_pairs_v2 디렉터리의 *.jsonl 파일들을 모두 읽어 행 리스트로 합침 (밑줄로 시작하는 파일은 제외)
 def load_pairs(sft_pairs_dir: Path):
     rows = []
     for p in sorted(sft_pairs_dir.glob("*.jsonl")):
@@ -117,6 +120,7 @@ def load_pairs(sft_pairs_dir: Path):
     return rows
 
 
+# (domain, document_id) 기준으로 행들을 그룹핑함 (같은 문서의 여러 청크를 묶기 위함)
 def group_by_document(rows):
     groups = defaultdict(list)
     for r in rows:
@@ -124,6 +128,7 @@ def group_by_document(rows):
     return groups
 
 
+# 문서(청크 그룹) 단위로 도메인별 train/val을 나눔 — 같은 문서의 청크가 train/val에 걸쳐 섞이지 않도록 함
 def split_train_val(rows, val_ratio, seed):
     rng = random.Random(seed)
     groups = group_by_document(rows)
@@ -135,6 +140,7 @@ def split_train_val(rows, val_ratio, seed):
     for domain, docs in by_domain_docs.items():
         docs = docs[:]
         rng.shuffle(docs)
+        # 문서가 2개 이상일 때만 val을 떼어냄 (문서가 1개뿐이면 val 없이 전부 train)
         n_val_docs = max(1, round(len(docs) * val_ratio)) if len(docs) > 1 else 0
         val_docs = docs[:n_val_docs]
         train_docs = docs[n_val_docs:]
@@ -145,6 +151,7 @@ def split_train_val(rows, val_ratio, seed):
     return train, val
 
 
+# target_ratio(예: 60:40)에 맞춰 메신저 train 샘플을 email 개수 기준으로 복제/샘플링함
 def upsample_messenger(train_by_domain, target_ratio: str, seed):
     rng = random.Random(seed)
     if "email" not in train_by_domain or "messenger" not in train_by_domain:
@@ -159,11 +166,13 @@ def upsample_messenger(train_by_domain, target_ratio: str, seed):
     rng.shuffle(pool)
     if desired_msg <= n_msg:
         return pool[:desired_msg]
+    # 목표 개수가 원본보다 많으면 통째로 반복(reps)한 뒤 나머지(remainder)만 앞에서 잘라 채운다
     reps = desired_msg // n_msg
     remainder = desired_msg % n_msg
     return pool * reps + pool[:remainder]
 
 
+# SFT 쌍 한 건을 sharegpt 포맷(conversations: system/human/gpt)으로 변환함
 def to_sharegpt(row, system_templates: dict, human_templates: dict) -> dict:
     domain = row["domain"]
     human = human_templates[domain].replace("{input_text}", row["input"])
@@ -184,12 +193,14 @@ def to_sharegpt(row, system_templates: dict, human_templates: dict) -> dict:
     }
 
 
+# 행 리스트를 JSONL 파일로 저장함
 def write_jsonl(rows, path: Path):
     with open(path, "w", encoding="utf-8") as f:
         for r in rows:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
+# CLI 엔트리포인트: sft_pairs_v2를 읽어 프롬프트를 입히고 train/val + 업샘플링까지 거쳐 LLaMA-Factory용 jsonl과 dataset_info 스니펫을 만듦
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sft-pairs-dir", required=True, type=Path)
@@ -244,6 +255,7 @@ def main():
         files_written[f"mailgrapher_v4_{domain}_val"] = val_path.name
 
     # 참고용 최대 길이 통계 (전체 원본 rows 기준, train/val 합쳐서)
+    # 예시 하나의 system+human+output 총 글자 수를 구함 (최대 길이 참고 통계용)
     def total_len(r, domain):
         human = human_templates[domain].replace("{input_text}", r["input"])
         return len(system_templates[domain]) + len(human) + len(r["output"])

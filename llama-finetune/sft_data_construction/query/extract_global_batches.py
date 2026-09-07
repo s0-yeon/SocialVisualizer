@@ -35,10 +35,12 @@ from pathlib import Path
 MAP_MAX_LENGTH = 1000  # 프롬프트에 넘기지만 실제로는 참조되지 않는 파라미터 (프로덕션 프롬프트 소스 확인)
 
 
+# 질문 목록 json 파일을 읽어옴
 def load_questions(questions_json: Path) -> list[dict]:
     return json.loads(questions_json.read_text(encoding="utf-8"))
 
 
+# 배치 텍스트 파일들과 질문 목록을 조합해(배치 x 질문) MAP 태스크 딕셔너리 리스트를 만듦
 def build_map_tasks(batch_dir: Path, questions: list[dict], map_prompt_template: str, domain: str, room_id: str | None = None) -> list[dict]:
     tasks = []
     batch_files = sorted(batch_dir.glob("batch_*.txt"))
@@ -57,6 +59,7 @@ def build_map_tasks(batch_dir: Path, questions: list[dict], map_prompt_template:
     return tasks
 
 
+# CLI 엔트리포인트: 메일/메신저 배치와 파일럿 질문을 조합해 MAP 태스크 jsonl을 만들어 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--global-batches-dir", type=Path, required=True,

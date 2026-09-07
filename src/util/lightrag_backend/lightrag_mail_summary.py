@@ -1,14 +1,10 @@
 # src/util/lightrag_backend/lightrag_mail_summary.py
-#
-# graphrag_mail_summary.py(GraphRAG 버전, 원래 이름 mail_summary.py)의 LightRAG 대응 파일.
-# graphrag_mail_summary.py는 건드리지 않았다.
-# 원본은 이미 text_units.parquet 존재 여부를 확인하고 없으면 조용히 건너뛰는 가드가 있어서
-# LightRAG에서 죽지는 않았지만(감사 결과 확인됨), 그 대신 월별/연별 메일 요약 자체가
-# 통째로 생성되지 않는 문제가 있었다 — 여기서 mail_latest.txt 기반으로 실제로 동작하게 한다.
-#
-# LLM 호출 로직(_summarize_with_llm)은 원본과 동일하되, api_key는 원본이 쓰던
-# GRAPHRAG_API_KEY 대신 이 마이그레이션에서 LightRAG쪽에 쓰기로 한 LLM_API_KEY를 쓴다
-# (lightrag_date_query.py와 동일한 규칙).
+
+# LightRAG용 메일 월별/연별 요약 생성 모듈. 
+# mail_latest.txt를 파싱해 메일을 월/연 단위로 묶고, 그룹별로 LLM에 넘겨 요약문과 관련 연락처를 받아 mail_summaries.json에 저장한 뒤 mail_summarize 테이블 저장과 요약 삽화 생성까지 이어서 처리한다.
+
+# Generates monthly/yearly mail summaries for LightRAG. 
+# Parses mail_latest.txt, groups mails by month and year, sends each group to an LLM for a summary and related contacts,saves the result to mail_summaries.json, then persists it to the mail_summarize table and generates summary illustrations.
 
 import os
 import json
@@ -21,6 +17,7 @@ from util.lightrag_backend.lightrag_mail_parser import parse_mail_blocks, extrac
 from util.summary_image_generator import generate_mail_summary_images
 
 
+# 메일 목록을 LLM에 넘겨 해당 기간 요약과 관련 이메일 주소 목록을 JSON으로 받아온다
 def _summarize_with_llm(text, period_label, contacts):
     client = openai.OpenAI(
         api_key=os.environ.get("LLM_API_KEY"),
@@ -59,6 +56,7 @@ def _summarize_with_llm(text, period_label, contacts):
         return {"summary": "", "contacts": []}
 
 
+# mail_latest.txt를 파싱해 월별/연별 메일 요약을 만들고 JSON 저장 및 mail_summarize 테이블 저장, 삽화 생성까지 수행한다
 def generate_mail_summaries_lightrag(paths):
     records = parse_mail_blocks(paths)
     if not records:
@@ -98,21 +96,26 @@ def generate_mail_summaries_lightrag(paths):
         monthly_groups.setdefault(mail["month"], []).append(mail)
         yearly_groups.setdefault(mail["year"],  []).append(mail)
 
+    # 그룹의 메일들을 제목/발신인/내용 형식으로 합쳐 LLM 입력 텍스트로 만든다
     def _build_text(group):
         return "\n\n".join(
             f"제목: {m['subject']}\n발신인: {m['sender']}\n내용: {m['body']}"
             for m in group
         )
 
+    # 그룹 내 모든 메일의 발신/수신 이메일 주소를 정렬된 리스트로 모은다 (본인 제외)
+    my_email = (paths.USER_ID or "").lower()
+
     def _collect_contacts(group):
         emails = set()
         for m in group:
-            if m.get("sender_email"):
+            if m.get("sender_email") and m["sender_email"].lower() != my_email:
                 emails.add(m["sender_email"])
-            if m.get("receiver_email"):
+            if m.get("receiver_email") and m["receiver_email"].lower() != my_email:
                 emails.add(m["receiver_email"])
         return sorted(emails)
 
+    # 기간 그룹 하나를 LLM 요약해 (kind, period, 요약결과)를 반환한다
     def _summarize_group(kind, period, group):
         print(f"[mail_summary][lightrag] {kind} 요약 중: {period} ({len(group)}건)")
         return kind, period, _summarize_with_llm(_build_text(group), period, _collect_contacts(group))

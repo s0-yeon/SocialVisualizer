@@ -1,6 +1,11 @@
+# output 폴더에 단계별 parquet 파일이 얼마나 생겼는지 보고 GraphRAG 인덱싱 진행률과 완료 단계 메시지를 계산한다.
+
+# Computes GraphRAG indexing progress and stage-completion messages by checking which per-stage parquet files have appeared in the output folder.
+
 import re
 import os
 
+# output 폴더에 단계별 parquet이 얼마나 생겼는지 보고 인덱싱 진행률/메시지 목록을 계산한다
 def get_stage_progress(output_dir, start_time, reported_progress=0):
     stage_map = [
         ("text_units.parquet",        15, "텍스트 유닛 생성 완료"),

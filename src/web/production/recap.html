@@ -2,6 +2,11 @@
 <html lang="ko">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <!--
+  "Recap" 통계 요약 페이지 진입 HTML.
+
+  Entry HTML for the "Recap" stats summary page.
+-->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
@@ -13,11 +18,12 @@
       http-equiv="Referrer-Policy"
       content="strict-origin-when-cross-origin"
     />
-    <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" type="image/x-icon" />
+    <link rel="icon" href="/images/logos/socialvisualizer.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/images/logos/socialvisualizer.png" sizes="231x231" />
     <title>Social Visualizer</title>
 
-    <!-- 💡 Bootstrap Icons 필수 로드 -->
+    <!-- Bootstrap Icons 필수 로드 -->
     <link
       rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
@@ -41,232 +47,7 @@
   <body class="page-recap">
     <div class="container body">
       <div class="main_container">
-        <div id="app-header"></div>
-
-        <!-- 공통 사이드바 컨테이너 -->
-        <div id="app-sidebar"></div>
-
-        <!-- 메인 콘텐츠 영역 (중복 main 태그 제거) -->
-        <main
-          class="right_col"
-          role="main"
-          style="padding: 0; overflow-y: auto"
-        >
-          <!-- 히어로 배너 -->
-          <div class="rc-hero">
-            <div class="rc-hero-inner">
-              <div class="rc-hero-label">Mail Analytics</div>
-              <div class="rc-hero-title">📊 Recap</div>
-              <div class="rc-hero-sub" id="rcHeroSub">
-                내 메일함 통계 한눈에 보기
-              </div>
-              <!-- 계정 선택은 사이드바가 전담 — account-picker-mount는 없앴고
-                   recap.js는 컨테이너 없이(null) "헤드리스"로 계속 호출해
-                   초기 계정 id만 조용히 resolve한다(화면엔 안 그려짐). -->
-            </div>
-            <a href="graph-viz.html" class="rc-hero-graph-link">
-              <span>knowledge graph</span>
-              <span class="rc-hero-graph-arrow">→</span>
-            </a>
-          </div>
-
-          <!-- 컨텐츠 -->
-          <div class="rc-content">
-            <!-- ── 1행: 수신/발신 2열 ── -->
-            <div class="rc-grid2">
-              <!-- 나에게 가장 많이 보낸 사람 -->
-              <div class="rc-card">
-                <div class="rc-card-header">
-                  <div class="rc-card-title">
-                    <div class="rc-card-title-icon" style="background: #fff9e6">
-                      📨
-                    </div>
-                    나에게 많이 보낸 사람
-                  </div>
-                  <span
-                    class="rc-card-badge"
-                    id="rcSenderBadge"
-                    style="display: none"
-                  ></span>
-                </div>
-                <div id="rcSenderLoading" class="rc-loading">
-                  <div class="rc-spinner"></div>
-                  데이터를 불러오는 중…
-                </div>
-                <div
-                  id="rcSenderError"
-                  class="rc-error"
-                  style="display: none"
-                ></div>
-                <div id="rcSenderContent" style="display: none">
-                  <div id="rcTopSender"></div>
-                  <ul class="rc-bar-list" id="rcBarList"></ul>
-                </div>
-              </div>
-
-              <!-- 내가 가장 많이 보낸 사람 -->
-              <div class="rc-card">
-                <div class="rc-card-header">
-                  <div class="rc-card-title">
-                    <div class="rc-card-title-icon" style="background: #e8f4fd">
-                      📤
-                    </div>
-                    내가 많이 보낸 사람
-                  </div>
-                  <span
-                    class="rc-card-badge"
-                    id="rcMySentBadge"
-                    style="display: none"
-                  ></span>
-                </div>
-                <div id="rcMySentLoading" class="rc-loading">
-                  <div class="rc-spinner"></div>
-                  데이터를 불러오는 중…
-                </div>
-                <div
-                  id="rcMySentError"
-                  class="rc-error"
-                  style="display: none"
-                ></div>
-                <div id="rcMySentContent" style="display: none">
-                  <div id="rcTopMySent"></div>
-                  <ul class="rc-bar-list" id="rcMySentBarList"></ul>
-                </div>
-              </div>
-            </div>
-
-            <!-- ── 2열 그리드 시작 ── -->
-            <div class="rc-grid2">
-              <!-- 키워드 통계 -->
-              <div class="rc-card">
-                <div class="rc-card-header">
-                  <div class="rc-card-title">
-                    <div class="rc-card-title-icon" style="background: #f0faf4">
-                      ✦
-                    </div>
-                    메일 속 주요 키워드
-                  </div>
-                  <span
-                    class="rc-card-badge"
-                    id="rcKwBadge"
-                    style="display: none"
-                  ></span>
-                </div>
-                <div id="rcKwLoading" class="rc-loading">
-                  <div class="rc-spinner"></div>
-                  키워드 분석 중…
-                </div>
-                <div
-                  id="rcKwError"
-                  class="rc-error"
-                  style="display: none"
-                ></div>
-                <div id="rcKwContent" style="display: none">
-                  <div class="rc-wc-wrap" id="rcKwCanvas"></div>
-                </div>
-              </div>
-
-              <!-- 친밀도 통계 (도넛 차트) -->
-              <div class="rc-card">
-                <div class="rc-card-header">
-                  <div class="rc-card-title">
-                    <div class="rc-card-title-icon" style="background: #fff0f6">
-                      💌
-                    </div>
-                    친밀도
-                  </div>
-                  <span
-                    class="rc-card-badge"
-                    id="rcAfBadge"
-                    style="display: none"
-                  ></span>
-                </div>
-                <div id="rcAfLoading" class="rc-loading">
-                  <div class="rc-spinner"></div>
-                  친밀도 분석 중…
-                </div>
-                <div
-                  id="rcAfError"
-                  class="rc-error"
-                  style="display: none"
-                ></div>
-                <div id="rcAfContent" style="display: none">
-                  <div class="rc-af-donut-wrap">
-                    <div class="rc-af-chart-container">
-                      <svg
-                        class="rc-af-donut-svg"
-                        viewBox="0 0 200 200"
-                        id="rcAfDonutSvg"
-                      >
-                        <circle
-                          class="rc-af-donut-bg"
-                          cx="100"
-                          cy="100"
-                          r="82.5"
-                        ></circle>
-                      </svg>
-                      <div class="rc-af-center-info">
-                        <div class="rc-af-center-num" id="rcAfCenterNum">-</div>
-                        <div class="rc-af-center-label">TOP 친밀도</div>
-                      </div>
-                    </div>
-                    <div class="rc-af-legend" id="rcAfLegend"></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- ── 3행: 동기화 ── -->
-            <div class="rc-grid2">
-              <!-- 메일 동기화 통계 -->
-              <div class="rc-card rc-sync-card">
-                <div class="rc-card-header">
-                  <div class="rc-card-title">
-                    <div class="rc-card-title-icon" style="background: #eff6ff">
-                      🔄
-                    </div>
-                    메일 동기화 현황
-                  </div>
-                </div>
-                <div id="rcSyncLoading" class="rc-loading">
-                  <div class="rc-spinner"></div>
-                  동기화 정보 불러오는 중…
-                </div>
-                <div
-                  id="rcSyncError"
-                  class="rc-error"
-                  style="display: none"
-                ></div>
-                <div id="rcSyncContent" style="display: none">
-                  <div class="rc-sync-tiles">
-                    <div class="rc-sync-tile rc-sync-tile--blue">
-                      <div class="rc-sync-tile-icon">📬</div>
-                      <div class="rc-sync-tile-num" id="rcSyncCount">—</div>
-                      <div class="rc-sync-tile-label">동기화된 메일</div>
-                    </div>
-                    <div class="rc-sync-tile rc-sync-tile--violet">
-                      <div class="rc-sync-tile-icon">⏱</div>
-                      <div class="rc-sync-tile-num" id="rcSyncTime">—</div>
-                      <div class="rc-sync-tile-label">동기화 소요</div>
-                    </div>
-                    <div class="rc-sync-tile rc-sync-tile--teal">
-                      <div class="rc-sync-tile-icon">📅</div>
-                      <div
-                        class="rc-sync-tile-num rc-sync-date"
-                        id="rcSyncDate"
-                      >
-                        —
-                      </div>
-                      <div class="rc-sync-tile-label">마지막 동기화</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-
-        <footer id="app-footer"></footer>
+        <div id="recap-app-root"></div>
       </div>
     </div>
   </body>

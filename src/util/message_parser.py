@@ -1,3 +1,7 @@
+# 카카오톡 대화 내보내기 텍스트를 파싱해 메시지 목록으로 정규화하고, 방 이름 추출과 인덱싱용 블록·방 ID 생성까지 처리한다.
+
+# Parses KakaoTalk chat export text into a normalized list of messages, and handles room-name extraction and building indexing blocks and room IDs.
+
 import re
 import hashlib
 import datetime
@@ -36,6 +40,7 @@ _BARE_DATE_SEP_RE = re.compile(
 _ROOM_NAME_HINT_RE = re.compile(r'카카오톡\s*대화\s*[:：]?\s*(?P<name>.+)')
 
 
+# 오전/오후 표기와 12시간제 시각을 24시간제 정수 시(hour)로 변환한다
 def _to_24h(ap: str, h) -> int:
     h = int(h)
     if ap == "오후" and h != 12:
@@ -45,9 +50,7 @@ def _to_24h(ap: str, h) -> int:
     return h
 
 
-# 카카오톡 대화 내보내기 텍스트(.txt)를 모바일/PC 포맷 구분 없이 파싱해서
-# [{"dt": datetime, "sender": str|None, "text": str, "is_system": bool}, ...] 로 정규화한다.
-# 실제 안드로이드/iOS/PC 내보내기 실물 파일로 정규식을 검증/보정하는 게 아직 필요함(알려진 포맷 기준으로 작성).
+# 카카오톡 대화 내보내기 텍스트를 모바일/PC 포맷 구분 없이 파싱해 메시지 dict 리스트로 정규화한다
 def parse_message_export(raw_text: str) -> list[dict]:
     messages: list[dict] = []
     current_date = None  # PC 포맷에서 날짜 구분선으로만 갱신되는 "현재 날짜" 컨텍스트
@@ -92,15 +95,13 @@ def parse_message_export(raw_text: str) -> list[dict]:
             continue
 
         # 위 패턴에 매치되지 않는 줄은 직전 메시지의 연속 줄(멀티라인 메시지: 사진 전송 안내 뒤 텍스트, 줄바꿈 포함 메시지 등)로 간주.
-        # 아직 메시지가 하나도 없으면(파일 맨 앞 안내문 등) 그냥 무시한다.
         if messages:
             messages[-1]["text"] += "\n" + line
 
     return messages
 
 
-# 파일 헤더 영역에서 방 이름 후보를 시도 추출. 실패하면 fallback(보통 업로드 파일명) 반환.
-# 최종적으로는 프론트 폼에서 사용자가 직접 입력/수정한 값이 우선하므로 이 함수는 초기값 추정 용도.
+# 파일 헤더에서 방 이름 후보를 추출하고, 못 찾으면 fallback(보통 업로드 파일명)을 반환한다
 def guess_room_name(raw_text: str, fallback: str) -> str:
     for line in raw_text.splitlines()[:5]:
         line = line.strip()
@@ -109,12 +110,11 @@ def guess_room_name(raw_text: str, fallback: str) -> str:
         m = _ROOM_NAME_HINT_RE.search(line)
         if m and m.group("name").strip():
             return m.group("name").strip()
-        break  # 첫 non-blank 줄만 후보로 봄 — 그 아래는 이미 대화 본문일 가능성이 높음
+        break  # 첫 non-blank 줄만 후보로 봄
     return fallback
 
 
-# 메시지 목록을 날짜별로 묶어(하루 메시지가 너무 많으면 max_per_block개씩 추가 분할) GraphRAG 인풋용
-# "메일 블록" 호환 텍스트로 변환한다 (구분자 MAIL_BLOCK_SEP, 블록당 ID:/날짜: 필수 — mail_data_manager.py 요구사항).
+# 메시지 목록을 날짜별(+너무 많으면 max_per_block개씩)로 묶어 GraphRAG 인풋용 "메일 블록" 텍스트로 변환한다
 def build_message_blocks(messages: list[dict], room_name: str, max_per_block: int = MESSAGE_MAX_MESSAGES_PER_BLOCK) -> list[str]:
     if not messages:
         return []
@@ -170,12 +170,7 @@ def build_message_blocks(messages: list[dict], room_name: str, max_per_block: in
     return blocks
 
 
-# 대화방 이름만으로 안정적인 합성 user_id를 만든다 (같은 방 이름을 다시 올리면 항상 같은 값 → append 대상 계정이 유지됨).
-# 방 이름(한글, 길이 제각각)을 그대로 ID에 넣으면 DB 쪽에서 chatroom_id가 여러 테이블의
-# 복합 PK/FK에 반복돼 InnoDB 인덱스 최대 길이(3072바이트)를 넘기는 문제가 있었다.
-# 그래서 ID는 항상 40자 고정 길이의 SHA1 hex(ASCII)만 쓴다. 사람이 읽을 표시용 이름은
-# 이 함수의 인자로 들어온 room_name을 호출부에서 별도로 보존해야 한다(예: chatroom 테이블의
-# chatroom_name 컬럼).
+# 대화방 이름을 SHA1 hex로 해싱해 40자 고정 길이의 안정적인 합성 ID를 만든다 (InnoDB 인덱스 길이 제한 회피용)
 def build_room_id(room_name: str) -> str:
     normalized = (room_name or "").strip()
     return hashlib.sha1(normalized.encode("utf-8")).hexdigest()

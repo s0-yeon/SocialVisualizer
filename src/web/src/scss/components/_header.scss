@@ -1,0 +1,161 @@
+/*
+ 공통 헤더(Header.jsx) 스타일 — 상단 고정 네비게이션 바와, 사이드바 제거에 따른 레이아웃 오프셋 보정을 한 곳에 모았다.
+ 
+ Styles for the shared header (Header.jsx) — the fixed top nav bar and layout offset fixes now that the old sidebar is gone.
+ */
+
+// 기존에 페이지마다 미세하게 다르게 복붙되어 있던 .gw-top-links 관련 규칙을 한 곳으로 통합.
+
+// 사이드바가 사라졌으므로 top_nav/right_col의 사이드바 오프셋을 항상 0으로 고정 상단바는 전체 사이트 공통으로 흰색 배경 + 고정(fixed) — 스크롤 시 아래 콘텐츠가 비쳐서 메뉴가 지저분해 보이지 않도록 투명 대신 흰색으로 막음
+.top_nav {
+  position: fixed;
+  // top:0 + min-height로 바닥 기준(top+min-height)을 73px로 유지 (.right_col/.gw-orbit-hero/.mypeople의 97px 공식과 호환)
+  top: 0px;
+  left: 0;
+  right: 0;
+  // 좌측 필터 사이드바(.gws-rail)가 z-index:999라서, 창이 좁아져 상단 "View
+  // results" 드롭다운(My People/My Time/... 목록)이 사이드바 위쪽 영역과
+  // 겹치면 그 아래로 숨어버렸음 — 헤더 전체를 사이드바보다 항상 위에 오도록
+  // 999보다 큰 값으로 올림.
+  z-index: 1000;
+  margin-left: 0 !important; // 사이드바 제거 후에도 남아있는 다른 반응형 규칙(margin-left:70/230px)을 이기기 위함
+  background: #ffffff;
+  min-height: 70px;
+  display: flex;
+  align-items: center;
+  // 맨 위에서는 그림자가 안 보이다가, 스크롤하면 js/init.js가 붙여주는 .gw-header-scrolled 클래스가 붙으면서 자연스럽게 그림자가 나타남
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0);
+  transition: box-shadow 0.2s ease;
+
+  &.gw-header-scrolled {
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  }
+
+  .nav_menu {
+    background: #ffffff;
+    // 로고/메뉴를 한꺼번에 아래로 내리고 싶으면 이 px 값만 조절하면 됨 (음수를 주면 위로 올라감)
+    transform: translateY(10px);
+  }
+}
+.right_col {
+  // 사이드바가 없는 페이지(홈/검색/View knowledge graph 등)에서는 --gw-sidebar-w가 세팅되지 않아 기본값 0px이라 기존과 동일 — My People/My Time/Recap처럼 #app-sidebar를 실제로 마운트하는 페이지에서만 appSidebar.js가 이 변수를 갱신해서 오른쪽 영역이 사이드바 폭만큼 같이 늘었다 줄었다 한다.
+  margin-left: var(--gw-sidebar-w, 0px) !important;
+  padding-top: 97px !important; // 고정 헤더 바닥 기준(top+min-height=73px) + 여백 24px. top_nav의 top/min-height 조합이 바뀌어도 바닥 기준(73px)만 유지되면 이 값은 안 바꿔도 됨 — 바닥 기준 자체가 바뀌면 이 값도 "바닥 기준 + 24px"로 같이 맞춰야 함
+  transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gw-brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-right: 32px;
+  flex-shrink: 0;
+  text-decoration: none !important; // Bootstrap 링크 밑줄 무력화
+}
+.gw-brand-logo-icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+.gw-brand-logo-text {
+  font-family:
+    "Pretendard",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-weight: 600;
+  // 헤더 바 자체의 높이(73px)는 모든 페이지의 top/padding-top 고정값 계산 기준이라
+  // 절대 줄이면 안 되지만(줄이면 8개 페이지 전부 배치가 틀어짐), 그 안의 글자/여백은
+  // clamp()로 창 폭에 따라 같이 줄어들게 해서 1180px 이하에서 메뉴가 뚝 사라지기
+  // 전까지 더 자연스럽게 좁아지도록 함.
+  font-size: clamp(1.05rem, 1.3vw, 1.3rem);
+  color: #000000;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.gw-top-links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.gw-tl {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px clamp(10px, 1.3vw, 18px);
+  border-radius: 8px;
+  font-family:
+    "Pretendard",
+    "Inter",
+    -apple-system,
+    sans-serif;
+  font-size: clamp(0.85rem, 1vw, 1rem);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  // _global-overrides.scss의 전역 `a { color: var(--gt-link-color) !important }`가 사이트 전체 링크를 다른색으로 강제하므로, 이를 이기기 위해 !important 필요
+  color: #000000 !important;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  white-space: nowrap;
+  line-height: 1.4;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.28);
+    color: #737373 !important;
+    text-decoration: none;
+  }
+  &.active {
+    color: #737373 !important;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.4);
+  }
+}
+
+@media (max-width: 1180px) {
+  .gw-top-links {
+    display: none;
+  }
+}
+
+.gw-tl-dropdown {
+  position: relative;
+}
+.gw-tl-dd-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding-top: 6px;
+  background: #fff;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  z-index: 9999;
+  min-width: 140px;
+  padding: 6px 0;
+}
+.gw-tl-dropdown:hover .gw-tl-dd-menu {
+  display: block;
+}
+.gw-tl-dd-menu a {
+  display: block;
+  padding: 8px 16px;
+  font-size: 0.84rem;
+  color: #2a3f54;
+  text-decoration: none;
+
+  &:hover {
+    background: #f4f6f8;
+    color: #fb923c;
+  }
+  &.active {
+    color: #fb923c;
+    font-weight: 700;
+  }
+}

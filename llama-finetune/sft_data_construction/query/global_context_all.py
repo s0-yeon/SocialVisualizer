@@ -54,6 +54,7 @@ GLOBAL_SEARCH_CONFIG = dict(
 RANDOM_STATE = 86  # GlobalCommunityContext 기본값 — 질문과 무관하게 배치 구성을 고정시킴
 
 
+# 한 도메인(메일 또는 방)의 community_reports/entities로 MAP 배치 텍스트 리스트를 한 번 계산함
 def build_batches_for_domain(community_reports_df, entities_df) -> list[str]:
     """query 인자를 안 쓰므로(dynamic_community_selection 미사용), 아무 placeholder
     질문으로 build_context를 호출해도 배치 구성은 항상 동일하다."""
@@ -69,6 +70,7 @@ def build_batches_for_domain(community_reports_df, entities_df) -> list[str]:
     return context_result.context_chunks
 
 
+# CLI 엔트리포인트: 메일 도메인과 방별(messenger) 도메인의 MAP 배치를 계산해 텍스트 파일로 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mail-community-reports", type=Path, required=True)

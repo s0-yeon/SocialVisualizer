@@ -1,0 +1,98 @@
+/*
+ 지식그래프 시각화 페이지 전용 스타일(인라인 <style>에서 이관, 공통 헤더/사이드바 규칙 제외).
+ 
+ Styles for the knowledge-graph visualization page (migrated from inline <style>, excluding shared header/sidebar rules).
+ */
+
+// 그래프 렌더링 영역 — 전체 화면을 차지하는 SVG/캔버스 컨테이너
+#graph-section {
+  width: 100%;
+  height: calc(100vh - 80px);
+  position: relative;
+}
+#graph {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+}
+
+// 그래프 좌상단에 떠 있는 계정/도메인 선택 패널
+.gv-picker-panel {
+  position: absolute;
+  top: clamp(14px, 1.8vw, 24px);
+  left: clamp(16px, 2vw, 28px);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: clamp(6px, 1vw, 10px);
+}
+
+// 도메인(메일/메시지 등) 전환 토글 버튼 그룹 — 알약 모양 스위치
+.gv-domain-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: #fff;
+  border: none;
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+.gv-domain-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: clamp(5px, 0.8vw, 6px) clamp(10px, 1.8vw, 14px);
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #73879c;
+  font-size: clamp(0.72rem, 1.05vw, 0.82rem);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+.gv-domain-btn:hover {
+  color: #2a3f54;
+}
+.gv-domain-btn.active {
+  background: #fb923c;
+  color: #fff;
+}
+
+// 계정 선택 드롭다운(공용 컴포넌트)에 이 페이지 전용 그림자만 덧붙임
+.gv-account-picker-wrap .gw-account-picker {
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  padding: clamp(6px, 0.9vw, 7px) clamp(10px, 1.6vw, 12px);
+  font-size: clamp(0.75rem, 1.05vw, 0.85rem);
+}
+
+// 노드/엣지 위에 마우스를 올렸을 때 뜨는 툴팁
+#tooltip {
+  position: fixed;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: clamp(12px, 1vw, 13px);
+  font-family: sans-serif;
+  line-height: 1.6;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  max-width: 260px;
+  z-index: 9999;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+#tooltip.visible {
+  opacity: 1;
+}
+
+// 이 페이지는 그래프를 전체 화면으로 써야 해서 공통 푸터를 숨김
+footer {
+  display: none !important;
+}

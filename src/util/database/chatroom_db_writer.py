@@ -1,6 +1,6 @@
-# src/util/database/chatroom_db_writer.py
-# db_writer.py의 메신저(카카오톡) 버전. chatroom/chatroom_people/message_block/participant/message_keyword/message_summarize/chatroom_relationship 테이블에 데이터 저장
-# get_db_connection/get_or_create_user_id/collect_indexing_stats는 도메인 독립적이라 db_writer.py 것을 그대로 재사용
+# 메신저 대화방 인덱싱 결과(참여자·대화 블록·관계·키워드·요약·분위기 등)를 chatroom 관련 테이블에 저장한다.
+
+# Utility functions that persist messenger chatroom indexing results (participants, message blocks, relationships, keywords, summaries, mood) into the chatroom-related database tables.
 
 import os
 import json
@@ -8,161 +8,24 @@ import datetime
 from config.db import get_db_connection
 from util.database.db_writer import get_or_create_user_id, collect_indexing_stats
 
+# datetime이면 microsecond를 제거해 초 단위로 통일한다 (그 외 값은 그대로 반환)
 def _normalize_datetime(value):
-    # chatroom.index_date는 DATETIME(초 단위, 마이크로초 없음) 컬럼이므로 형태 통일 목적
     if isinstance(value, datetime.datetime):
         return value.replace(microsecond=0)
     return value
 
 # participant.participant_name / message_keyword.participant_name 둘 다 VARCHAR(255).
-# message_statics._MSG_LINE_RE가 여러 줄 메시지의 중간 줄을 "HH:MM 이름: 내용" 패턴으로
-# 오탐하면 콜론 앞 문장 전체가 발신자 이름으로 잡혀 255자를 넘는 경우가 있다 — 그대로
-# INSERT하면 MySQL이 1406(Data too long)으로 블록 전체 저장을 실패시키므로, 잘라서 저장하되
-# 잘렸다는 걸 알 수 있게 말줄임표를 남긴다(프론트는 컬럼 값을 그대로 표시하면 되므로 별도 처리 불필요).
 _PARTICIPANT_NAME_MAXLEN = 255
 
+# 참여자 이름이 maxlen(255)을 넘으면 말줄임표를 붙여 잘라낸다 (파싱 오탐으로 긴 이름이 들어오는 경우 대비)
 def _clip_participant_name(name: str, maxlen: int = _PARTICIPANT_NAME_MAXLEN) -> str:
     name = (name or "").strip()
     if len(name) <= maxlen:
         return name
     return name[: maxlen - 3].rstrip() + "..."
 
-def init_chatroom_tables():
-    """서버 시작 시 chatroom 관련 7개 테이블이 없으면 자동 생성 (chatroom_relationship 포함 — 원래
-    sql/message_schema.sql에 있었으나 이 저장소에는 해당 파일이 없어 여기 직접 추가함)"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chatroom (
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                chatroom_name VARCHAR(255) NOT NULL,
-                message_platform VARCHAR(50),
-                message_count INT,
-                index_time VARCHAR(50),
-                llm_model VARCHAR(100),
-                embed_model VARCHAR(100),
-                llm_calls INT,
-                input_tokens INT,
-                output_tokens INT,
-                embed_calls INT,
-                embed_tokens INT,
-                total_tokens INT,
-                cost_usd DECIMAL(12,6),
-                node_count INT,
-                edge_count INT,
-                PRIMARY KEY (chatroom_id, index_date, user_id),
-                FOREIGN KEY (user_id) REFERENCES `user`(user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chatroom_people (
-                participant_id VARCHAR(255) NOT NULL,
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                chatroom_people_name VARCHAR(255),
-                message_count INT,
-                description TEXT,
-                PRIMARY KEY (participant_id, chatroom_id, index_date, user_id),
-                FOREIGN KEY (chatroom_id, index_date, user_id)
-                    REFERENCES chatroom(chatroom_id, index_date, user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS message_block (
-                block_id VARCHAR(255) NOT NULL,
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                block_date DATE,
-                message_count INT,
-                participant_count INT,
-                kg_tone VARCHAR(20),
-                llm_tone VARCHAR(20),
-                participant JSON,
-                PRIMARY KEY (block_id, chatroom_id, index_date, user_id),
-                FOREIGN KEY (chatroom_id, index_date, user_id)
-                    REFERENCES chatroom(chatroom_id, index_date, user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS participant (
-                participant_name VARCHAR(255) NOT NULL,
-                block_id VARCHAR(255) NOT NULL,
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                sent_message INT,
-                PRIMARY KEY (participant_name, block_id, chatroom_id, index_date, user_id),
-                FOREIGN KEY (block_id, chatroom_id, index_date, user_id)
-                    REFERENCES message_block(block_id, chatroom_id, index_date, user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS message_keyword (
-                keyword_name VARCHAR(100) NOT NULL,
-                participant_name VARCHAR(255) NOT NULL,
-                block_id VARCHAR(255) NOT NULL,
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                mention_count INT,
-                PRIMARY KEY (keyword_name, participant_name, block_id, chatroom_id, index_date, user_id),
-                FOREIGN KEY (participant_name, block_id, chatroom_id, index_date, user_id)
-                    REFERENCES participant(participant_name, block_id, chatroom_id, index_date, user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS message_summarize (
-                summarize_unit VARCHAR(20) NOT NULL,
-                summary_period VARCHAR(20) NOT NULL,
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                summarized_context TEXT,
-                contacts JSON,
-                PRIMARY KEY (summarize_unit, summary_period, chatroom_id, index_date, user_id),
-                FOREIGN KEY (chatroom_id, index_date, user_id)
-                    REFERENCES chatroom(chatroom_id, index_date, user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS chatroom_relationship (
-                chatroom_id CHAR(40) NOT NULL,
-                index_date DATETIME NOT NULL,
-                user_id CHAR(36) NOT NULL,
-                person_a VARCHAR(255) NOT NULL,
-                person_b VARCHAR(255) NOT NULL,
-                relation_label VARCHAR(100),
-                description TEXT,
-                PRIMARY KEY (chatroom_id, index_date, user_id, person_a, person_b),
-                FOREIGN KEY (person_a, chatroom_id, index_date, user_id)
-                    REFERENCES chatroom_people(participant_id, chatroom_id, index_date, user_id),
-                FOREIGN KEY (person_b, chatroom_id, index_date, user_id)
-                    REFERENCES chatroom_people(participant_id, chatroom_id, index_date, user_id)
-            ) ENGINE=InnoDB
-        """)
-
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("[DB] chatroom 관련 테이블 준비 완료")
-    except Exception as e:
-        print(f"[DB] chatroom 테이블 초기화 실패 (무시): {e}")
-
-
+# chatroom 테이블에서 해당 chatroom_id의 가장 최근 레코드를 dict로 반환한다 (없으면 None)
 def get_latest_chatroom(chatroom_id: str):
-    # chatroom 테이블에서 해당 chatroom_id의 가장 최근 레코드 반환
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -185,8 +48,8 @@ def get_latest_chatroom(chatroom_id: str):
         conn.close()
 
 
+# chatroom 레코드의 복합 키 (chatroom_id, index_date, user_id)를 반환한다 (레코드도 update_date도 없으면 None)
 def _resolve_chatroom_key(chatroom_id: str, update_date=None):
-    # chatroom 레코드의 (chatroom_id, index_date, user_id)를 반환. 아직 chatroom 레코드가 없고 update_date도 없으면 None.
     update_date = _normalize_datetime(update_date)
 
     latest = get_latest_chatroom(chatroom_id)
@@ -198,8 +61,8 @@ def _resolve_chatroom_key(chatroom_id: str, update_date=None):
     return chatroom_id, update_date, user_id
 
 
+# chatroom 테이블에 인덱싱 결과 레코드를 생성하고 user_id를 반환한다 (user_id 없으면 신규 발급)
 def create_chatroom(chatroom_id, chatroom_name, ended_at, index_time, message_count, message_platform):
-    # chatroom 테이블에 인덱싱 결과 레코드 생성 (user_id 없으면 신규 발급)
     user_id = get_or_create_user_id(chatroom_id)
     ended_at = _normalize_datetime(ended_at)
 
@@ -232,8 +95,8 @@ def create_chatroom(chatroom_id, chatroom_name, ended_at, index_time, message_co
     return user_id
 
 
+# collect_indexing_stats 결과를 chatroom 테이블의 통계 컬럼들에 업데이트한다
 def update_chatroom_indexing_stats(chatroom_id: str, index_date, stats: dict):
-    # chatroom 테이블의 인덱싱 컬럼 업데이트
     key = _resolve_chatroom_key(chatroom_id, index_date)
     if key is None:
         print(f"[WARN] update_chatroom_indexing_stats: chatroom 없음 {chatroom_id}")
@@ -285,8 +148,8 @@ def update_chatroom_indexing_stats(chatroom_id: str, index_date, stats: dict):
         conn.close()
 
 
+# graph_data.json의 노드/엣지 수를 chatroom 테이블에 저장한다
 def save_chatroom_graph_stats_to_db(paths, update_date=None):
-    # graph_data.json을 읽어 노드/엣지 수를 chatroom 테이블에 저장
     if not os.path.exists(paths.GRAPH_JSON_PATH):
         print(f"[WARN] 그래프 JSON 파일이 없습니다: {paths.GRAPH_JSON_PATH}")
         return
@@ -326,8 +189,8 @@ def save_chatroom_graph_stats_to_db(paths, update_date=None):
         conn.close()
 
 
+# 대화 블록을 파싱해 블록별 메시지 수·참여자·어조와 참여자별 발화 수를 message_block/participant 테이블에 저장한다
 def save_message_block_to_db(paths, update_date=None):
-    # text_units.parquet에서 대화 블록을 파싱해 message_block + participant 테이블에 저장
     from util.message_statics import _parse_message_blocks_from_parquet, _classify_message_tone_with_llm
 
     key = _resolve_chatroom_key(paths.USER_ID, update_date)
@@ -407,9 +270,9 @@ def save_message_block_to_db(paths, update_date=None):
         conn.close()
 
 
+# 참여자별 메시지 수와 LLM 프로필(description)을 chatroom_people 테이블에 저장한다
 def save_chatroom_people_to_db(paths, update_date=None):
-    # chatroom_people_messages.json 기반 메시지 수 + LLM 프로필(description)을 chatroom_people에 저장
-    from util.message_statics import generate_chatroom_people_descriptions
+    from util.message_statics import generate_chatroom_people_descriptions, generate_chatroom_people_short_bios
 
     key = _resolve_chatroom_key(paths.USER_ID, update_date)
     if key is None:
@@ -429,29 +292,34 @@ def save_chatroom_people_to_db(paths, update_date=None):
         print(f"[WARN] 참여자 프로필 생성 실패, description 없이 저장: {e}")
         descriptions = {}
 
+    # description을 입력으로 My Time 툴팁용 한줄소개(short_bio) 2차 생성
+    try:
+        short_bios = generate_chatroom_people_short_bios(descriptions)
+    except Exception as e:
+        print(f"[WARN] 참여자 한줄소개 생성 실패, short_bio 없이 저장: {e}")
+        short_bios = {}
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         insert_sql = """
             INSERT INTO chatroom_people (
                 participant_id, chatroom_id, index_date, user_id,
-                chatroom_people_name, message_count, description
+                chatroom_people_name, message_count, description, short_bio
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 chatroom_people_name = VALUES(chatroom_people_name),
                 message_count        = VALUES(message_count),
-                description          = COALESCE(VALUES(description), description)
+                description          = COALESCE(VALUES(description), description),
+                short_bio            = COALESCE(VALUES(short_bio), short_bio)
         """
         count = 0
         for name, messages in people.items():
-            # participant_id/chatroom_people_name도 participant 테이블과 동일한 원인(파싱 오탐으로
-            # 생긴 비정상적으로 긴 "이름")으로 VARCHAR(255)를 넘을 수 있어 동일하게 클립한다.
-            # descriptions는 원본(미클립) 이름으로 키가 잡혀 있으므로 조회는 원본 name으로 한다.
             clipped_name = _clip_participant_name(name)
             cursor.execute(insert_sql, (
                 clipped_name, chatroom_id, update_date, user_id,
-                clipped_name, len(messages), descriptions.get(name),
+                clipped_name, len(messages), descriptions.get(name), short_bios.get(name),
             ))
             count += 1
 
@@ -466,13 +334,8 @@ def save_chatroom_people_to_db(paths, update_date=None):
         conn.close()
 
 
+# graph_data.json의 사람-사람 엣지 중 relation_label이 붙은 것만 무방향으로 정리해 chatroom_relationship 테이블에 저장한다
 def save_chatroom_relationships_to_db(paths, update_date=None):
-    """graph_data.json의 사람-사람 interacts_with 엣지 중 relation_label이 붙은 것만
-    chatroom_relationship 테이블에 저장한다. person_a/person_b가 chatroom_people을 FK로
-    참조하므로 반드시 save_chatroom_people_to_db가 끝난 뒤에 호출해야 한다.
-
-    GraphRAG가 같은 두 사람에 대해 A→B, B→A를 따로 뽑는 경우가 있어서, 같은 두 사람 쌍은
-    무방향으로 취급해 하나만 남긴다(weight를 저장하지 않으므로 나중에 뽑힌 엣지로 덮어쓴다)."""
     if not os.path.exists(paths.GRAPH_JSON_PATH):
         print(f"[WARN] 그래프 JSON 파일이 없습니다: {paths.GRAPH_JSON_PATH}")
         return
@@ -486,13 +349,7 @@ def save_chatroom_relationships_to_db(paths, update_date=None):
     with open(paths.GRAPH_JSON_PATH, "r", encoding="utf-8") as f:
         graph_data = json.load(f)
 
-    # graph_data.json 엣지엔 type 필드가 없어서(interacts_with인지 구분 불가), relation_label
-    # 태그만으로 거르면 Person-Date/Keyword/NamedEntity 엣지까지 섞여 들어온다(LLM이 태그를
-    # interacts_with 외의 엣지에도 잘못 붙이는 경우가 있음). graph_data.json의 entity_type도
-    # 못 믿는 게, 1:1 채팅방(방 이름=상대방 이름)에서 상대방이 Person이 아니라 ChatRoom
-    # 엔티티로만 잘못 분류되는 경우가 있다. 대신 message 파싱으로 만들어진(엔티티 추출과
-    # 무관한) chatroom_people 참여자 명단을 진짜 "사람" 기준으로 쓴다 — 이 명단이 어차피
-    # person_a/person_b의 FK 대상이라 이중으로 정확하다.
+    # message 파싱으로 만들어진 chatroom_people 참여자 명단을 "사람"의 기준으로 한다
     people_cursor_conn = get_db_connection()
     people_cursor = people_cursor_conn.cursor()
     try:
@@ -563,8 +420,8 @@ def save_chatroom_relationships_to_db(paths, update_date=None):
         conn.close()
 
 
+# message_keyword_stats.json을 읽어 participant에 실제 존재하는 (참여자, 블록) 쌍만 message_keyword 테이블에 저장한다 (2회 미만 키워드 제외)
 def save_message_keyword_to_db(paths, update_date=None):
-    # message_keyword_stats.json을 읽어 participant에 실제 존재하는 (참여자, 블록) 쌍만 message_keyword에 저장
     key = _resolve_chatroom_key(paths.USER_ID, update_date)
     if key is None:
         print(f"[WARN] chatroom 테이블에 해당 채팅방이 없습니다: {paths.USER_ID}")
@@ -620,8 +477,8 @@ def save_message_keyword_to_db(paths, update_date=None):
         conn.close()
 
 
+# message_summaries.json의 연/월별 LLM 요약과 참여자 목록을 message_summarize 테이블에 저장한다
 def save_message_summarize_to_db(paths, update_date=None):
-    # message_summaries.json(연/월별 LLM 요약)을 message_summarize 테이블에 저장
     key = _resolve_chatroom_key(paths.USER_ID, update_date)
     if key is None:
         print(f"[WARN] chatroom 테이블에 해당 채팅방이 없습니다: {paths.USER_ID}")
@@ -678,8 +535,8 @@ def save_message_summarize_to_db(paths, update_date=None):
         conn.close()
 
 
+# message_mood.json의 연/월별 분위기 점수·설명을 message_mood 테이블에 저장한다
 def save_message_mood_to_db(paths, update_date=None):
-    # message_mood.json(연/월별 분위기 점수+설명)을 message_mood 테이블에 저장
     key = _resolve_chatroom_key(paths.USER_ID, update_date)
     if key is None:
         print(f"[WARN] chatroom 테이블에 해당 채팅방이 없습니다: {paths.USER_ID}")

@@ -1,3 +1,7 @@
+# 메일 본문에서 LLM으로 키워드·어조·관계 프로필을 추출해 연락처별 통계를 계산하고 파이프라인으로 저장한다.
+
+# Extracts keywords, tone, and relationship profiles from mail bodies via LLM, then computes and saves per-contact statistics through a background pipeline.
+
 import os
 import re
 import json
@@ -18,14 +22,16 @@ client = OpenAI(
     base_url=os.getenv("SUB_TASK_API_BASE") or None,
 )
 
+# 시작 시각과 성능 카운터를 담은 타이머 dict를 만든다
 def start_timer():
     return {
         "started_at": datetime.now(),
         "start_perf": time.perf_counter()
     }
 
+# 타이머를 종료해 시작/종료 시각과 경과 초를 담은 dict를 반환한다
 def end_timer(timer):
-    ended_at = datetime.now()
+    ended_at = datetime.now().replace(microsecond=0)
     elapsed_sec = time.perf_counter() - timer["start_perf"]
 
     return {
@@ -34,6 +40,7 @@ def end_timer(timer):
         "elapsed_sec": round(elapsed_sec, 2)
     }
 
+# 초 단위 시간을 "HH:MM:SS.ss" 문자열로 변환한다
 def format_elapsed_time(seconds: float) -> str:
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
@@ -41,7 +48,7 @@ def format_elapsed_time(seconds: float) -> str:
 
     return f"{hours:02d}:{minutes:02d}:{secs:05.2f}"
 
-# 이름+메일주소 형식에서 이름과 메일주소 분리하여 반환
+# "이름 <메일>" 형식에서 (이름, 소문자 메일주소) 튜플을 분리해 반환한다
 def _parse_contact(raw: str) -> tuple[str, str]:
         m = re.search(r"^(.*?)\s*<([^>]+)>", raw.strip())
         if m:
@@ -52,7 +59,7 @@ def _parse_contact(raw: str) -> tuple[str, str]:
             email = raw.strip().lower()
         return name, email
 
-# 메일 블록에서 특정 필드 값 추출
+# 메일 블록에서 특정 라벨의 필드 값을 추출한다 (multiline이면 블록 단위로 추출)
 def _extract_field(block: str, label: str, multiline: bool = False) -> str:
     if multiline:
         m = re.search(
@@ -68,7 +75,7 @@ def _extract_field(block: str, label: str, multiline: bool = False) -> str:
         )
     return m.group(1).strip() if m else ""
 
-# LLM으로 친밀한 어조 판별
+# 메일 본문을 LLM에 넘겨 친밀한 어조인지(True/False) 판별한다
 def _is_friendly_tone_with_llm(body: str) -> bool:
 
     if not body.strip():
@@ -113,6 +120,7 @@ def _is_friendly_tone_with_llm(body: str) -> bool:
     answer = result.choices[0].message.content.strip().lower()
     return answer == "friendly"
 
+# 메일/대화 본문에서 LLM으로 핵심 키워드(한국어 명사)를 최대 몇 개 뽑아 리스트로 반환한다
 def extract_keywords_with_llm(body: str) -> list[str]:
     body = body.strip()
     if not body:
@@ -171,7 +179,7 @@ def extract_keywords_with_llm(body: str) -> list[str]:
         return []
 
 
-# 메일 발신 수신 횟수 계정별로 저장
+# parquet에서 연락처별 발신/수신/친밀 메일 수와 이름을 집계해 mail_contact_stats.json으로 저장한다 (rewrite/append)
 def _save_mail_contact_stats(paths, mode: str = "rewrite"):
     import pandas as pd
 
@@ -244,6 +252,7 @@ def _save_mail_contact_stats(paths, mode: str = "rewrite"):
 
     print(f"[STATS] ({mode}) 계정 {len(stats)}개 집계 완료 → {paths.MAIL_CONTACTS_PATH}")
 
+# text_units.parquet의 메일마다 LLM 키워드를 뽑아 키워드별 언급 수·사람·날짜 맵을 mail_keyword_stats.json으로 저장한다
 def _save_mail_keyword_stats(paths, mode: str = "rewrite"):
     import pandas as pd, re
     # 기존 데이터 로드 (append 모드)
@@ -272,6 +281,7 @@ def _save_mail_keyword_stats(paths, mode: str = "rewrite"):
         date_match = re.search(r'^\[날짜\]\s*(.+)$', text, re.MULTILINE)
         mail_date = date_match.group(1).strip()[:10] if date_match else None  # YYYY-MM-DD
 
+        # "Name <email>" 형태에서 이메일만 뽑는다
         def parse_email(value):
             m = re.search(r'<(.+?)>', value)
             return m.group(1).strip() if m else value.strip()
@@ -316,14 +326,8 @@ def _save_mail_keyword_stats(paths, mode: str = "rewrite"):
     print(f"[KEYWORD] ({mode}) 키워드 {len(keyword_stats)}개 저장 완료 → {paths.MAIL_KEYWORDS_PATH}")
 
 
+# parquet에서 사람별 이름·소속·주제·메일 수를 모아 LLM으로 관계 프로필을 생성해 {이메일: {description, relation_label}}로 반환한다
 def generate_person_descriptions(paths) -> dict:
-    """
-    parquet에서 각 person의 이름·소속·주제·메일 수를 수집하고
-    LLM으로 줄글 프로필을 생성해 dict로 반환한다 (DB 저장은 호출자가 담당).
-
-    반환: { person_email: {"description": "이름: ...\n관계: ...\n자주 주고 받은 내용: ...",
-                          "relation_label": "가족|연인|친구|동료|사제|지인|기업" | None} }
-    """
     import pandas as pd
 
     if not os.path.exists(paths.ENTITIES_PATH) or not os.path.exists(paths.RELATIONSHIPS_PATH):
@@ -335,6 +339,7 @@ def generate_person_descriptions(paths) -> dict:
 
     type_col = 'type' if 'type' in entities_df.columns else 'entity_type'
 
+    # 주어진 엔티티 타입에 해당하는 title들의 집합을 반환한다
     def titles_of(etype: str) -> set:
         mask = entities_df[type_col].str.lower() == etype.lower()
         return set(entities_df.loc[mask, 'title'].astype(str))
@@ -440,6 +445,7 @@ def generate_person_descriptions(paths) -> dict:
 {topics_text}
 
 아래 형식으로만 출력하세요. 다른 텍스트는 절대 포함하지 마세요.
+한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 마세요. 문장은 존댓말로 통일하고 반말을 섞지 마세요.
 "관계:" 줄은 반드시 대괄호 태그 [관계: <카테고리>]로 시작해야 합니다. <카테고리>는 가족, 연인, 친구, 동료, 사제, 지인, 기업 중 하나만 사용하세요. 대괄호를 빼먹거나 다른 단어를 쓰면 안 됩니다.
 
 카테고리 판단 기준(위에서부터 순서대로 확인):
@@ -462,42 +468,67 @@ def generate_person_descriptions(paths) -> dict:
 
         person_prompts.append((person_email, name, prompt))
 
+    # 사람 한 명의 프롬프트를 LLM에 넘겨 (이메일, description, relation_label)을 반환한다
+    # LLM 출력에서 관계/내용을 파싱해 (relationship, content, relation_label)로 반환한다
+    def _parse_relation_output(llm_output):
+        rel_m     = re.search(r'관계:\s*(.+)',            llm_output)
+        content_m = re.search(r'자주 주고 받은 내용:\s*(.+)', llm_output)
+        relationship = rel_m.group(1).strip()     if rel_m     else ''
+        content      = content_m.group(1).strip() if content_m else ''
+
+        # [관계: 카테고리] 태그 파싱  person.relation_label 컬럼으로 분리 저장한다
+        tag_m = re.match(r'^\[관계:\s*([^\]]+?)\]\s*', relationship)
+        relation_label = tag_m.group(1).strip() if tag_m else None
+        if tag_m:
+            relationship = relationship[tag_m.end():].strip()
+        return relationship, content, relation_label
+
     def _call_llm(person_email, name, prompt):
-        try:
-            result = client.chat.completions.create(
-                model=os.getenv("SUB_TASK_CHAT_MODEL"),
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "당신은 이메일 데이터를 분석해 인물 관계를 한국어로 간결하게 요약하는 AI입니다."
-                    },
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.3
-            )
-            llm_output = result.choices[0].message.content.strip()
-            rel_m     = re.search(r'관계:\s*(.+)',            llm_output)
-            content_m = re.search(r'자주 주고 받은 내용:\s*(.+)', llm_output)
-            relationship = rel_m.group(1).strip()     if rel_m     else ''
-            content      = content_m.group(1).strip() if content_m else ''
+        last_parsed = None
+        feedback = None
+        for attempt in range(1, 4):
+            try:
+                user_content = prompt
+                if feedback:
+                    user_content += f"\n\n[이전 시도 오류] 방금 답변에 다음 문제가 있었습니다: {feedback}. 반드시 한국어(한글)만 사용해서 다시 작성하세요."
+                result = client.chat.completions.create(
+                    model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 이메일 데이터를 분석해 인물 관계를 한국어로 간결하게 요약하는 AI입니다. 반드시 한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 않으며, 존댓말로 통일하고 반말을 섞지 않습니다."
+                        },
+                        {"role": "user", "content": user_content}
+                    ],
+                    temperature=min(0.3 + 0.2 * (attempt - 1), 0.7)
+                )
+                llm_output = result.choices[0].message.content.strip()
+                relationship, content, relation_label = _parse_relation_output(llm_output)
+                last_parsed = (relationship, content, relation_label)
 
-            # 메신저 relation_label과 동일한 "[관계: 카테고리]" 태그 파싱 (graphrag_parquet2json.py
-            # _RELATION_TAG_RE 참고). person.relation_label 컬럼으로 분리 저장하고, description에
-            # 남는 "관계:" 줄에서는 태그를 떼어내 순수 설명 문장만 남긴다.
-            tag_m = re.match(r'^\[관계:\s*([^\]]+?)\]\s*', relationship)
-            relation_label = tag_m.group(1).strip() if tag_m else None
-            if tag_m:
-                relationship = relationship[tag_m.end():].strip()
+                issue = _has_disallowed_foreign_text(relationship) or _has_disallowed_foreign_text(content)
+                if issue is None:
+                    description = (
+                        f"이름: {name if name else '알 수 없음'}\n"
+                        f"관계: {relationship}\n"
+                        f"자주 주고 받은 내용: {content}"
+                    )
+                    return person_email, description, relation_label
+                feedback = issue
+                print(f"[PROFILES] 형식 검증 실패 ({person_email}, {attempt}/3번째 시도): {llm_output!r} ({issue})")
+            except Exception as e:
+                print(f"[PROFILES] LLM 호출 실패 ({person_email}, {attempt}/3번째 시도): {e}")
 
+        # 3번 다 검증에 실패해도 완전히 비우는 것보다는 마지막 결과라도 반환한다.
+        if last_parsed:
+            relationship, content, relation_label = last_parsed
             description = (
                 f"이름: {name if name else '알 수 없음'}\n"
                 f"관계: {relationship}\n"
                 f"자주 주고 받은 내용: {content}"
             )
             return person_email, description, relation_label
-        except Exception as e:
-            print(f"[PROFILES] LLM 호출 실패 ({person_email}): {e}")
-            return person_email, None, None
+        return person_email, None, None
 
     with ThreadPoolExecutor(max_workers=min(len(person_prompts), 15)) as executor:
         futures = {executor.submit(_call_llm, email, name, prompt): email
@@ -515,8 +546,115 @@ def generate_person_descriptions(paths) -> dict:
     return descriptions
 
 
+# 텍스트에 부적절한 한자/영어가 섞였는지 검사한다. 영어는 이름/도메인/아이디처럼 보이는 것만
+# 허용(도메인, 대문자가 하나라도 섞인 단어 — Google, iPhone, eBay 등, 또는 csi10186처럼 숫자가
+# 섞인 식별자) 하고 "serta"처럼 순수 소문자로만 된 일반 단어가 섞이면 차단한다. 한자는 무조건 차단.
+# 문제없으면 None, 있으면 사유 문자열을 반환한다.
+_DOMAIN_RE = re.compile(r'[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.(?:com|net|org|co\.kr|kr|io|ai)', re.IGNORECASE)
+_LATIN_WORD_RE = re.compile(r'[A-Za-z][A-Za-z0-9]*')
+_HAN_CHAR_RE = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]')
+# 한국어 존댓말 평서형은 대부분 "~습니다/~입니다/~합니다/~갑니다"처럼 "니다"로 끝난다.
+# 어간을 일일이 나열하는 대신 이 공통 어미로 판별한다.
+_POLITE_ENDING_RE = re.compile(r'니다\.?\s*$')
+
+
+def _has_disallowed_foreign_text(text: str):
+    if not text:
+        return None
+    text_wo_domains = _DOMAIN_RE.sub('', text)
+    for word in _LATIN_WORD_RE.findall(text_wo_domains):
+        if any(ch.isupper() for ch in word) or any(ch.isdigit() for ch in word):
+            continue
+        return f"허용되지 않는 영어 단어 포함: {word!r}"
+    if _HAN_CHAR_RE.search(text):
+        return "한자(중국어 문자) 포함"
+    return None
+
+
+def _is_clean_korean_polite_sentence(text: str) -> bool:
+    if not text:
+        return False
+    if _has_disallowed_foreign_text(text) is not None:
+        return False
+    if not _POLITE_ENDING_RE.search(text):
+        return False
+    return True
+
+
+# generate_person_descriptions() 결과({이메일: {description, relation_label}})를 2차 LLM 호출로 한 문장 소개(short_bio)로 압축해 {이메일: 문장}으로 반환한다
+def generate_person_short_bios(descriptions: dict) -> dict:
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    targets = [
+        (email, info.get("description") or "", info.get("relation_label") or "지인")
+        for email, info in descriptions.items()
+        if info.get("description")
+    ]
+    if not targets:
+        return {}
+
+    # 완성된 description + relation_label로 한 문장 소개 프롬프트를 만든다
+    def _build_prompt(description, relation_label):
+        return f"""다음은 이미 생성된 인물 설명입니다.
+
+관계 카테고리: {relation_label}
+설명:
+{description}
+
+위 내용을 바탕으로, 이 사람을 다른 사람에게 소개하듯 자연스러운 한국어 한 문장으로 요약하세요.
+- 문장은 반드시 "~습니다." 또는 "~입니다."로 끝나야 합니다. 반말(~야, ~해, ~지 등)은 절대 쓰지 마세요.
+- 한국어(한글)만 사용하세요. 영어 단어나 한자(중국어 문자)를 절대 섞지 마세요.
+- 성격이나 관계의 특징이 드러나는 짧은 소개 문장으로 쓰세요.
+- 예시: "꼼꼼하고 계획적인 성격의 친구입니다.", "함께 프로젝트를 진행하는 믿음직한 동료입니다."
+- 다른 설명, 따옴표, 접두어 없이 문장 하나만 출력하세요.""".strip()
+
+    def _call_llm(email, description, relation_label):
+        last_bio = None
+        feedback = None
+        for attempt in range(1, 4):
+            try:
+                user_content = _build_prompt(description, relation_label)
+                if feedback:
+                    user_content += f"\n\n[이전 시도 오류] 방금 답변에 다음 문제가 있었습니다: {feedback}. 반드시 한국어(한글)만 사용하고 \"~습니다.\"/\"~입니다.\"로 끝나도록 다시 작성하세요."
+                result = client.chat.completions.create(
+                    model=os.getenv("SUB_TASK_CHAT_MODEL"),
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "당신은 인물 설명을 한 문장의 자연스러운 한국어 소개글로 압축하는 AI입니다. 반드시 한국어(한글)만 사용하고, 영어 단어나 한자(중국어 문자)를 절대 섞지 않으며, 존댓말(습니다/입니다체)로 통일하고 반말을 섞지 않습니다."
+                        },
+                        {"role": "user", "content": user_content}
+                    ],
+                    temperature=min(0.3 + 0.2 * (attempt - 1), 0.7)
+                )
+                bio = result.choices[0].message.content.strip()
+                last_bio = bio
+                issue = _has_disallowed_foreign_text(bio)
+                if issue is None and _POLITE_ENDING_RE.search(bio):
+                    return email, bio
+                feedback = issue or "존댓말(~습니다/~입니다) 종결이 아님"
+                print(f"[SHORT_BIO] 형식 검증 실패 ({email}, {attempt}/3번째 시도): {bio!r} ({feedback})")
+            except Exception as e:
+                print(f"[SHORT_BIO] LLM 호출 실패 ({email}, {attempt}/3번째 시도): {e}")
+        # 3번 다 검증에 실패해도 완전히 비우는 것보다는 마지막 결과라도 반환한다.
+        return email, last_bio
+
+    short_bios: dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=min(len(targets), 15)) as executor:
+        futures = {executor.submit(_call_llm, email, desc, rel): email for email, desc, rel in targets}
+        for future in as_completed(futures):
+            email, bio = future.result()
+            if bio:
+                short_bios[email] = bio
+
+    print(f"[SHORT_BIO] 총 {len(short_bios)}명 한줄소개 생성 완료")
+    return short_bios
+
+
+# (함수, 인자) 목록을 각각 스레드로 병렬 실행하고 모두 끝날 때까지 기다린다 (에러가 나면 첫 에러를 재발생)
 def _run_and_join(jobs):
     errors = []
+    # 함수를 실행하고 예외를 errors 리스트에 모은다
     def _wrap(fn, args):
         try:
             fn(*args)
@@ -529,6 +667,7 @@ def _run_and_join(jobs):
         raise errors[0]
 
 
+# 메일 키워드 통계와 연락처 통계 저장을 병렬로 실행하는 메일 통계 파이프라인
 def _extract_statics_pipeline(paths, mode: str = "rewrite"):
     os.makedirs(paths.MAIL_STATICS_PATH, exist_ok=True)
     # 서로 다른 출력 파일(keywords/contacts)에 쓰고 순서 의존성이 없어 병렬 실행
@@ -537,6 +676,7 @@ def _extract_statics_pipeline(paths, mode: str = "rewrite"):
         (_save_mail_contact_stats, (paths, mode)),
     ])
 
+# 통계 파이프라인을 실행하며 Job 상태(running/done/failed)와 로그를 갱신한다
 def run_statics_pipeline(job_id, paths, mode: str = "rewrite"):
     print(f"[JOB][statics] START job_id={job_id}")
     append_job_log(job_id, "[START] statics pipeline")
@@ -571,6 +711,7 @@ def run_statics_pipeline(job_id, paths, mode: str = "rewrite"):
             finished_at=time.time(),
         )
 
+# 통계 파이프라인을 데몬 스레드로 백그라운드 실행하고 스레드 객체를 반환한다
 def start_statics_pipeline_background(job_id, paths, mode: str = "rewrite"):
     print(f"[JOB][statics] BACKGROUND START job_id={job_id}")
     append_job_log(job_id, "[INFO] background thread starting")

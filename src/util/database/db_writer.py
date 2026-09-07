@@ -1,4 +1,7 @@
-# user DB에 데이터 저장 함수
+# 메일 인덱싱 결과(계정·연락처·메일·키워드·요약·폴더·비용 통계 등)를 user DB에 저장한다.
+
+# Utility functions that persist mail indexing results — accounts, contacts, mail, keywords, summaries, folders, and cost stats — into the user database.
+
 import os
 import re
 import json
@@ -6,11 +9,8 @@ import uuid
 import datetime
 from config.db import get_db_connection
 
+# mail_account 테이블에서 해당 계정의 가장 최근 레코드를 dict로 반환한다 (없으면 None)
 def get_latest_mail_account(user_mail_account_id: str):
-    """
-    mail_account 테이블에서 해당 user_mail_account_id의 가장 최근 레코드 반환
-    return: dict | None
-    """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -34,7 +34,7 @@ def get_latest_mail_account(user_mail_account_id: str):
         cursor.close()
         conn.close()
 
-# 한 명의 사용자가 여러 메일 계정을 연결해 쓰므로 user_id는 하나만 존재함
+# user 테이블의 user_id를 조회하고, 없으면 새 UUID를 발급해 저장한 뒤 반환한다
 def get_or_create_user_id(user_mail_account_id: str) -> str:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -53,8 +53,8 @@ def get_or_create_user_id(user_mail_account_id: str) -> str:
         conn.close()
 
 
+# mail_account 테이블에 인덱싱 결과 레코드를 생성하고 user_id를 반환한다 (user_id 없으면 신규 발급)
 def create_mail_account(user_mail_account_id, ended_at, index_time, mail_count, mail_platform):
-    """mail_account 테이블에 인덱싱 결과 레코드 생성 (user_id 없으면 신규 발급)"""
     user_id = get_or_create_user_id(user_mail_account_id)
 
     conn = get_db_connection()
@@ -84,9 +84,8 @@ def create_mail_account(user_mail_account_id, ended_at, index_time, mail_count, 
     conn.close()
     return user_id
 
+# mail_contact_stats.json과 LLM 프로필을 합쳐 person 테이블에 저장한다 (255자 초과 이메일은 건너뜀)
 def save_person_stats_to_db(paths, update_date=None):
-    """person 테이블에 기본 통계 저장 후, parquet 기반 LLM 프로필을 description에 함께 저장"""
-
     if not os.path.exists(paths.MAIL_CONTACTS_PATH):
         raise FileNotFoundError(f"통계 파일이 없습니다: {paths.MAIL_CONTACTS_PATH}")
 
@@ -108,13 +107,20 @@ def save_person_stats_to_db(paths, update_date=None):
             stats = json.load(f)
 
         # parquet → LLM 프로필 생성 (실패해도 기본 통계 저장은 계속)
-        from util.extract_statics import generate_person_descriptions
+        from util.extract_statics import generate_person_descriptions, generate_person_short_bios
         try:
             descriptions_raw = generate_person_descriptions(paths)
             descriptions = {k.lower(): v for k, v in descriptions_raw.items()}
         except Exception as e:
             print(f"[WARN] 프로필 생성 실패, description 없이 저장: {e}")
             descriptions = {}
+
+        # description(+relation_label)을 입력으로 My Time 툴팁용 한줄소개(short_bio) 2차 생성
+        try:
+            short_bios = generate_person_short_bios(descriptions)
+        except Exception as e:
+            print(f"[WARN] 한줄소개 생성 실패, short_bio 없이 저장: {e}")
+            short_bios = {}
 
         insert_sql = """
             INSERT INTO person (
@@ -126,25 +132,24 @@ def save_person_stats_to_db(paths, update_date=None):
                 send_mails,
                 friendly_mails,
                 description,
-                relation_label
+                relation_label,
+                short_bio
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON DUPLICATE KEY UPDATE
                 person_name    = VALUES(person_name),
                 receive_mails  = VALUES(receive_mails),
                 send_mails     = VALUES(send_mails),
                 friendly_mails = VALUES(friendly_mails),
                 description    = COALESCE(VALUES(description), description),
-                relation_label = COALESCE(VALUES(relation_label), relation_label)
+                relation_label = COALESCE(VALUES(relation_label), relation_label),
+                short_bio      = COALESCE(VALUES(short_bio), short_bio)
         """
 
         inserted_count = 0
         skipped_count = 0
         for email, info in stats.items():
-            # person_mail_account_id 컬럼은 VARCHAR(255) — 발신자 파싱이 실패해서 메일
-            # 제목/본문 일부(약관 문구 등, 최대 820자까지 봤음)가 통째로 "이메일" 자리에
-            # 들어오는 경우가 있어서, 그런 값은 DB에 넣지 않고 건너뛴다(이런 항목 하나
-            # 때문에 나머지 전부가 롤백되어 사람 목록이 통째로 안 뜨는 문제를 막기 위함).
+            # 발신자 파싱이 실패한 값은 DB에 넣지 않고 건너뛴다
             if len(email) > 255:
                 skipped_count += 1
                 continue
@@ -161,6 +166,7 @@ def save_person_stats_to_db(paths, update_date=None):
                     int(info.get("friendly_mail", 0)),
                     profile.get("description"),
                     profile.get("relation_label"),
+                    short_bios.get(email),
                 )
             )
             inserted_count += 1
@@ -189,17 +195,19 @@ _EMBED_COST_PER_1M = {
     "text-embedding-ada-002": 0.10,
 }
 
+# 채팅 모델의 입출력 토큰 수로 USD 비용을 계산한다
 def _calc_cost_usd(model_name: str, input_tokens: int, output_tokens: int) -> float:
     costs = _MODEL_COST_PER_1M.get(model_name, {"input": 0.0, "output": 0.0})
     return (input_tokens * costs["input"] + output_tokens * costs["output"]) / 1_000_000
 
+# 임베딩 모델의 토큰 수로 USD 비용을 계산한다
 def _calc_embed_cost_usd(model_name: str, total_tokens: int) -> float:
     cost = _EMBED_COST_PER_1M.get(model_name, 0.0)
     return (total_tokens * cost) / 1_000_000
 
 
+# GraphRAG 캐시 폴더를 읽어 인덱싱에 쓴 LLM/임베딩 호출 수·토큰·비용을 집계한 dict를 반환한다
 def collect_indexing_stats(paths) -> dict:
-    """캐시 폴더를 읽어 인덱싱에 사용된 LLM/임베딩 통계를 집계"""
     LLM_FOLDERS = ["community_reporting", "extract_graph", "summarize_descriptions"]
     EMBED_FOLDER = "text_embedding"
 
@@ -274,8 +282,8 @@ def collect_indexing_stats(paths) -> dict:
     }
 
 
+# collect_indexing_stats 결과를 mail_account 테이블의 통계 컬럼들에 업데이트한다
 def update_mail_account_indexing_stats(user_mail_account_id: str, index_date, stats: dict):
-    """mail_account 테이블의 인덱싱 통계 컬럼을 업데이트"""
     if index_date is None:
         latest = get_latest_mail_account(user_mail_account_id)
         if not latest:
@@ -327,8 +335,8 @@ def update_mail_account_indexing_stats(user_mail_account_id: str, index_date, st
         conn.close()
 
 
+# graph_data.json의 노드/엣지 수를 mail_account 테이블에 저장한다
 def save_graph_stats_to_db(paths, update_date=None):
-    """graph_data.json을 읽어 노드/엣지 수를 mail_account 테이블에 저장"""
     if not os.path.exists(paths.GRAPH_JSON_PATH):
         print(f"[WARN] 그래프 JSON 파일이 없습니다: {paths.GRAPH_JSON_PATH}")
         return
@@ -372,6 +380,7 @@ def save_graph_stats_to_db(paths, update_date=None):
         conn.close()
 
 
+# 질의 1건(질문·응답 시간·스코프·토큰·비용·답변·근거)을 query 테이블에 저장한다
 def save_query_to_db(
     user_mail_account_id: str,
     context: str,
@@ -426,13 +435,8 @@ def save_query_to_db(
         conn.close()
 
 
+# mail_keyword_stats.json을 읽어 키워드·사람·날짜별 일간 언급 수를 mail_keyword 테이블에 저장한다 (2회 미만 키워드/미등록 person 제외)
 def save_keyword_stats_to_db(paths,update_date=None):
-    """
-    1. mail_account 테이블에서 paths.USER_ID에 해당하는 가장 최근 row 조회
-    2. keyword json 파일 읽기
-    3. mail_keyword 테이블에 없으면 INSERT, 있으면 UPDATE
-    """
-
     if not os.path.exists(paths.MAIL_KEYWORDS_PATH):
         raise FileNotFoundError(f"통계 파일이 없습니다: {paths.MAIL_KEYWORDS_PATH}")
 
@@ -493,12 +497,8 @@ def save_keyword_stats_to_db(paths,update_date=None):
         cursor.close()
         conn.close()
 
+# 기존 키워드 목록과 text_units parquet으로 LLM 없이 문자열 매칭해 keyword_person_date_map을 재구성하고 mail_keyword를 채운다
 def rebuild_keyword_mail(paths, update_date=None):
-    """
-    기존 keyword JSON의 키워드 목록과 text_units parquet을 이용해
-    LLM 없이 단순 문자열 매칭으로 keyword_person_date_map을 재구성하고
-    mail_keyword 테이블을 채운다.
-    """
     import pandas as pd, re, os
 
     if not os.path.exists(paths.MAIL_KEYWORDS_PATH):
@@ -526,6 +526,7 @@ def rebuild_keyword_mail(paths, update_date=None):
 
     df = pd.read_parquet(text_units_path)
 
+    # "Name <email>" 형태에서 이메일만 소문자로 뽑는다
     def parse_email(value):
         m = re.search(r'<(.+?)>', value)
         return m.group(1).strip().lower() if m else value.strip().lower()
@@ -568,67 +569,8 @@ def rebuild_keyword_mail(paths, update_date=None):
     save_keyword_stats_to_db(paths, update_date)
 
 
-def init_mail_keyword_table():
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS mail_keyword (
-                keyword_name            VARCHAR(100) NOT NULL,
-                user_mail_account_id    VARCHAR(255) NOT NULL,
-                index_date              DATETIME     NOT NULL,
-                person_mail_account_id  VARCHAR(255) NOT NULL,
-                mail_date               DATETIME     NOT NULL,
-                daily_count             INT          NOT NULL DEFAULT 0,
-                PRIMARY KEY (
-                    user_mail_account_id, index_date, person_mail_account_id,
-                    keyword_name, mail_date
-                ),
-                FOREIGN KEY (user_mail_account_id, index_date, person_mail_account_id)
-                    REFERENCES person(user_mail_account_id, index_date, person_mail_account_id)
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("[DB] mail_keyword 테이블 준비 완료")
-    except Exception as e:
-        print(f"[DB] mail_keyword 테이블 초기화 실패 (무시): {e}")
-
-
-def init_processed_attachments_table():
-    """
-    서버 시작 시 processed_attachments 테이블이 없으면 자동 생성
-    """
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS processed_attachments (
-                id                    INT AUTO_INCREMENT PRIMARY KEY,
-                user_mail_account_id  VARCHAR(255) NOT NULL,
-                index_date            DATETIME     NOT NULL,
-                mail_id               VARCHAR(255) NOT NULL,
-                filename              VARCHAR(255) NOT NULL,
-                processed_at          DATETIME     NOT NULL,
-                UNIQUE KEY uq_att (user_mail_account_id, index_date, mail_id, filename),
-                FOREIGN KEY (user_mail_account_id, index_date) REFERENCES mail_account(user_mail_account_id, index_date)
-            )
-        """)
-        conn.commit()
-        cursor.close()
-        conn.close()
-        print("[DB] processed_attachments 테이블 준비 완료")
-    except Exception as e:
-        print(f"[DB] processed_attachments 테이블 초기화 실패 (무시): {e}")
-
-
+# processed_attachments 테이블과 대조해 아직 처리되지 않은 첨부파일만 걸러 반환한다
 def filter_unprocessed_attachments(user_id: str, attachments: list) -> list:
-    """
-    이미 처리된 첨부파일 필터링
-    (user_mail_account_id, index_date, mail_id, filename) 조합으로 중복 체크
-    반환: 미처리 첨부파일 리스트
-    """
     if not attachments:
         return []
 
@@ -675,11 +617,8 @@ def filter_unprocessed_attachments(user_id: str, attachments: list) -> list:
         return attachments
 
 
+# 처리 완료된 첨부파일을 processed_attachments 테이블에 기록한다 (중복은 INSERT IGNORE)
 def mark_attachments_as_processed(user_id: str, attachments: list):
-    """
-    처리 완료된 첨부파일 DB에 기록
-    IGNORE: 중복 INSERT 시 오류 없이 무시
-    """
     if not attachments:
         return
 
@@ -711,6 +650,7 @@ def mark_attachments_as_processed(user_id: str, attachments: list):
     except Exception as e:
         print(f"[AttachmentFilter] 처리 완료 기록 실패 (무시): {e}")
 
+# mail_summaries.json의 연/월별 요약과 참여자 목록을 mail_summarize 테이블에 저장한다
 def save_mail_summarize_to_db(paths, update_date=None):
     if not os.path.exists(paths.MAIL_SUMMARIES_PATH):
         print(f"[WARN] 파일이 없습니다: {paths.MAIL_SUMMARIES_PATH}")
@@ -778,6 +718,7 @@ def save_mail_summarize_to_db(paths, update_date=None):
         conn.close()
 
 
+# text_units parquet을 메일(document) 단위로 묶어 폴더별 메일 수를 집계해 mail_folder 테이블에 저장한다
 def save_mail_folder_to_db(paths, update_date=None):
     import pandas as pd, re, os
 
@@ -794,9 +735,7 @@ def save_mail_folder_to_db(paths, update_date=None):
     text_units_path = paths.RELATIONSHIPS_PATH.replace("relationships.parquet", "text_units.parquet")
     df = pd.read_parquet(text_units_path)
 
-    # 메일 하나가 GraphRAG 청크 분할로 여러 text_unit 행이 될 수 있음.
-    # 메일 폴더 정보 헤더는 첫 청크에만 있으므로, document_id(=메일) 단위로 묶어서
-    # 그중 하나라도 메일 폴더 정보를 찾으면 그 값을 메일의 폴더로 쓰고, 청크 수가 아닌 메일 수로 카운트한다.
+    # document_id(=메일) 단위로 묶어서 그중 하나라도 메일 폴더 정보를 찾으면 그 값을 메일의 폴더로 쓴다.
     folder_by_doc = {}
     for _, row in df.iterrows():
         doc_key = row.get('document_id')
@@ -814,7 +753,7 @@ def save_mail_folder_to_db(paths, update_date=None):
 
     folder_counts = {}
     for folder_raw in folder_by_doc.values():
-        # save_mail_to_db와 동일한 폴백('UNKNOWN')을 써야 mail.mail_folder_name FK가 항상 만족됨
+        # save_mail_to_db와 동일한 폴백('UNKNOWN')을 쓴다
         mail_folder_name = folder_raw or 'UNKNOWN'
         folder_counts[mail_folder_name] = folder_counts.get(mail_folder_name, 0) + 1
 
@@ -839,6 +778,7 @@ def save_mail_folder_to_db(paths, update_date=None):
         conn.close()
 
 
+# text_units parquet을 파싱해 메일별 방향·어조·답장 관계를 계산해 mail 테이블에 저장한다
 def save_mail_to_db(paths, update_date=None):
     import pandas as pd, re, os, datetime
 
@@ -867,10 +807,12 @@ def save_mail_to_db(paths, update_date=None):
                 if val in {'formal', 'casual', 'transactional', 'notification', 'alert'}:
                     tone_map[str(row['title']).upper()] = val
 
+    # "Name <email>" 형태에서 이메일만 소문자로 뽑는다
     def _extract_sender_email(raw):
         m = re.search(r'<([^>]+)>', raw)
         return m.group(1).lower() if m else raw.strip().lower()
 
+    # "2024년 1월 1일 (월) 오후 3:20" 형식의 한글 날짜를 "YYYY-MM-DD HH:MM" 문자열로 변환한다
     def _parse_korean_datetime(text):
         m = re.search(r'(\d{4})년 (\d{1,2})월 (\d{1,2})일[^(]*\([^)]+\)\s*(오전|오후)\s*(\d{1,2}):(\d{2})', text)
         if not m:
@@ -902,8 +844,7 @@ def save_mail_to_db(paths, update_date=None):
         date_match = re.search(r'^\[날짜\]\s*(.+)$', text, re.MULTILINE)
         mail_date = date_match.group(1).strip() if date_match else None
 
-        # mail.mail_folder_name은 NOT NULL이며 mail_folder에 대한 FK이므로, 파싱 실패 시에도
-        # 값이 비어선 안 됨 → 'UNKNOWN'으로 대체 (save_mail_folder_to_db가 먼저 실행되어 있어야 함)
+        # mail.mail_folder_name은 NOT NULL이며 mail_folder에 대한 FK이므로, 파싱 실패 시에도 'UNKNOWN'으로 대체
         folder_match = re.search(r'\[폴더 정보\]\s*(.+)', text)
         folder_raw = folder_match.group(1).strip() if folder_match else None
         mail_folder_name = folder_raw if (folder_raw and folder_raw != '없음') else 'UNKNOWN'

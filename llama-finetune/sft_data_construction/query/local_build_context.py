@@ -75,17 +75,20 @@ MULTI_ACCOUNT_INSTRUCTION_KO = (
 )
 
 
+# 실시간 임베딩 API 호출 대신 사전 계산된 질문 임베딩을 텍스트로 조회하는 스텁 임베더
 class StubTextEmbedder:
     """실시간 임베딩 API 호출 대신, 사전 계산된 질문 임베딩을 텍스트로 조회하는 스텁.
 
     rebuild_lancedb.py --questions-json으로 만든 query_embeddings.json을 그대로 사용.
     """
 
+    # 사전 계산된 질문→임베딩 매핑 JSON을 로드함
     def __init__(self, precomputed_query_embeddings_path: Path):
         self._map: dict[str, list[float]] = json.loads(
             precomputed_query_embeddings_path.read_text(encoding="utf-8")
         )
 
+    # 질문 텍스트에 해당하는 사전 계산 임베딩을 반환함 (없으면 KeyError)
     def embed(self, text: str) -> list[float]:
         if text not in self._map:
             raise KeyError(
@@ -95,20 +98,24 @@ class StubTextEmbedder:
         return self._map[text]
 
 
+# 텍스트를 지정한 토큰 예산 이내로 잘라냄 (o200k_base 토크나이저 기준)
 def trim_to_token_budget(text: str, max_tokens: int, encoding_name: str = O200K_ENCODING) -> str:
     enc = tiktoken.get_encoding(encoding_name)
     tokens = enc.encode(text)
     if len(tokens) <= max_tokens:
         return text
+    # 토큰 단위로 자른 뒤 다시 텍스트로 디코딩 (문자 단위가 아닌 토큰 단위 트리밍)
     return enc.decode(tokens[:max_tokens])
 
 
+# 메일 도메인의 local_search 컨텍스트를 생성함 (단일계정)
 def build_mail_context(mail_search_engine: LocalSearchMixedContext, question: str) -> str:
     """단일계정(메일) — LocalSearchMixedContext.build_context()를 그대로 호출."""
     context_result = mail_search_engine.build_context(query=question, **LOCAL_SEARCH_CONFIG)
     return context_result.context_chunks
 
 
+# 메신저 각 방의 컨텍스트를 독립적으로 만들고 트리밍한 뒤 합쳐 federated 컨텍스트를 만듦
 def build_federated_messenger_context(
     room_search_engines: dict[str, LocalSearchMixedContext],
     room_display_names: dict[str, str],
@@ -128,6 +135,7 @@ def build_federated_messenger_context(
     return "\n\n".join(parts)
 
 
+# 컨텍스트를 채운 system prompt를 렌더링하고, federated인 경우 멀티계정 지침을 덧붙임
 def render_system_prompt(local_search_prompt_template: str, context_data: str, is_federated: bool) -> str:
     system_prompt = local_search_prompt_template.format(
         context_data=context_data,

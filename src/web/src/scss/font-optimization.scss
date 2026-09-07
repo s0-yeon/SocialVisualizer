@@ -1,3 +1,9 @@
+/*
+ 모든 @font-face에 font-display: swap을 적용해 폰트 로딩 중 텍스트가 안 보이는 현상(FOIT)을 방지.
+ 
+ Applies font-display: swap to every @font-face to avoid invisible text while fonts load (FOIT).
+ */
+
 // Font Display Optimization
 // This file adds font-display: swap to all @font-face declarations
 // to improve perceived performance and avoid FOIT (Flash of Invisible Text)
@@ -50,8 +56,8 @@
 
 // System font stack fallback for better performance
 $system-font-stack:
-  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-  "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans",
+  sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
 // Ensure good fallbacks for custom fonts
 body {

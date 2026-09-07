@@ -1,0 +1,18 @@
+/*
+ 공통 푸터(Footer.jsx) 스타일 — 사이드바 없는 지금 레이아웃 기준으로 화면 폭 전체에 걸친 조용한 placeholder 바로, 브랜드명만 가운데 정렬해 보여준다.
+ 
+ Styles for the shared footer (Footer.jsx) — a quiet, full-width placeholder bar for the current sidebar-less layout, centering just the brand name.
+ */
+
+#app-footer.gw-footer {
+  margin-left: 0;
+  padding: var(--gt-spacing-sm) var(--gt-spacing-lg);
+  border-top: 1px solid var(--gt-border-color);
+  text-align: center;
+}
+
+.gw-footer-brand {
+  font-size: 0.8rem;
+  color: var(--gt-text-muted);
+  letter-spacing: 0.01em;
+}

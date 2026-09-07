@@ -4,7 +4,6 @@ dist
 node_modules/
 src/parquet/.env
 .vscode/
-docs/
 gmailweaver-venv/
 mailgrapher-venv/
 lightrag-venv/
@@ -34,6 +33,7 @@ src/parquet/input/*
 !src/parquet/input/.gitkeep
 user_data/*
 !user_data/.gitkeep
+!user_data/README.md
 
 # Python cache
 __pycache__/

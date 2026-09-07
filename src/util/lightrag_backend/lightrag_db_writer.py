@@ -1,16 +1,13 @@
 # src/util/lightrag_backend/lightrag_db_writer.py
-#
-# database/db_writer.py(GraphRAG 버전)의 LightRAG 대응 파일. db_writer.py는 건드리지
-# 않았다 — 그 파일 대부분(create_mail_account, save_person_stats_to_db,
-# save_keyword_stats_to_db, save_mail_summarize_to_db, save_graph_stats_to_db,
-# collect_indexing_stats 등)은 GraphRAG의 parquet을 직접 읽지 않거나(JSON/MySQL만
-# 다룸) 이미 파일 존재 여부를 확인하고 우아하게 건너뛰므로 엔진과 무관하게 그대로 쓸 수
-# 있다. text_units.parquet을 가드 없이 pd.read_parquet()으로 읽어서 LightRAG에서는
-# 무조건 죽는 두 함수(save_mail_folder_to_db, save_mail_to_db)만 여기서 raw-text
-# 버전으로 다시 만든다.
-#
-# mail_latest.txt는 메일 하나 = 블록 하나라서, GraphRAG 버전이 text_units.parquet의
-# document_ids로 청크를 메일 단위로 묶던 워크어라운드가 필요 없다 — 그만큼 로직이 단순해졌다.
+
+# LightRAG 인덱싱 결과를 MySQL에 반영하는 모듈. mail_latest.txt를 파싱해 폴더별 메일 수를
+# mail_folder 테이블에, 메일 개별 레코드(방향/어조/답장 관계 포함)를 mail 테이블에 저장한다.
+# GraphRAG는 knowledge graph에서 뽑은 kg_tone을 쓰지만 LightRAG 경로엔 그 값이 없어 항상 None으로 둔다.
+
+# Persists LightRAG indexing results into MySQL. Parses mail_latest.txt to save
+# per-folder mail counts into mail_folder, and per-mail records (direction, tone,
+# reply relationship) into the mail table. kg_tone is always None here since
+# LightRAG has no equivalent to GraphRAG's knowledge-graph-derived tone.
 
 import os
 import re
@@ -23,6 +20,7 @@ from util.lightrag_backend.lightrag_extract_statics import load_tone_cache
 from util.extract_statics import _is_friendly_tone_with_llm
 
 
+# mail_latest.txt를 파싱해 폴더별 메일 수를 집계해 mail_folder 테이블에 저장한다
 def save_mail_folder_to_db_lightrag(paths, update_date=None):
     if update_date is None:
         latest_account = get_latest_mail_account(paths.USER_ID)
@@ -66,6 +64,7 @@ def save_mail_folder_to_db_lightrag(paths, update_date=None):
         conn.close()
 
 
+# "2024년 1월 1일 (월) 오후 3:20" 형식의 한글 날짜를 "YYYY-MM-DD HH:MM" 문자열로 변환한다
 def _parse_korean_datetime(text):
     m = re.search(r'(\d{4})년 (\d{1,2})월 (\d{1,2})일[^(]*\([^)]+\)\s*(오전|오후)\s*(\d{1,2}):(\d{2})', text)
     if not m:
@@ -79,10 +78,7 @@ def _parse_korean_datetime(text):
     return f"{year}-{int(month):02d}-{int(day):02d} {hour:02d}:{minute}"
 
 
-# GraphRAG 버전의 kg_tone(entities.parquet의 EMAIL 엔티티 Tone: 필드)에 대응하는 값이
-# LightRAG에는 없다 — GraphRAG 자체 LLM 엔티티 추출 산출물이라 원문만으로는 재현이 안 된다.
-# mail 테이블의 kg_tone 컬럼은 NULL을 허용하므로 그냥 None으로 둔다(EIS 계산 등 소비 코드는
-# kg_tone이 없을 때 llm_tone만으로 대체하도록 이미 처리되어 있음 - db_reader.calculate_eis 참고).
+# mail_latest.txt를 파싱해 메일별 방향·어조·답장 관계를 계산해 mail 테이블에 저장한다 (kg_tone은 LightRAG에 없어 None)
 def save_mail_to_db_lightrag(paths, update_date=None):
     if update_date is None:
         latest_account = get_latest_mail_account(paths.USER_ID)

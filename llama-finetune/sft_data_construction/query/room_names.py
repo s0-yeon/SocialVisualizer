@@ -28,6 +28,7 @@ import pandas as pd
 DEFAULT_ENTITIES_PATTERN = "{room_id}/artifacts/entities.parquet"
 
 
+# entities.parquet를 읽어 type이 CHATROOM인 행만 추출함
 def load_chatroom_entities(entities_parquet_path: Path) -> pd.DataFrame:
     df = pd.read_parquet(entities_parquet_path)
     # GraphRAG entities.parquet의 type 컬럼은 프롬프트에서 정의한 엔티티 타입 그대로 저장됨
@@ -35,6 +36,7 @@ def load_chatroom_entities(entities_parquet_path: Path) -> pd.DataFrame:
     return df[df["type"].str.upper() == "CHATROOM"].copy()
 
 
+# CHATROOM 엔티티들 중 가장 빈도 높은 것의 title을 방 표시이름으로 선택함
 def pick_display_name(chatroom_df: pd.DataFrame) -> str | None:
     """가장 빈도 높은(=degree가 가장 큰) ChatRoom 엔티티의 title을 표시이름으로 채택."""
     if chatroom_df.empty:
@@ -49,6 +51,7 @@ def pick_display_name(chatroom_df: pd.DataFrame) -> str | None:
     return str(best["title"])
 
 
+# 방 ID 목록을 순회하며 각 방의 entities.parquet에서 표시이름을 뽑아 매핑 딕셔너리를 만듦
 def build_room_name_map(graphrag_output_root: Path, room_ids: list[str]) -> dict[str, str]:
     name_map: dict[str, str] = {}
     for room_id in room_ids:
@@ -66,6 +69,7 @@ def build_room_name_map(graphrag_output_root: Path, room_ids: list[str]) -> dict
     return name_map
 
 
+# CLI 인자를 파싱해 방 이름 매핑을 만들고 JSON으로 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--graphrag-output-root", type=Path, required=True,

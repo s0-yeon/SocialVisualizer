@@ -16,6 +16,7 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from build_context import load_domain, build_local_contexts
 
+# 조사 대상 13개 메신저 방 ID 목록
 ROOMS = [
     "0827e9a2", "1422f5f2", "4d4d567a", "823e7fcd", "afb96430", "b8378282",
     "c2248847", "c8a7c88a", "ca4130a6", "cb5deed9", "d26b54b6", "d93f9d2f", "f7792b49",
@@ -24,6 +25,7 @@ ROOMS = [
 MAX_INPUT_TOKENS = 5500  # production community_reports.max_input_length
 
 
+# mail 도메인과 13개 메신저 방 도메인의 GraphRAG output 경로 목록을 구성함
 def build_domains(raw_data_dir: str):
     domains = [("mail", "mail", os.path.join(raw_data_dir, "Llama_mail_output/Llama_mail_output/output"))]
     for r in ROOMS:
@@ -34,6 +36,7 @@ def build_domains(raw_data_dir: str):
     return domains
 
 
+# 전체 도메인의 커뮤니티 컨텍스트를 빌드해 토큰 수를 조사하고, 예산 초과 커뮤니티를 CSV로 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-data-dir", default="./raw_data",
@@ -49,7 +52,7 @@ def main():
         full_ctx = build_local_contexts(entities, relationships, communities, max_context_tokens=None)
         for (cid, level), info in full_ctx.items():
             rep_row = reports[(reports["community"] == cid) & (reports["level"] == level)]
-            has_gold = len(rep_row) == 1
+            has_gold = len(rep_row) == 1  # 해당 (community, level)에 실제 community_reports gold가 존재하는지
             all_rows.append({
                 "domain": domain, "room": room, "community": cid, "level": level,
                 "n_entities": info["n_entities"], "full_tokens": info["context_size"],

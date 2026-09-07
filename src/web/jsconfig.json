@@ -1,0 +1,20 @@
+// .ts/.tsx 파일은 없지만 typescript/@types/react/@types/react-dom이 devDependencies에 있었고
+// 실제로 쓰이는 곳이 없었다. 이 파일로 그 패키지들을 실제로 활용한다 — 에디터가 .jsx 파일에서도
+// React/DOM 타입 기반 자동완성을 주게 하되, checkJs를 켜지 않아 빌드를 막는 타입 검사는 안 한다.
+
+// No .ts/.tsx files exist, but typescript/@types/react/@types/react-dom were sitting in
+// devDependencies unused. This file puts them to actual use — editors get React/DOM-aware
+// autocomplete inside .jsx files, while checkJs stays off so nothing here blocks the build.
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowJs": true,
+    "checkJs": false,
+    "paths": { "*": ["./*"] }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "**/_to_delete/**"]
+}

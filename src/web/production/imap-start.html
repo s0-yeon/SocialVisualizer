@@ -1,6 +1,11 @@
 <!doctype html>
 <html lang="ko">
   <head>
+    <!--
+  주소창으로 직접 들어온 사용자를 /dashboard/로 리다이렉트하는 진입 HTML. (vite.config.js의 빌드 입력 목록에 없어 실제 빌드에는 포함되지 않는다)
+
+  Entry HTML for a redirect-only entry page sending direct visitors to /dashboard/ (not listed in vite.config.js's build input, so it is not part of the actual production build.)
+-->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Social Visualizer</title>
@@ -9,7 +14,7 @@
     <p>홈 화면으로 이동 중...</p>
     <script>
       // 이 페이지를 서빙한 주소를 그대로 백엔드(Flask) 주소로 저장한다.
-      // 애드온 없이 브라우저로 직접 들어오는 사용자를 위한 진입점.
+      // 브라우저로 직접 들어오는 사용자를 위한 진입점.
       localStorage.setItem("gw_flask_url", location.origin);
       location.replace("/dashboard/");
     </script>

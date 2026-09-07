@@ -11,6 +11,8 @@
 - `extract_graph_matching/` — extract_graph 캐시 응답을 원본 청크와 매칭해 SFT 페어로
   변환 (v2, Jaccard 유사도 기반 근사 매칭 포함)
 
+---
+
 ## 인덱싱 파이프라인 자체의 버그 수정/진단 기록은 여기 없음
 
 작업 중 GraphRAG 인덱싱 파이프라인 자체에서 발견된 버그 4건(relationship 포맷 붕괴,

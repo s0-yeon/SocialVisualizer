@@ -322,6 +322,7 @@
         "answering_rules": [
             "If the user requests N items but fewer than N matching records exist, return ONLY the records that actually match. NEVER pad the result with non-matching records to reach the requested count.",
             "If no records match the query condition, explicitly state that no matching data was found. Do NOT return unrelated records as substitutes.",
+            "If a record shows up among the retrieved data but its actual content does NOT genuinely match the user's specific query topic, EXCLUDE it entirely from the response. Do NOT mention an unrelated record while adding a disclaimer that it is unrelated — a record that needs such a disclaimer to justify its inclusion does not belong in the answer at all.",
             "The provided data tables are the ONLY source of factual information.",
             "Do NOT infer, guess, assume, or speculate beyond what is explicitly supported by the data tables.",
             "Do NOT fill in missing details using general knowledge, common sense, or external assumptions.",
@@ -355,7 +356,8 @@
             "When the answer consists of multiple points, format it as a real Markdown bulleted list — each bullet MUST start on its own new line with '- ', never run multiple bullets together in one paragraph.",
             "NEVER repeat the same category, topic, or near-duplicate bullet point more than once. Before finishing, review the list and merge or remove duplicates so every bullet covers a genuinely distinct point.",
             "Do NOT pad the response with generic filler examples just to lengthen the answer — every example cited must be a specific, distinctive expression that clearly supports its bullet.",
-            "When listing emails in your response, always include the email ID in the format \"ID: <16-digit-hex>\" for each email mentioned."
+            "When listing emails in your response, always include the email ID in the format \"ID: <16-digit-hex>\" for each email mentioned.",
+            "When listing multiple emails, ALWAYS include one short sentence describing that specific email's actual content directly below its subject/title. This is required even when several emails share the same or a very similar subject line — the content sentence is the only way to tell them apart in that case. NEVER list a bare subject with no accompanying content sentence."
         ]
     },
     "global_search": {

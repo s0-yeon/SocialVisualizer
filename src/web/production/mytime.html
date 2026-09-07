@@ -2,6 +2,11 @@
 <html lang="ko">
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <!--
+  "My Time" 타임라인 페이지 진입 HTML.
+
+  Entry HTML for the "My Time" timeline page.
+-->
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
@@ -13,8 +18,9 @@
       http-equiv="Referrer-Policy"
       content="strict-origin-when-cross-origin"
     />
-    <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
-    <link rel="icon" href="images/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="/favicon.ico" sizes="32x32" type="image/x-icon" />
+    <link rel="icon" href="/images/logos/socialvisualizer.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/images/logos/socialvisualizer.png" sizes="231x231" />
     <title>Social Visualizer</title>
     <script type="module" src="/src/pages/mytime.js"></script>
     <!-- 헤더 폰트를 홈 화면(index.html)과 완전히 동일하게: Fraunces뿐 아니라
@@ -36,157 +42,7 @@
   <body class="page-mytime">
     <div class="container body">
       <div class="main_container">
-        <div id="app-header"></div>
-
-        <!-- 공통 사이드바 컨테이너 (My People/Recap과 동일) -->
-        <div id="app-sidebar"></div>
-
-        <main class="right_col" role="main">
-          <div class="mt-page">
-            <!-- 계정/방 선택은 사이드바가 전담하므로 메일·메신저 전환 버튼, 계정
-                 토글, 채팅방 토글, 월별/연별 토글은 페이지에서 없앰 — 아래
-                 전체 타임라인이 그 역할을 대신 덮는다. account-picker-mount /
-                 chatroom-picker-mount는 mytime.js가 컨테이너 없이(null) "헤드리스"로
-                 계속 호출해 초기 계정 id만 조용히 resolve한다(화면엔 안 그려짐). -->
-            <div class="mt-page-header">
-              <div class="mt-title-group">
-                <div class="mt-title">My <span>Time</span></div>
-                <span class="mt-count" id="mtDataRangeLbl"></span>
-              </div>
-            </div>
-
-            <!-- 메일 뷰 (기본 표시) -->
-            <div class="mt-view" id="mt-mail-view">
-              <!-- 전체 타임라인(기존 슬라이더)을 두 창 위로 올림 — 날짜 범위 라벨은
-                   한 줄로 합쳐서 트랙 위 가운데에 둠(양 끝에 따로 두지 않음) -->
-              <div class="mt-pointer-wrap">
-                <div class="mt-pointer-dates">
-                  <span class="mt-pointer-date-label" id="mtPointerRangeLbl"
-                    >—</span
-                  >
-                </div>
-                <div class="mt-pointer-track" id="pointerTrack">
-                  <div class="mt-pointer-bg"></div>
-                  <div class="mt-pointer-window" id="pointerWindow"></div>
-                  <div class="mt-pointer-cursor" id="pointerCursor">
-                    <span class="mt-pointer-cursor-fallback">나</span>
-                  </div>
-                </div>
-                <div class="mt-pointer-axis" id="pointerAxis"></div>
-              </div>
-
-              <!-- 두 창(5:5) 구성: 왼쪽 = 타임슬라이더 + 요약 + 주요 연락처,
-                   오른쪽 = 월별 키워드 -->
-              <div class="mt-two-col">
-                <div class="mt-col-main">
-                  <div class="mt-main" id="mainCard">
-                    <div class="mt-track" id="track"></div>
-                    <div class="mt-info-area">
-                      <div class="mt-panel" id="infoPanel">
-                        <div class="mt-panel-top">
-                          <div class="mt-panel-period" id="panelPeriod"></div>
-                          <div class="mt-panel-count" id="panelCount"></div>
-                        </div>
-                        <div class="mt-panel-summary" id="panelSummary"></div>
-                        <div class="mt-panel-contacts-title">주요 연락처</div>
-                        <div class="mt-panel-contacts" id="panelContacts"></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 오른쪽 창: 월별 키워드 -->
-                <div class="mt-kw-panel mt-card" id="mtKwPanel">
-                  <div class="mt-kw-header">
-                    <div class="mt-kw-title" id="mtKwTitle">키워드</div>
-                    <button
-                      type="button"
-                      class="mt-kw-back-btn"
-                      id="mtKwBackBtn"
-                      style="display: none"
-                    >
-                      <i class="bi bi-arrow-left"></i
-                      ><span>키워드 목록으로</span>
-                    </button>
-                  </div>
-                  <div class="mt-kw-hint" id="mtKwHint">
-                    키워드를 클릭하시면 일별 그래프가 나타납니다.
-                  </div>
-                  <div class="mt-kw-body" id="mtKwBody"></div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 메신저 뷰: 메일 뷰와 동일한 구성(왼쪽 이미지 칸 + 타임라인 트랙 + 요약 패널
-                 + 전체 타임라인). 첫 클릭 시 mytime.js가 /chatroom-summaries를 불러와 채움,
-                 기본은 숨김 -->
-            <div class="mt-view" id="mt-messenger-view" style="display: none">
-              <div class="mt-pointer-wrap">
-                <div class="mt-pointer-dates">
-                  <span class="mt-pointer-date-label" id="msgPointerRangeLbl"
-                    >—</span
-                  >
-                </div>
-                <div class="mt-pointer-track" id="msgPointerTrack">
-                  <div class="mt-pointer-bg"></div>
-                  <div class="mt-pointer-window" id="msgPointerWindow"></div>
-                  <div class="mt-pointer-cursor" id="msgPointerCursor">
-                    <span class="mt-pointer-cursor-fallback">나</span>
-                  </div>
-                </div>
-                <div class="mt-pointer-axis" id="msgPointerAxis"></div>
-              </div>
-
-              <div class="mt-two-col">
-                <div class="mt-col-main">
-                  <div class="mt-main" id="msgMainCard">
-                    <div class="mt-track" id="msgTrack"></div>
-                    <div class="mt-info-area">
-                      <div class="mt-panel" id="msgInfoPanel">
-                        <div class="mt-panel-top">
-                          <div
-                            class="mt-panel-period"
-                            id="msgPanelPeriod"
-                          ></div>
-                        </div>
-                        <div
-                          class="mt-panel-summary"
-                          id="msgPanelSummary"
-                        ></div>
-                        <div class="mt-panel-contacts-title">주요 연락처</div>
-                        <div
-                          class="mt-panel-contacts"
-                          id="msgPanelContacts"
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 오른쪽 창: 월별 키워드 -->
-                <div class="mt-kw-panel mt-card" id="msgKwPanel">
-                  <div class="mt-kw-header">
-                    <div class="mt-kw-title" id="msgKwTitle">키워드</div>
-                    <button
-                      type="button"
-                      class="mt-kw-back-btn"
-                      id="msgKwBackBtn"
-                      style="display: none"
-                    >
-                      <i class="bi bi-arrow-left"></i
-                      ><span>키워드 목록으로</span>
-                    </button>
-                  </div>
-                  <div class="mt-kw-hint" id="msgKwHint">
-                    키워드를 클릭하시면 일별 그래프가 나타납니다.
-                  </div>
-                  <div class="mt-kw-body" id="msgKwBody"></div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-        <footer id="app-footer"></footer>
+        <div id="mytime-app-root"></div>
       </div>
     </div>
   </body>

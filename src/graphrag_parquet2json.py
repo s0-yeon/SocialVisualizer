@@ -1,9 +1,6 @@
-# src/graphrag_parquet2json.py
-#
-# GraphRAG 전용 파일 (parquet2json.py에서 이름만 변경). GraphRAG의 entities/relationships/
-# communities parquet을 그래프 시각화용 json으로 변환한다. job_run_graphrag.py가 이 파일을
-# subprocess로 실행한다 (paths.GRAPH_BUILD_SCRIPT). LightRAG는 이 변환기를 쓰지 않는다
-# (job_run_lightrag.py의 build_graph_json 참고 — 아직 미구현 스텁).
+# GraphRAG 전용 파일. GraphRAG의 entities/relationships/communities parquet을 그래프 시각화용 JSON으로 변환한다. job_run_graphrag.py가 subprocess(paths.GRAPH_BUILD_SCRIPT)로 실행하며, LightRAG는 이 변환기를 쓰지 않는다.
+
+# GraphRAG-only script. Converts GraphRAG's entities/relationships/communities parquet files into JSON for graph visualization; run as a subprocess by job_run_graphrag.py (paths.GRAPH_BUILD_SCRIPT). LightRAG does not use this converter.
 
 import pandas as pd
 import json
@@ -13,16 +10,16 @@ import re
 from config.settings import *
 from util.user_path import UserPaths
 
-# Email 엔티티의 description(예: "Subject: ... | ID: ... | Date: ...")에서 Subject 값만 추출
+# Email 엔티티 description에서 Subject 값만 추출한다 (없으면 None)
 def _extract_email_subject(description: str) -> str | None:
     m = re.search(r"Subject:\s*(.+?)\s*\|", description)
     return m.group(1).strip() if m and m.group(1).strip() else None
 
-# 메신저 interacts_with 엣지 description 앞에 붙는 "[관계: 친구]" 태그(messenger.json의
-# summarize_descriptions/extract_graph 규칙 참고)를 분리해 별도 필드로 뽑아낸다.
+# 엣지 description 앞의 "[관계: 친구]" 태그를 분리해 별도 필드로 뽑아낸다.
 # 태그가 없으면(다른 도메인/엣지 타입) relation_label은 None, description은 원본 그대로 둔다.
 _RELATION_TAG_RE = re.compile(r"^\[관계:\s*([^\]]+?)\]\s*")
 
+# description에서 "[관계: ...]" 태그를 떼어내 (관계 라벨, 태그 제거된 description) 튜플로 반환한다
 def _extract_relation_tag(description: str | None) -> tuple[str | None, str | None]:
     if not description:
         return None, description
@@ -31,7 +28,7 @@ def _extract_relation_tag(description: str | None) -> tuple[str | None, str | No
         return None, description
     return m.group(1).strip(), description[m.end():].strip()
 
-# pandas에서 읽은 값을 JSON으로 저장 가능한 타입으로 변환
+# pandas에서 읽은 값을 JSON 직렬화 가능한 타입으로 변환한다 (NaN→None, float 6자리 반올림)
 def _convert(val):
     try:
         if pd.isna(val): # 값이 비어있으면
@@ -52,18 +49,19 @@ def _convert(val):
 # title이 이중 하나면 무조건 노이즈로 간주
 _PLACEHOLDER_TITLES = {"NONE", "NULL", "N/A", "없음", "-", ""}
 
-# relationships.parquet에서 source/target 컬럼명을 찾는다 (_build_edges와 동일 기준을 공유)
+# relationships DataFrame에서 source/target 역할을 하는 컬럼명을 찾아 반환한다
 def _rel_endpoint_cols(rel_df: pd.DataFrame) -> tuple[str, str]:
     src_col = next((c for c in ["source", "src", "source_id"] if c in rel_df.columns), rel_df.columns[0])
     tgt_col = next((c for c in ["target", "tgt", "target_id"] if c in rel_df.columns), rel_df.columns[1])
     return src_col, tgt_col
 
-# 노이즈 노드/엣지 제거
+# 자리표시자 이름 노드와 고립 노드(연결 엣지 없음), 그 노드를 참조하는 엣지를 제거한 DataFrame 쌍을 반환한다
 def _clean_entities_and_relationships(
     entities_df: pd.DataFrame, rel_df: pd.DataFrame
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     title_col = "title" if "title" in entities_df.columns else "name"
 
+    # 비교용으로 문자열을 trim + 대문자화한다
     def _norm(v) -> str:
         return str(v).strip().upper()
 
@@ -95,7 +93,7 @@ def _clean_entities_and_relationships(
     return entities_df, rel_df
 
 
-# 노드 생성
+# entities/communities DataFrame을 프론트 렌더용 노드 dict 리스트로 변환한다
 def _build_nodes(entities_df: pd.DataFrame, communities_df: pd.DataFrame | None) -> list[dict]:
  
     print(f"entities 컬럼: {list(entities_df.columns)}")
@@ -152,7 +150,7 @@ def _build_nodes(entities_df: pd.DataFrame, communities_df: pd.DataFrame | None)
 
     return nodes
  
-# 엣지 생성
+# relationships DataFrame을 프론트 렌더용 엣지 dict 리스트로 변환한다
 def _build_edges(rel_df: pd.DataFrame) -> list[dict]:
  
     print(f"relationships 컬럼: {list(rel_df.columns)}") # rel_df : relationships.parquet을 pandas로 읽은 표
@@ -182,7 +180,7 @@ def _build_edges(rel_df: pd.DataFrame) -> list[dict]:
 
     return edges
  
-# job_run_graphrag.py에서 subprocess로 이 파일을 실행하면 여기서 시작
+# CLI 인자로 받은 계정/도메인의 parquet들을 읽어 그래프 시각화용 JSON을 생성·저장한다 (subprocess 진입점)
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-dir", required=True)

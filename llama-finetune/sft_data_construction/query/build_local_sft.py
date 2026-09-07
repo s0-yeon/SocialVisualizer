@@ -47,6 +47,7 @@ SEED = 42
 VAL_RATIO = 0.1  # 9:1
 
 
+# 행에서 gold 답변을 뽑음: "실제 답변" 우선, 비어 있으면 "정답 답변"으로 폴백
 def pick_gold_answer(row: pd.Series) -> str:
     """"실제 답변" 우선, 비어 있으면 "정답 답변"으로 폴백."""
     actual = str(row.get("실제 답변", "") or "").strip()
@@ -58,6 +59,7 @@ def pick_gold_answer(row: pd.Series) -> str:
     return fallback
 
 
+# system/human/gpt 3-turn 딕셔너리를 만들어 ShareGPT 포맷 학습 예제 하나로 조립함
 def build_sharegpt_example(system_prompt: str, question: str, gold_answer: str) -> dict:
     return {
         "conversations": [
@@ -68,6 +70,7 @@ def build_sharegpt_example(system_prompt: str, question: str, gold_answer: str) 
     }
 
 
+# 예제 리스트를 셔플한 뒤 val_ratio 비율로 train/val 두 리스트로 나눔
 def domain_split(examples: list[dict], val_ratio: float, rng: random.Random) -> tuple[list[dict], list[dict]]:
     shuffled = examples[:]
     rng.shuffle(shuffled)
@@ -75,6 +78,7 @@ def domain_split(examples: list[dict], val_ratio: float, rng: random.Random) -> 
     return shuffled[n_val:], shuffled[:n_val]
 
 
+# CLI 엔트리포인트: QA 엑셀을 읽어 local_search SFT train/val jsonl을 만들어 저장함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mail-qa-xlsx", type=Path, required=True)

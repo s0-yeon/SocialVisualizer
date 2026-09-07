@@ -30,6 +30,7 @@ MAX_REPORT_LENGTH = 2000  # community_reports.max_length in settings.j2
 DEFAULT_PROMPTS_DIR = Path(__file__).resolve().parents[3] / "parquet_template" / "rendered"
 
 
+# 메일 도메인 1개 + 13개 방 메신저 도메인 각각의 (도메인, 방ID, GraphRAG 산출물 경로) 목록을 만듦
 def build_domains(raw_data_dir: str):
     domains = [("mail", "mail", os.path.join(raw_data_dir, "Llama_mail_output/Llama_mail_output/output"))]
     for r in ROOMS:
@@ -40,6 +41,7 @@ def build_domains(raw_data_dir: str):
     return domains
 
 
+# mail/messenger 도메인별 community_reports 렌더링 프롬프트 텍스트를 읽어옴
 def load_prompts(prompts_dir: Path):
     return {
         "mail": (prompts_dir / "mail" / "prompts" / "community_reports.txt").read_text(encoding="utf-8"),
@@ -47,6 +49,8 @@ def load_prompts(prompts_dir: Path):
     }
 
 
+# 모든 도메인을 순회하며 토큰 예산 내 커뮤니티는 gold 재사용 SFT 쌍으로, 초과 커뮤니티는
+# oversized_cases.json으로 나눠 저장하는 전체 파이프라인 진입점
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--raw-data-dir", default="./raw_data",
@@ -70,7 +74,7 @@ def main():
         for (cid, level), info in full_ctx.items():
             rep_row = reports[(reports["community"] == cid) & (reports["level"] == level)]
             if len(rep_row) != 1:
-                continue
+                continue  # 매칭되는 gold 리포트가 정확히 1개가 아니면(없거나 중복) 건너뜀
             gold_json = rep_row.iloc[0]["full_content_json"]
 
             if info["context_size"] <= MAX_INPUT_TOKENS:
@@ -87,6 +91,7 @@ def main():
                     },
                 })
             else:
+                # 예산을 넘는 커뮤니티는 트리밍된(잘라낸) 컨텍스트를 참고용으로 함께 저장해 수작업 gold 작성에 활용
                 tinfo = trimmed_ctx[(cid, level)]
                 oversized.append({
                     "domain": domain, "room": room, "community": int(cid), "level": int(level),

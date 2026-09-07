@@ -1,5 +1,7 @@
-# 웹앱 DB → 메일에서 추출한 정보 데이터 JSON
-# 현재는 가라 데이터
+# 메일 계정의 통계·친밀도·키워드·연락처 관계 등을 DB에서 조회해 반환한다.
+
+# Utility functions that read and return mail account statistics, affinity (EIS) scores, keywords, and contact relationships from the database.
+
 import calendar
 import json
 import math
@@ -18,6 +20,7 @@ _KG_TONE_SCORE = {
 _LAMBDA = 0.01
 
 
+# 두 계정이 주고받은 메일로 상호성(R)·반응성(P)·어조(T)를 계산해 관계 친밀도 점수(EIS) dict를 반환한다
 def calculate_eis(
     user_mail_account_id: str,
     person_mail_account_id: str,
@@ -27,26 +30,6 @@ def calculate_eis(
     apply_volume_correction: bool = True,
     apply_time_decay: bool = True,
 ) -> dict:
-    """
-    update_date 생략 시 DB에서 MAX(index_date)를 자동 조회.
-    start_date / end_date 지정 시 mail_date 범위로 추가 필터링.
-
-    Returns:
-    {
-        "R": float,
-        "P": float,
-        "T": float,
-        "EIS": float,
-        "EIS_adj": float,
-        "EIS_final": float,
-        "N": int,
-        "S_A_to_B": int,
-        "S_B_to_A": int,
-        "reply_count": int,
-        "t_bar": float | None,
-        "delta_t_last": int | None
-    }
-    """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -79,14 +62,14 @@ def calculate_eis(
         cursor.close()
         conn.close()
 
-    # ── 1. 상호성 점수 R ──────────────────────────────────────────────────
+    # 1. 상호성 점수 R 
     S_A_to_B = sum(1 for r in rows if r["direction"] == "sent")
     S_B_to_A = sum(1 for r in rows if r["direction"] == "received")
     N = S_A_to_B + S_B_to_A
 
     R = 0.0 if N == 0 else 1 - abs((S_A_to_B - S_B_to_A) / N)
 
-    # ── 2. 반응성 점수 P ──────────────────────────────────────────────────
+    # 2. 반응성 점수 P 
     reply_count = sum(1 for r in rows if r["is_reply"] == 1)
     elapsed = [float(r["reply_elapsed_hours"]) for r in rows if r["reply_elapsed_hours"] is not None]
 
@@ -101,7 +84,7 @@ def calculate_eis(
             t_bar = None
             P = reply_ratio
 
-    # ── 3. 어조 점수 T ────────────────────────────────────────────────────
+    # 3. 어조 점수 T
     if N == 0:
         T = 0.0
     else:
@@ -116,13 +99,13 @@ def calculate_eis(
                 tone_scores.append((kg_score + llm_score) / 2)
         T = sum(tone_scores) / len(tone_scores)
 
-    # ── 4. 통합 EIS ───────────────────────────────────────────────────────
+    # 4. 통합 EIS 
     EIS = 0.3 * R + 0.4 * P + 0.3 * T
 
-    # ── 5. 볼륨 보정 (apply_volume_correction=False 시 생략) ──────────────
+    # 5. 볼륨 보정 (apply_volume_correction=False 시 생략)
     EIS_adj = EIS * (1 - math.exp(-0.05 * N)) if apply_volume_correction else EIS
 
-    # ── 6. 시간 감쇠 보정 (apply_time_decay=False 시 생략) ────────────────
+    # 6. 시간 감쇠 보정 (apply_time_decay=False 시 생략) 
     mail_dates = [r["mail_date"] for r in rows if r["mail_date"] is not None]
     if not apply_time_decay:
         delta_t_last = None
@@ -151,7 +134,8 @@ def calculate_eis(
         "delta_t_last": delta_t_last,
     }
 
-def get_mail_stats(paths): # 메일 송수신
+# mail_contact_stats.json(연락처별 송수신 수)을 읽어 반환한다 (파일 없으면 예시 데이터)
+def get_mail_stats(paths):
     try:
         with open(paths.MAIL_CONTACTS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -188,7 +172,8 @@ def get_mail_stats(paths): # 메일 송수신
     }
     
 
-def get_keyword_stats(paths): # 메일 키워드 수
+# mail_keyword_stats.json의 키워드별 언급 수를 [{word, count}] 리스트로 반환한다 (파일 없으면 예시 데이터)
+def get_keyword_stats(paths):
     try:
         with open(paths.MAIL_KEYWORDS_PATH, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -219,7 +204,7 @@ def get_keyword_stats(paths): # 메일 키워드 수
         ]
     }
 
-# 친밀한 사람 친밀도 수치 (볼륨 보정·시간 감쇠 없이 EIS 기반)
+# 이 계정의 모든 연락처에 대해 EIS(볼륨 보정·시간 감쇠 없이)를 계산해 친밀도 내림차순 목록을 반환한다
 def get_high_affinity_person_stats(paths):
     latest = get_latest_mail_account(paths.USER_ID)
     if not latest:
@@ -257,6 +242,7 @@ def get_high_affinity_person_stats(paths):
     return result
 
 
+# 특정 상대방과 날짜 범위 내 주고받은 키워드별 총 언급 수와 등장 날짜 목록을 반환한다
 def get_keywords_by_person_date(user_id: str, person_user_id: str, start_date: str, end_date: str) -> list:
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -288,9 +274,8 @@ def get_keywords_by_person_date(user_id: str, person_user_id: str, start_date: s
         conn.close()
 
 
+# 계정 전체(모든 상대방 합산)의 월별 키워드 목록·언급 수를 {월: [{word, count}]}로 반환한다
 def get_mail_keyword_monthly_stats(user_id: str, start_date: str = None, end_date: str = None) -> dict:
-    """user_id 전체(모든 상대방 합산)의 월별 키워드 목록+언급 수를 반환.
-    start_date/end_date를 주면 그 기간만, 안 주면 전체 기간."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
     try:
@@ -317,9 +302,8 @@ def get_mail_keyword_monthly_stats(user_id: str, start_date: str = None, end_dat
     return monthly
 
 
+# 계정 전체가 특정 월에 날짜별로 언급한 키워드 목록·횟수를 {날짜: [{word, count}]}로 반환한다
 def get_mail_keyword_daily_stats(user_id: str, month: str) -> dict:
-    """user_id 전체(모든 상대방 합산)가 특정 월(month, "YYYY-MM")에 날짜별로 언급한
-    키워드 목록+횟수를 반환. 월별 그래프에서 달을 클릭했을 때 "일별 목록" 화면용."""
     year, mon = (int(x) for x in month.split("-"))
     month_start = f"{month}-01"
     month_end = f"{month}-{calendar.monthrange(year, mon)[1]:02d}"
@@ -350,10 +334,8 @@ def get_mail_keyword_daily_stats(user_id: str, month: str) -> dict:
     return daily
 
 
+# 특정 날짜에 특정 키워드를 언급한 상대방별 횟수를 count 내림차순 목록으로 반환한다
 def get_mail_keyword_mentioners(user_id: str, date: str, keyword: str) -> list:
-    """user_id 전체에서 특정 날짜(date, "YYYY-MM-DD")에 특정 키워드(keyword)를 언급한
-    상대방별 횟수를 반환. 인원 수 제한 없음, count 내림차순. avatar_url은 여기서 채우지
-    않고 app.py에서 person_avatars 캐시를 붙인다(기존 /chatroom-people 패턴과 동일)."""
     latest = get_latest_mail_account(user_id)
     if not latest:
         return []
@@ -388,9 +370,11 @@ def get_mail_keyword_mentioners(user_id: str, date: str, keyword: str) -> list:
     return [{"person_id": r["person_id"], "name": r["name"], "count": int(r["count"] or 0)} for r in rows]
 
 
-def get_user_rating_stats(): # 모든 유저의 Olive 만족도
+# 전체 유저의 Olive 만족도 통계를 반환한다 (현재는 고정값)
+def get_user_rating_stats():
     return {"total_rating" : 99}
 
+# 특정 상대방과 날짜 범위 내 월별 발신/수신 메일 수를 집계해 반환한다 (메일이 오간 연도만, 그 안의 빈 달은 0)
 def get_mail_exchange_stats(user_id, person_mail_id, start_date, end_date):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -416,9 +400,7 @@ def get_mail_exchange_stats(user_id, person_mail_id, start_date, end_date):
         GROUP BY DATE_FORMAT(mail_date, '%Y-%m')
         ORDER BY month ASC
         """
-        # 이 사람과 실제로 메일을 주고받은 달만 GROUP BY 대상에 들어오도록 WHERE에도
-        # 같은 조건을 넣는다 — 안 그러면 (다른 사람과) 메일이 오간 모든 달이 이 사람의
-        # 그래프에도 0건짜리로 끼어들어와 연도/달이 쓸데없이 많이 늘어난다.
+        # 이 사람과 실제로 메일을 주고받은 달만 GROUP BY 대상에 들어오도록 한다
         cursor.execute(sql, (
             like_param, like_param, user_id, update_date, start_date, end_date + ' 23:59:59',
             like_param, like_param,
@@ -430,8 +412,7 @@ def get_mail_exchange_stats(user_id, person_mail_id, start_date, end_date):
             for row in rows
         }
 
-        # 실제 메일이 오간 "연도"만 남기되, 그 연도 안에서는 달을 건너뛰지 않고 전부
-        # 채운다(빈 달은 0건으로) — 연도 단위로만 거르고 월별 흐름은 끊기지 않게 하기 위함.
+        # 실제 메일이 오간 "연도"만 남기되, 그 연도 안에서는 달을 건너뛰지 않고 전부 채운다(빈 달은 0건으로) 
         active_years = sorted({month[:4] for month in by_month})
         start_ym, end_ym = start_date[:7], end_date[:7]
 
@@ -457,10 +438,8 @@ def get_mail_exchange_stats(user_id, person_mail_id, start_date, end_date):
         conn.close()
 
 
+# 특정 상대방과 특정 월에 날짜별로 주고받은 발신/수신 메일 수를 집계해 반환한다
 def get_mail_person_daily_stats(user_id, person_mail_id, month):
-    """user_id가 person_mail_id와 특정 월(month, "YYYY-MM")에 날짜별로 주고받은 메일 수를
-    집계. 상세보기 통계 탭에서 월 막대를 클릭했을 때 "일별 목록" 화면용
-    (get_chatroom_person_daily_stats의 메일판)."""
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -510,14 +489,8 @@ def get_mail_person_daily_stats(user_id, person_mail_id, month):
         conn.close()
 
 
+# 특정 상대방과 날짜 범위 내 주고받은 메일의 (mail_id, 방향, 날짜) 목록을 반환한다 (제목/본문은 이후 Gmail API로 조회)
 def get_person_mail_ids_in_range(user_id, person_mail_id, start_date, end_date) -> list:
-    """
-    특정 상대방과 주고받은 메일의 (mail_id, 방향, 날짜) 목록을 날짜 범위 내에서 반환한다.
-    MySQL mail 테이블은 GraphRAG 인덱싱 캡(MAX_MAILS)과 무관하게 전체 동기화 이력을
-    담고 있어서, get_mail_exchange_stats와 같은 소스를 써야 그래프 통계 숫자와
-    실제 목록 건수가 어긋나지 않는다. 제목/본문은 여기 없으므로(집계용 테이블이라
-    저장 안 함), 이 mail_id로 Gmail API(Apps Script)를 호출해 실시간으로 가져온다.
-    """
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -549,6 +522,7 @@ def get_person_mail_ids_in_range(user_id, person_mail_id, start_date, end_date) 
         conn.close()
 
 
+# 날짜 범위 내 발신(sent) 또는 수신(received) 메일을 상대방 이메일별로 집계해 건수 내림차순 목록을 반환한다
 def get_date_range_person_stats(user_id, start_date, end_date, sort_by):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -582,11 +556,7 @@ def get_date_range_person_stats(user_id, start_date, end_date, sort_by):
                         continue
                     counts[email] = counts.get(email, 0) + 1
             else:
-                # 발신/수신 필드가 이메일 형식이 아닌 경우("cgv", "산학교육지원센터"처럼
-                # 파싱 과정에서 이름만 남은 발신자 등). person 테이블(person_mail_account_id)에도
-                # 이런 비-이메일 식별자가 그대로 저장돼 있으므로, 여기서도 같은 방식으로
-                # 정규화해서 집계해야 한다 — 안 그러면 이 사람들은 실제 메일이 있어도 항상
-                # 0건으로 잡혀서 mypeople 목록에서 영구히 걸러진다.
+                # 발신/수신 필드가 이메일 형식이 아닌 경우 같은 정규화 과정을 거친다
                 ident = field.strip().lower()
                 if ident and ident != user_id.lower():
                     counts[ident] = counts.get(ident, 0) + 1
@@ -603,6 +573,7 @@ def get_date_range_person_stats(user_id, start_date, end_date, sort_by):
         conn.close()
 
 
+# 최신 인덱싱 기준 이 계정 메일의 가장 이른/늦은 날짜를 반환한다
 def get_mail_date_range(user_id):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
@@ -628,7 +599,8 @@ def get_mail_date_range(user_id):
         cursor.close()
         conn.close()
 
-def get_mail_sync_stats(paths): # 메일 동기화시 동기화된 메일 수, 동기화 시간
+# 가장 최근 인덱싱의 동기화 메일 수·소요 시간·날짜를 반환한다
+def get_mail_sync_stats(paths):
     conn = get_db_connection()
     cursor = conn.cursor(dictionary=True)
 
@@ -667,6 +639,7 @@ def get_mail_sync_stats(paths): # 메일 동기화시 동기화된 메일 수, �
         conn.close()
 
 
+# 최신 인덱싱 기준 이 계정 연락처의 이메일·이름·description·relation_label을 반환한다 (description 있는 것만)
 def get_person_descriptions(user_id: str) -> list:
     latest_account = get_latest_mail_account(user_id)
     if not latest_account:
@@ -677,7 +650,7 @@ def get_person_descriptions(user_id: str) -> list:
     try:
         # person_account_id로 alias: 프론트/avatar_generator가 기대하는 기존 API 응답 키 유지
         cursor.execute("""
-            SELECT person_mail_account_id AS person_account_id, person_name, description, relation_label
+            SELECT person_mail_account_id AS person_account_id, person_name, description, relation_label, short_bio
             FROM person
             WHERE user_mail_account_id = %s AND index_date = %s
               AND description IS NOT NULL AND description != ''
@@ -688,10 +661,44 @@ def get_person_descriptions(user_id: str) -> list:
         conn.close()
 
 
+# 최신 인덱싱 기준 이 계정 연락처 전체를 person 테이블 전 컬럼으로 반환한다 (프론트 연락처 목록용)
+def get_mail_people(user_id: str):
+    latest_account = get_latest_mail_account(user_id)
+    if not latest_account:
+        return None
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute("""
+            SELECT person_mail_account_id, person_name, receive_mails, send_mails,
+                   friendly_mails, description, relation_label, short_bio
+            FROM person
+            WHERE user_mail_account_id = %s AND index_date = %s
+            ORDER BY (receive_mails + send_mails) DESC
+        """, (latest_account["user_mail_account_id"], latest_account["index_date"]))
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    return [
+        {
+            "person_account_id": row["person_mail_account_id"],
+            "person_name": row["person_name"],
+            "receive_mails": int(row["receive_mails"] or 0),
+            "send_mails": int(row["send_mails"] or 0),
+            "friendly_mails": int(row["friendly_mails"] or 0),
+            "description": row["description"],
+            "relation_label": row["relation_label"],
+            "short_bio": row["short_bio"],
+        }
+        for row in rows
+    ]
+
+
+# 최신 인덱싱 기준 이 계정 연락처 전체(이메일+이름)를 반환한다 (아바타 일괄 생성용 경량 조회)
 def get_all_persons(user_id: str) -> list:
-    """설명 유무와 무관하게 최신 인덱싱 기준 이 계정의 연락처 전체(이메일+이름)를 반환한다.
-    인덱싱 직후 서버가 아바타를 일괄 생성할 때, EIS 계산이 들어간 get_high_affinity_person_stats
-    대신 가볍게 조회하기 위한 용도."""
     latest_account = get_latest_mail_account(user_id)
     if not latest_account:
         return []
@@ -710,10 +717,8 @@ def get_all_persons(user_id: str) -> list:
         conn.close()
 
 
+# 최신 인덱싱 기준 이 계정 연락처의 이메일·이름·relation_label만 추려서 반환한다 (경량 페이로드)
 def get_mail_relationships(user_id: str) -> list:
-    """person.relation_label만 추려서 반환 (description 전체 텍스트 없이 가벼운 페이로드).
-    메신저의 get_chatroom_relationships()에 대응하는 메일 버전 — 메일은 person 테이블에
-    이미 relation_label 컬럼이 있어서 그래프 JSON을 매번 스캔할 필요 없이 바로 SELECT한다."""
     latest_account = get_latest_mail_account(user_id)
     if not latest_account:
         return []
@@ -731,3 +736,58 @@ def get_mail_relationships(user_id: str) -> list:
     finally:
         cursor.close()
         conn.close()
+
+
+# 최신 인덱싱 기준 계정의 연/월별 LLM 요약을 주요 연락처(이메일→description/short_bio 포함)와 함께 반환한다
+def get_mail_summaries(user_id: str, summarize_unit: str):
+    latest_account = get_latest_mail_account(user_id)
+    if not latest_account:
+        return None
+    user_mail_account_id = latest_account["user_mail_account_id"]
+    update_date           = latest_account["index_date"]
+
+    conn = get_db_connection()
+    cursor = conn.cursor(dictionary=True)
+    try:
+        cursor.execute(
+            """
+            SELECT summary_period, summarized_context, contacts
+            FROM mail_summarize
+            WHERE user_mail_account_id = %s AND index_date = %s AND summarize_unit = %s
+            ORDER BY summary_period
+            """,
+            (user_mail_account_id, update_date, summarize_unit),
+        )
+        rows = cursor.fetchall()
+
+        cursor.execute(
+            """
+            SELECT person_mail_account_id, person_name, description, short_bio
+            FROM person
+            WHERE user_mail_account_id = %s AND index_date = %s
+            """,
+            (user_mail_account_id, update_date),
+        )
+        people_map = {row["person_mail_account_id"]: row for row in cursor.fetchall()}
+    finally:
+        cursor.close()
+        conn.close()
+
+    result = []
+    for row in rows:
+        contacts = row["contacts"]
+        contacts = json.loads(contacts) if isinstance(contacts, str) else (contacts or [])
+        result.append({
+            "summary_period": row["summary_period"],
+            "summarized_context": row["summarized_context"],
+            "contacts": [
+                {
+                    "person_account_id": email,
+                    "person_name": people_map.get(email, {}).get("person_name"),
+                    "description": people_map.get(email, {}).get("description"),
+                    "short_bio": people_map.get(email, {}).get("short_bio"),
+                }
+                for email in contacts
+            ],
+        })
+    return result

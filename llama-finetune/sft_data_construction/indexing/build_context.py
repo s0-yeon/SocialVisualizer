@@ -27,6 +27,7 @@ import pandas as pd
 # 용도로만 쓰이며, 프로덕션과 정확히 일치시키기 위한 값은 아니다.
 _CJK_RE = re.compile(r"[ㄱ-힝一-鿿]")
 
+# 텍스트의 대략적인 토큰 수를 구함 (CJK 문자는 1글자당 1토큰, 나머지는 공백 기준 단어 수로 근사)
 def num_tokens(s: str) -> int:
     if not s:
         return 0
@@ -37,23 +38,27 @@ def num_tokens(s: str) -> int:
 
 # faithful port of graphrag's context building
 
+# entities 테이블의 description 결측치를 채우고, 노드 상세정보(node_details) 컬럼을 만듦
 def prep_nodes(entities: pd.DataFrame) -> pd.DataFrame:
     df = entities.copy()
     df["description"] = df["description"].fillna("No Description")
     df["node_details"] = df[["human_readable_id", "title", "description", "degree"]].to_dict(orient="records")
     return df
 
+# relationships 테이블의 description 결측치를 채우고, 엣지 상세정보(edge_details) 컬럼을 만듦
 def prep_edges(relationships: pd.DataFrame) -> pd.DataFrame:
     df = relationships.copy()
     df["description"] = df["description"].fillna("No Description")
     df["edge_details"] = df[["human_readable_id", "source", "target", "description", "combined_degree"]].to_dict(orient="records")
     return df
 
+# 커뮤니티별 entity_ids를 행 단위로 펼쳐 엔티티 정보와 조인하고, 커뮤니티가 없는(-1) 행은 제외함
 def explode_communities(communities: pd.DataFrame, entities: pd.DataFrame) -> pd.DataFrame:
     community_join = communities.explode("entity_ids").loc[:, ["community", "level", "entity_ids"]]
     nodes = entities.merge(community_join, left_on="id", right_on="entity_ids", how="left")
     return nodes.loc[nodes["community"] != -1]
 
+# 엔티티/관계 리스트를 GraphRAG 프롬프트 형식의 CSV 텍스트로 직렬화함
 def _get_context_string(entities, edges):
     contexts = []
     for label, data in [("Entities", entities), ("Relationships", edges)]:
@@ -63,6 +68,7 @@ def _get_context_string(entities, edges):
                 contexts.append(f"-----{label}-----\n{data_df.to_csv(index=False, sep=',')}")
     return "\n\n".join(contexts)
 
+# 커뮤니티 컨텍스트를 degree 내림차순으로 정렬하며 채워 넣고, 토큰 한도를 넘으면 잘라냄
 def sort_context(local_context: list, max_context_tokens=None):
     """Faithful port of sort_context.py (no claims, since extract_claims is disabled)."""
     edges = [
@@ -103,6 +109,7 @@ def sort_context(local_context: list, max_context_tokens=None):
 
     return context_string, truncated
 
+# 커뮤니티·레벨별로 sort_context를 호출해 SFT 학습용 입력 컨텍스트 딕셔너리를 만듦
 def build_local_contexts(entities: pd.DataFrame, relationships: pd.DataFrame, communities: pd.DataFrame, max_context_tokens=None):
     """Returns a dict: (community_id, level) -> {"context_string", "context_size", "truncated", "n_entities", "n_relationships"}"""
     nodes = explode_communities(communities, entities)
@@ -145,6 +152,7 @@ def build_local_contexts(entities: pd.DataFrame, relationships: pd.DataFrame, co
     return results
 
 
+# GraphRAG가 생성한 entities/relationships/communities/community_reports parquet 파일들을 읽어옴
 def load_domain(base_dir):
     entities = pd.read_parquet(os.path.join(base_dir, "entities.parquet"))
     relationships = pd.read_parquet(os.path.join(base_dir, "relationships.parquet"))

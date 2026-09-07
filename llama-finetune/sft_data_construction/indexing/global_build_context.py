@@ -32,6 +32,7 @@ from graphrag.tokenizer.get_tokenizer import get_tokenizer
 MAX_CONTEXT_TOKENS = 12000  # GlobalSearchConfig default (settings.yaml에 override 없음)
 
 
+# GraphRAG parquet 산출물(entities/communities/community_reports)로부터 GlobalCommunityContext를 구성함
 def load_global_context_builder(output_dir: str) -> GlobalCommunityContext:
     entity_df = pd.read_parquet(f"{output_dir}/entities.parquet")
     community_df = pd.read_parquet(f"{output_dir}/communities.parquet")
@@ -52,6 +53,7 @@ def load_global_context_builder(output_dir: str) -> GlobalCommunityContext:
     )
 
 
+# GraphRAG production과 동일한 파라미터로 MAP 단계 컨텍스트 배치를 생성함
 async def build_map_batches(context_builder: GlobalCommunityContext, query: str):
     """실제 production과 동일한 파라미터로 context_result.context_chunks(=MAP 배치 리스트) 생성."""
     result = await context_builder.build_context(

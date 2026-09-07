@@ -1,0 +1,200 @@
+﻿번호,라이브러리명,버전,라이선스,공식 저장소 URL
+1,aiofiles,25.1.0,Apache-2.0,https://github.com/Tinche/aiofiles
+2,aiohappyeyeballs,2.7.1,PSF-2.0,https://github.com/aio-libs/aiohappyeyeballs
+3,aiohttp,3.14.3,Apache-2.0 AND MIT,https://github.com/aio-libs/aiohttp
+4,aiosignal,1.4.0,Apache 2.0,https://github.com/aio-libs/aiosignal
+5,annotated-doc,0.0.4,MIT,https://github.com/fastapi/annotated-doc
+6,annotated-types,0.7.0,MIT,https://github.com/annotated-types/annotated-types
+7,anyio,4.12.1,MIT,https://github.com/agronholm/anyio
+8,asttokens,2.4.1,Apache 2.0,https://github.com/gristlabs/asttokens
+9,attrs,26.1.0,MIT,https://github.com/python-attrs/attrs
+10,azure-common,1.1.28,MIT,https://github.com/Azure/azure-sdk-for-python
+11,azure-core,1.38.3,MIT,https://github.com/Azure/azure-sdk-for-python
+12,azure-cosmos,4.15.0,MIT,https://github.com/Azure/azure-sdk-for-python
+13,azure-identity,1.25.3,MIT,https://github.com/Azure/azure-sdk-for-python
+14,azure-search-documents,12.0.0,MIT,https://github.com/Azure/azure-sdk-for-python
+15,azure-storage-blob,12.28.0,MIT,https://github.com/Azure/azure-sdk-for-python
+16,beautifulsoup4,4.15.0,MIT,https://www.crummy.com/software/BeautifulSoup/
+17,blinker,1.9.0,MIT,https://github.com/pallets-eco/blinker
+18,blis,1.3.3,BSD,https://github.com/explosion/cython-blis
+19,catalogue,2.0.10,MIT,https://github.com/explosion/catalogue
+20,certifi,2026.2.25,MPL-2.0,https://github.com/certifi/python-certifi
+21,cffi,2.0.0,MIT,https://github.com/python-cffi/cffi
+22,charset-normalizer,3.4.6,MIT,https://github.com/jawah/charset_normalizer
+23,click,8.4.2,BSD-3-Clause,https://github.com/pallets/click
+24,cloudpathlib,0.23.0,MIT,https://github.com/drivendataorg/cloudpathlib
+25,colorama,0.4.6,BSD License,https://github.com/tartley/colorama
+26,coloredlogs,15.0.1,MIT,https://github.com/xolox/python-coloredlogs
+27,confection,0.1.5,MIT,https://github.com/explosion/confection
+28,configparser,7.2.0,MIT,https://github.com/jaraco/configparser
+29,contourpy,1.3.3,BSD License,https://github.com/contourpy/contourpy
+30,cryptography,46.0.5,Apache-2.0 OR BSD-3-Clause,https://github.com/pyca/cryptography
+31,cycler,0.12.1,BSD License,https://github.com/matplotlib/cycler
+32,cymem,2.0.13,MIT,https://github.com/explosion/cymem
+33,defusedxml,0.7.1,PSFL,https://github.com/tiran/defusedxml
+34,deprecation,2.1.0,Apache 2,https://github.com/briancurtin/deprecation
+35,devtools,0.12.2,MIT,https://github.com/pydantic/python-devtools
+36,distro,1.9.0,"Apache License, Version 2.0",https://github.com/python-distro/distro
+37,environs,11.2.1,MIT,https://github.com/sloria/environs
+38,et_xmlfile,2.0.0,MIT,https://pypi.org/project/et-xmlfile/
+39,executing,2.2.1,MIT,https://github.com/alexmojaki/executing
+40,fastapi,0.141.1,MIT,https://github.com/fastapi/fastapi
+41,fastuuid,0.14.0,BSD License,https://github.com/thusoy/fastuuid
+42,filelock,3.32.2,MIT,https://github.com/tox-dev/py-filelock
+43,Flask,3.1.3,BSD-3-Clause,https://github.com/pallets/flask
+44,flask-cors,6.0.2,MIT,https://github.com/corydolphin/flask-cors
+45,flatbuffers,25.12.19,Apache 2.0,https://github.com/google/flatbuffers
+46,fonttools,4.62.1,MIT,https://github.com/fonttools/fonttools
+47,frozenlist,1.8.0,Apache-2.0,https://github.com/aio-libs/frozenlist
+48,fsspec,2026.7.0,BSD-3-Clause,https://github.com/fsspec/filesystem_spec
+49,future,1.0.0,MIT,https://github.com/PythonCharmers/python-future
+50,google-api-core,2.30.3,Apache 2.0,https://github.com/googleapis/python-api-core
+51,google-genai,2.2.0,Apache-2.0,https://github.com/googleapis/python-genai
+52,graphrag,3.1.1,MIT,https://github.com/microsoft/graphrag
+53,graphrag-cache,3.1.1,MIT,https://github.com/microsoft/graphrag
+54,graphrag-chunking,3.1.1,MIT,https://github.com/microsoft/graphrag
+55,graphrag-common,3.1.1,MIT,https://github.com/microsoft/graphrag
+56,graphrag-input,3.1.1,MIT,https://github.com/microsoft/graphrag
+57,graphrag-llm,3.1.1,MIT,https://github.com/microsoft/graphrag
+58,graphrag-storage,3.1.1,MIT,https://github.com/microsoft/graphrag
+59,graphrag-vectors,3.1.1,MIT,https://github.com/microsoft/graphrag
+60,lightrag-hku (LightRAG),"1.5.6 (git 24ee484, 2026-08-10)",MIT,https://github.com/HKUDS/LightRAG
+61,graspologic-native,1.2.5,MIT,https://github.com/graspologic-org/graspologic-native
+62,h11,0.16.0,MIT,https://github.com/python-hyper/h11
+63,hf-xet,1.6.0,Apache Software License,https://github.com/huggingface/xet-core
+64,httpcore,1.0.9,BSD License,https://github.com/encode/httpcore
+65,httpx,0.28.1,BSD-3-Clause,https://github.com/encode/httpx
+66,huggingface_hub,1.27.0,Apache-2.0,https://github.com/huggingface/huggingface_hub
+67,humanfriendly,10,MIT,https://github.com/xolox/python-humanfriendly
+68,idna,3.11,BSD-3-Clause,https://github.com/kjd/idna
+69,importlib_metadata,8.9.0,Apache-2.0,https://github.com/python/importlib_metadata
+70,isodate,0.7.2,BSD License,https://github.com/gweis/isodate
+71,itsdangerous,2.2.0,BSD License,https://github.com/pallets/itsdangerous
+72,Jinja2,3.1.6,BSD License,https://github.com/pallets/jinja
+73,jiter,0.13.0,MIT,https://github.com/pydantic/jiter
+74,joblib,1.5.3,BSD-3-Clause,https://github.com/joblib/joblib
+75,json_repair,0.30.3,MIT,https://github.com/mangiucugna/json_repair
+76,jsonschema,4.26.0,MIT,https://github.com/python-jsonschema/jsonschema
+77,jsonschema-specifications,2025.9.1,MIT,https://github.com/python-jsonschema/jsonschema-specifications
+78,kiwisolver,1.5.0,BSD License,https://github.com/nucleic/kiwi
+79,lance-namespace,0.9.0,Apache-2.0,https://github.com/lance-format/lance-namespace
+80,lance-namespace-urllib3-client,0.9.0,Apache-2.0,https://github.com/lance-format/lance-namespace
+81,lancedb,0.34.0,Apache Software License,https://github.com/lancedb/lancedb
+82,litellm,1.92.0,MIT,https://github.com/BerriAI/litellm
+83,lxml,6.0.2,BSD-3-Clause,https://github.com/lxml/lxml
+84,magika,0.6.3,Apache-2.0,https://github.com/google/magika
+85,markdown-it-py,4.0.0,MIT,https://github.com/executablebooks/markdown-it-py
+86,markdownify,1.2.3,MIT,https://github.com/matthewwithanm/python-markdownify
+87,markitdown,0.1.7,MIT,https://github.com/microsoft/markitdown
+88,MarkupSafe,3.0.3,BSD-3-Clause,https://github.com/pallets/markupsafe
+89,marshmallow,4.2.2,MIT,https://github.com/marshmallow-code/marshmallow
+90,matplotlib,3.10.8,Python Software Foundation License,https://github.com/matplotlib/matplotlib
+91,mdurl,0.1.2,MIT,https://github.com/executablebooks/mdurl
+92,mpmath,1.3.0,BSD,https://github.com/mpmath/mpmath
+93,msal,1.35.1,MIT,https://github.com/AzureAD/microsoft-authentication-library-for-python
+94,msal-extensions,1.3.1,MIT,https://github.com/AzureAD/microsoft-authentication-extensions-for-python
+95,multidict,6.7.1,Apache License 2.0,https://github.com/aio-libs/multidict
+96,murmurhash,1.0.15,MIT,https://github.com/explosion/murmurhash
+97,mysql-connector-python,9.6.0,GNU GPLv2 (with FOSS License Exception),https://github.com/mysql/mysql-connector-python
+98,nano-vectordb,0.0.4.3,MIT,https://github.com/gusye1234/nano-vectordb
+99,nest-asyncio2,1.7.2,BSD,https://github.com/Chaoses-Ib/nest-asyncio2
+100,networkx,3.6.1,BSD-3-Clause,https://github.com/networkx/networkx
+101,nltk,3.10.2,"Apache License, Version 2.0",https://github.com/nltk/nltk
+102,numpy,2.4.6,BSD-3-Clause,https://github.com/numpy/numpy
+103,olefile,0.47,BSD,https://github.com/decalage2/olefile
+104,onnxruntime,1.20.1,MIT,https://github.com/microsoft/onnxruntime
+105,openai,2.53.0,Apache-2.0,https://github.com/openai/openai-python
+106,openpyxl,3.1.5,MIT,https://foss.heptapod.net/openpyxl/openpyxl
+107,orjson,3.11.9,Apache/MIT/MPL 2.0,https://github.com/ijl/orjson
+108,overrides,7.7.0,"Apache License, Version 2.0",https://github.com/mkorpela/overrides
+109,packaging,26,Apache-2.0 OR BSD-2-Clause,https://github.com/pypa/packaging
+110,pandas,3.0.5,BSD License,https://github.com/pandas-dev/pandas
+111,pdfminer.six,20260107,MIT,https://github.com/pdfminer/pdfminer.six
+112,pdfplumber,0.11.10,MIT,https://github.com/jsvine/pdfplumber
+113,pillow,12.2.0,MIT-CMU,https://github.com/python-pillow/Pillow
+114,pipmaster,1.1.8,Apache-2.0,https://github.com/ParisNeo/pipmaster
+115,preshed,3.0.12,MIT,https://github.com/explosion/preshed
+116,propcache,0.5.2,Apache-2.0,https://github.com/aio-libs/propcache
+117,protobuf,7.35.1,3-Clause BSD License,https://github.com/protocolbuffers/protobuf
+118,pyarrow,25.0.1,Apache-2.0,https://github.com/apache/arrow
+119,pycparser,3,BSD-3-Clause,https://github.com/eliben/pycparser
+120,pydantic,2.12.5,MIT,https://github.com/pydantic/pydantic
+121,pydantic-settings,2.15.0,MIT,https://github.com/pydantic/pydantic-settings
+122,pydantic_core,2.41.5,MIT,https://github.com/pydantic/pydantic-core
+123,Pygments,2.19.2,BSD-2-Clause,https://github.com/pygments/pygments
+124,PyJWT,2.12.1,MIT,https://github.com/jpadilla/pyjwt
+125,pylance,0.20.0,Apache Software License,https://github.com/lancedb/lance
+126,pyparsing,3.3.2,MIT,https://github.com/pyparsing/pyparsing
+127,pypdfium2,5.11.0,"BSD-3-Clause, Apache-2.0",https://github.com/pypdfium2-team/pypdfium2
+128,pypinyin,0.55.0,MIT,https://github.com/mozillazg/python-pinyin
+129,pyreadline3,3.5.6,BSD,https://github.com/pyreadline3/pyreadline3
+130,python-dateutil,2.9.0.post0,Dual License,https://github.com/dateutil/dateutil
+131,python-docx,1.2.0,MIT,https://github.com/python-openxml/python-docx
+132,python-dotenv,1.2.2,BSD-3-Clause,https://github.com/theskumar/python-dotenv
+133,python-pptx,1.0.2,MIT,https://github.com/scanny/python-pptx
+134,pytz,2026.1.post1,MIT,https://github.com/stub42/pytz
+135,PyYAML,6.0.3,MIT,https://github.com/yaml/pyyaml
+136,referencing,0.37.0,MIT,https://github.com/python-jsonschema/referencing
+137,regex,2026.2.28,Apache-2.0,https://github.com/mrabarnett/mrab-regex
+138,requests,2.32.5,Apache-2.0,https://github.com/psf/requests
+139,rich,13.9.4,MIT,https://github.com/Textualize/rich
+140,rpds-py,2026.6.3,MIT,https://github.com/crate-py/rpds
+141,scipy,1.17.1,BSD License,https://github.com/scipy/scipy
+142,seaborn,0.13.2,BSD License,https://github.com/mwaskom/seaborn
+143,shellingham,1.5.4,ISC License,https://github.com/sarugaku/shellingham
+144,six,1.17.0,MIT,https://github.com/benjaminp/six
+145,smart_open,7.5.1,MIT,https://github.com/piskvorky/smart_open
+146,sniffio,1.3.1,MIT OR Apache-2.0,https://github.com/python-trio/sniffio
+147,soupsieve,2.9.2,MIT,https://github.com/facelessuser/soupsieve
+148,spacy,3.8.11,MIT,https://github.com/explosion/spaCy
+149,spacy-legacy,3.0.12,MIT,https://github.com/explosion/spacy-legacy
+150,spacy-loggers,1.0.5,MIT,https://github.com/explosion/spacy-loggers
+151,srsly,2.5.2,MIT,https://github.com/explosion/srsly
+152,starlette,1.6.0,BSD-3-Clause,https://github.com/encode/starlette
+153,sympy,1.14.0,BSD,https://github.com/sympy/sympy
+154,tenacity,9.1.4,Apache 2.0,https://github.com/jd/tenacity
+155,textblob,0.18.0.post0,MIT License,https://github.com/sloria/TextBlob
+156,thinc,8.3.10,MIT,https://github.com/explosion/thinc
+157,tiktoken,0.12.0,BSD-3-Clause,https://github.com/openai/tiktoken
+158,tokenizers,0.23.1,Apache Software License,https://github.com/huggingface/tokenizers
+159,toml,0.10.2,MIT,https://github.com/uiri/toml
+160,tqdm,4.67.3,MPL-2.0 AND MIT,https://github.com/tqdm/tqdm
+161,typer,0.27.1,MIT,https://github.com/fastapi/typer
+162,typer-slim,0.21.2,MIT,https://github.com/fastapi/typer
+163,typing-inspection,0.4.2,MIT,https://github.com/pydantic/typing-inspection
+164,typing_extensions,4.15.0,PSF-2.0,https://github.com/python/typing_extensions
+165,tzdata,2025.3,Apache-2.0,https://github.com/python/tzdata
+166,urllib3,2.6.3,MIT,https://github.com/urllib3/urllib3
+167,wasabi,1.1.3,MIT,https://github.com/explosion/wasabi
+168,weasel,0.4.3,MIT,https://github.com/explosion/weasel
+169,Werkzeug,3.1.6,BSD-3-Clause,https://github.com/pallets/werkzeug
+170,wrapt,2.1.2,BSD-2-Clause,https://github.com/GrahamDumpleton/wrapt
+171,xlsxwriter,3.2.9,BSD-2-Clause,https://github.com/jmcnamara/XlsxWriter
+172,yarl,1.24.5,Apache-2.0,https://github.com/aio-libs/yarl
+173,zipp,4.1.0,MIT,https://github.com/jaraco/zipp
+174,@fortawesome/fontawesome-free,7.1.0,CC-BY-4.0 AND OFL-1.1 AND MIT,https://github.com/FortAwesome/Font-Awesome
+175,@popperjs/core,2.11.8,MIT,https://github.com/popperjs/popper-core
+176,@radix-ui/react-dropdown-menu,2.1.24,MIT,https://github.com/radix-ui/primitives
+177,bootstrap,5.3.8,MIT,https://github.com/twbs/bootstrap
+178,bootstrap-icons,1.13.1,MIT,https://github.com/twbs/icons
+179,cobe,2.0.1,MIT,https://github.com/shuding/cobe
+180,d3,7.9.0,ISC,https://github.com/d3/d3
+181,dompurify,3.3.1,MPL-2.0 OR Apache-2.0,https://github.com/cure53/DOMPurify
+182,i18next,26.0.3,MIT,https://github.com/i18next/i18next
+183,react,19.2.8,MIT,https://github.com/facebook/react
+184,react-dom,19.2.8,MIT,https://github.com/facebook/react
+185,@eslint/js,9.39.2,MIT,https://github.com/eslint/eslint
+186,@tailwindcss/vite,4.3.3,MIT,https://github.com/tailwindlabs/tailwindcss
+187,@types/react,19.2.18,MIT,https://github.com/DefinitelyTyped/DefinitelyTyped
+188,@types/react-dom,19.2.4,MIT,https://github.com/DefinitelyTyped/DefinitelyTyped
+189,@vitejs/plugin-react,5.2.0,MIT,https://github.com/vitejs/vite-plugin-react
+190,cross-env,10.1.0,MIT,https://github.com/kentcdodds/cross-env
+191,eslint,9.39.2,MIT,https://github.com/eslint/eslint
+192,eslint-config-prettier,10.1.8,MIT,https://github.com/prettier/eslint-config-prettier
+193,prettier,3.7.4,MIT,https://github.com/prettier/prettier
+194,rollup-plugin-visualizer,6.0.5,MIT,https://github.com/btd/rollup-plugin-visualizer
+195,sass,1.97.2,MIT,https://github.com/sass/dart-sass
+196,tailwindcss,4.3.3,MIT,https://github.com/tailwindlabs/tailwindcss
+197,terser,5.44.1,BSD-2-Clause,https://github.com/terser/terser
+198,typescript,7.0.2,Apache-2.0,https://github.com/microsoft/TypeScript
+199,vite,7.3.1,MIT,https://github.com/vitejs/vite

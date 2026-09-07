@@ -1,8 +1,79 @@
-# _SocialVisualizer_
+# _Social Visualizer_
+> <u><b>소셜 데이터</b></u>를 <u><b>지식 그래프</b></u>로 구조화하여, <u><b>인물 관계와 시간의 흐름</b></u>을 <u><b>분석·시각화</b></u>하고 <u><b>자연어 검색</b></u>이 가능한 <u><b>오픈소스 플랫폼</b></u>
 
-메일 데이터를 분석해 지식 그래프를 만들고, 사람/시간 통계와 자연어 검색을 제공
+---
 
-## 사용 모델
+## 🎬 시연 영상
+
+<a href="https://youtu.be/RDueDD39eTI?si=E3ReXJa3mdewYrBK">
+    <img width="60%" alt="video-thumbnail" src="./docs/images/video-thumbnail.png">
+    <div>👉 시연 영상 보러 가기</div>
+</a>
+
+---
+
+## 📚 가이드
+
+<table>
+  <tr><td>설치 · 실행</td><td><a href="docs/EXECUTE.md">EXECUTE</a></td></tr>
+  <tr><td>라이선스</td><td><a href="LICENSE">LICENSE</a> · <a href="LICENSE_3rd.md">THIRD PARTY</a></td></tr>
+  <tr><td>SW 자재명세서</td><td><a href="docs/SBOM.csv">SBOM</a></td></tr>
+</table>
+
+---
+
+## 📋 목차
+
+- [시스템 소개](#-시스템-소개)
+- [시스템 구성 및 아키텍쳐](#-시스템-구성-및-아키텍쳐)
+- [시스템 주요 기능](#-시스템-주요-기능)
+- [기대효과 및 활용 분야](#-기대효과-및-활용-분야)
+- [차별성 및 혁신성](#-차별성-및-혁신성)
+- [기술 스택](#-기술-스택)
+
+
+---
+
+## 💡 시스템 소개
+### 1. 개발 배경
+
+사람들은 일상과 업무 속에서 <b>방대한 규모의 소셜 데이터(메일·메신저 등)를 축적</b>한다. 이러한 <b>소셜 데이터</b>에는 단순한 대화 내용뿐만 아니라 <b>사람 간 관계, 사건, 시간에 따른 변화 등 개인의 사회적 행적</b>을 보여주는 다양한 정보가 포함되어 있다. 이를 활용해 인간관계·사건 변화 등을 추적하거나 지능적으로 분석하고자 하는 수요가 존재한다.<br>
+
+현재는 소셜 서비스에서의 <b>단순 검색</b> 또는 <b>대화형 LLM을 통한 질의나 분석</b>이 보편적이다. 이러한 방식의 문제점은 다음과 같다.
+
+- 이러한 방식은 사용자가 요청한 검색이나 질의에 대해 <b>매우 단편적인 결과만 출력</b>
+- 매번 데이터를 전달해야 하는 <b>불편함</b>
+- <b>개인정보 유출</b> 우려와 <b>할루시네이션 가능성</b>
+- <b>세밀한 시각화의 어려움</b>
+
+따라서 본 팀은 <b>소셜 데이터</b>를 <b>문맥 분석이 가능한 구조</b>로 만들어, 사람 간의 관계, 사건, 시간에 따른 변화 등 <b>개인의 사회적 기록을 가시화</b>하는 도구가 필요하다고 판단한다.
+
+---
+
+### 2. 개발 목표
+
+메일·메신저·회의록·통화 녹음 등 유형과 관계없이 <b>어떤 소셜 데이터</b>라도 <b>문맥 분석이 가능한 지식 그래프</b>로 구축하고, 개인이나 조직의 관심사, <b>인물·시간 관계</b> 등을 세밀하게 분석하여 <b>시각화</b>하는 오픈소스 플랫폼을 개발한다.
+
+---
+
+## 🧱 시스템 구성 및 아키텍쳐
+
+<img width="100%" alt="system-architecture" src="./docs/images/system-architecture.png"><br>
+
+ ◼ <u><b>Social Visualizer 서버</b></u>
+- <b>데이터 수집 모듈</b>: IMAP 프로토콜로 메일 수집. 파일 업로드 방식으로 메신저 수집
+- <b>데이터 전처리 모듈</b>: 정제·정렬·첨부파일 텍스트 추출 등 원문 소셜 데이터 전처리
+- <b>지식 그래프 생성 모듈</b>: 인물·관계·사건 등의 엔티티·관계 추출. GraphRAG/LightRAG 중 선택 가능하도록 모듈화
+- <b>데이터 분석 모듈</b>: 기간별 키워드·인물별 어조·소통 패턴 분석 및 친밀도 산출
+- <b>자연어 검색 모듈</b>: 지식 그래프 기반 의미·맥락 검색 수행
+- <b>이미지 생성 모듈</b>: 인물 정보(관계·어조·성별 등) 기반 이미지 생성 프롬프트 작성
+
+---
+
+ ◼ <u><b>오픈소스 AI 서버</b></u>: 기능별로 역할을 분담해 모델 구성
+
+<details>
+<summary><b>AI 모델 상세</b></summary>
 
 | 구분 | 모델 | 용도 | 라이선스 |
 |---|---|---|---|
@@ -12,303 +83,121 @@
 | FLUX | [`black-forest-labs/FLUX.1-schnell`](https://huggingface.co/black-forest-labs/FLUX.1-schnell) | 이미지 및 아바타 생성 | Apache-2.0 |
 | Embedding | [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3) | 텍스트 임베딩 및 벡터 검색 | MIT |
 
-Llama LoRA Adapter의 학습·서빙에 대한 자세한 내용은 [`llama-finetune/README.md`](./llama-finetune/README.md)를 참고.
+> Llama LoRA Adapter의 학습·서빙에 대한 자세한 내용은 [`llama-finetune/README.md`](./llama-finetune/README.md)를,
+위 모델 서버들의 설치·실행 명령은 [`llama-finetune/serving/gpu_server_ops.md`](./llama-finetune/serving/gpu_server_ops.md)를 참고.
+</details>
 
-## 실행 방법
+- <b>Llama</b>: 엔티티·관계 추출 및 자연어 질의응답
+- <b>BGE-M3</b>: 자연어 질의 임베딩
+- <b>Qwen</b>: 인물 특성 및 활동·주제·사건·키워드 분석
+- <b>Flux</b>: 이미지 생성 모듈이 구성한 프롬프트로 인물별 아바타 프로필 이미지 생성
 
-### 1. 사전 준비
+---
 
-- Python 3.11
-- Node.js
-- MySQL 서버
+◼ <u><b>데이터베이스</b></u>
+- <b>지식 그래프 DB</b>: 엔티티·관계·커뮤니티 등의 지식 그래프 생성 결과물 저장
+- <b>분석 DB</b>: 지식 그래프에서 분석한 결과(인물·관계·시간·친밀도·키워드 등) 저장
 
-### 2. 파이썬 가상환경 & 모듈 설치
+---
 
-```bash
-python -m venv socialvisualizer-venv
-```
+## ✨ 시스템 주요 기능
 
-가상환경 활성화
+◼ <b><u>My People: 인물 간 관계 분석</u></b>
 
-```bash
-# Git Bash
-source socialvisualizer-venv/Scripts/activate
+- <b>소통 인물 분석</b>: 대화를 나눈 인물과 인물별 소통량·상호작용 정보 분석
+- <b>관계·친밀도 분석</b>: 인물 간 관계와 친밀도를 분석하여 시각화
+- <b>기간별 관계 분석</b>: 타임슬라이더로 기간을 설정하고 시점에 따른 관계·소통 변화 분석
+- <b>아바타 프로필 생성</b>: 인물별 주요 특성 기반으로 프로필 이미지 생성
+- <b>인물 상세 정보</b>: 소통량·관계·주요 주제·키워드 등 인물별 상세 분석 결과 확인
 
-# Windows cmd
-socialvisualizer-venv\Scripts\activate.bat
-```
+<img width="70%" alt="mypeople" src="./docs/images/mypeople.png">
 
-모듈 설치
+---
 
-```bash
-pip install -r requirements.txt
-```
+◼ <b><u>My Time: 시간 기반 분석</u></b>
 
-(참고) `requirements.txt`에는 GraphRAG뿐 아니라 LightRAG 라이브러리가 필요로 하는 패키지도 이미
-포함되어 있다. 기본값은 GraphRAG라 이 가상환경만으로 바로 실행되고, 나중에 LightRAG 기능을 켜고
-싶어지면 아래 "LightRAG 기능 켜기" 섹션만 추가로 진행하면 된다(가상환경을 새로 만들 필요 없음).
+- <b>주요 사건 하이라이트</b>: 월/연별 주요 사건을 추출하여 핵심 활동과 변화 요약
+- <b>기간별 사건 분석</b>: 타임슬라이더로 설정한 기간의 주된 활동·주제·키워드·주요 연락처·일별 키워드 언급 횟수 등 시각화
 
-### 3. 환경변수 설정
+<img width="70%" alt="mytime" src="./docs/images/mytime.png">
 
-`src/parquet/.env` : 노션에서 복붙하세요(mail grapher용 .env)
+---
 
-### 4. MySQL 데이터베이스 생성
+◼ <b><u>Recap: 소셜 데이터를 분석한 통계치 가시화</u></b>
 
-mail_grapher_db 를 사용. (노션 참고)
+- <b>통합 가시화</b>: 전체 소셜 데이터를 요약한 통계들을 한 페이지로 시각화
+- <b>최다 소통 인물</b>: 나와 최다 송·수신한 사람들을 소통량 기준으로 정렬
+- <b>주요 키워드</b>: 반복적으로 등장한 핵심 키워드 가시화
+- <b>친밀도</b>: 전체 인물에 대한 친밀도 분석 및 시각화
 
-### 5. 백엔드 실행 (프로젝트 루트에서)
+<img width="70%" alt="recap" src="./docs/images/recap.png">
 
-```bash
-python src/app.py
-```
+---
 
-→ `http://localhost/dashboard/` 에서 실행됨
+◼ <b><u>자연어 검색</u></b>
 
-### 6. 프론트엔드 실행 (`src/web`에서)
+- <b>문맥 기반 탐색</b>: 키워드에 한정되지 않고 자연어 질의를 통한 소셜 데이터 탐색
+- <b>플로팅 검색</b>: 상단의 플로팅 아이콘을 통해 화면 이동 없이 어디에서든 질의 가능
 
-```bash
-npm install
-npm run build
-```
+<img width="70%" alt="search" src="./docs/images/search.png">
 
-→ 빌드 후 백엔드(80번)만 켜면 `http://localhost` 로 바로 접속 가능
+---
 
-개발 중이라 화면을 수정하며 바로 확인하고 싶다면:
+## 🚀 기대효과 및 활용 분야
 
-```bash
-npm run dev
-```
+- <b>방대한 소셜 데이터</b>에 담긴 과거/현재의 <b>인간관계·시간의 흐름·활동 파악</b>용으로 활용
+- 개인이나 조직에서 사건·범죄 등의 <b>특수한 이벤트 추적용</b>으로 활용
+- 개인이나 조직에서 <b>사건의 흐름을 시간·인물별로 파악</b>하는 도구로 수정 및 확장 가능
+- 개인의 모든 소셜 데이터를 한 곳에 모으는 <b>디지털 아카이브 용도</b>로 활용
 
-→ `http://localhost:3000` (단, 백엔드(80)도 같이 켜져 있어야 API가 동작함)
+---
 
-## LightRAG 기능 켜기 (선택)
+## 💎 차별성 및 혁신성
 
-SocialVisualizer는 기본적으로 GraphRAG로 동작한다. 인덱싱/질의 엔진을 LightRAG로 바꾸고 싶을 때만
-아래를 추가로 진행하면 된다 — 안 하면 GraphRAG 그대로 동작하니 건너뛰어도 무방하다.
+Social Visualizer는 기존 소셜 서비스의 검색 기능이나 대화형 LLM으로는 다루기 어려웠던, <b>대량의 소셜 데이터</b>에 축적된 <b>사회활동 기록의 맥락을 분석</b>한다는 점에서 큰 의의를 가진다. 주요 차별성과 혁신성은 다음과 같다.<br><br>
 
-### 1. LightRAG 클론
+◼ <b><u>방대한 소셜 데이터의 맥락 파악에 용이한 방법 제시/구축/실용성 증명</u></b><br>
+&nbsp;&nbsp;<b>대규모의 소셜 데이터</b>를 관계·시간 중심으로 재구성하여, 정보 간 연결 관계를 따라 <b>맥락을 파악</b>하는 방법을 제시하였다. 이는 하나의 문서나 특정 키워드에 대한 답을 찾는 것을 넘어, <b>관련된 인물·관계·사건·시간 정보를 연결한</b>다. Gmail·Naver·iCloud의 메일과 3MB~8GB 규모의 카카오톡 데이터로 검증하고, 실사용 가능한 수준임을 증명하였다.<br><br>
 
-LightRAG는 pip 패키지로 설치하지 않고 소스를 그대로 클론해서 라이브러리처럼 가져다 쓴다.
+◼ <b><u>높은 직관성과 다양성을 가진 관계·시간의 시각화</u></b><br>
+&nbsp;&nbsp;<b>복잡한 관계가 얽힌 소셜 데이터</b>를 그래프·타임슬라이더 등 다양한 시각적 요소로 표현하여 한눈에 파악할 수 있도록 한다. 텍스트로 풀어 설명하는 기존의 LLM과 달리, Social Visualizer는 주요 관계 및 변화의 흐름을 <b>직관적으로 이해</b>하게 한다.<br><br>
 
-백엔드 코드 중 lightrag의 이름이 포함된 파일을 직접 참조하므로, **반드시 프로젝트 루트(`SocialVisualizer/`)
-바로 밑에 클론해야 한다.**
+◼ <b><u>자연어 검색 정확도 93%를 달성하여 우수한 검색 성능 입증</u></b><br>
+&nbsp;&nbsp;평균 검색 정확도 93%, 평균 응답 시간 5.4초를 달성하였다. 이는 지식 그래프 기반 맥락 탐색이 <b>대규모 소셜 데이터에서 높은 검색 성능</b>을 보임을 의미한다.<br><br>
 
-위 2번에서 만든 `socialvisualizer-venv`에 이미 필요한 패키지가 설치되어
-있으므로 별도 가상환경이나 추가 설치는 필요 없다.
+◼ <b><u>자체 Llama 파인튜닝으로 상용 API 수준의 지식 그래프 생성·질의응답 성능 달성</u></b><br>
+&nbsp;&nbsp;오픈웨이트 Llama를 고도로 파인튜닝하여, <b>상용 API 없이도</b> 지식 그래프 생성 및 자연어 질의응답을 수행한다. <b>과금 없이 상용 수준의 성능</b>을 달성하였으며, 외부 서버로 데이터를 보낼 필요가 없어 <b>개인정보 유출 우려를 근본적으로 차단</b>하였다.<br><br>
 
-```bash
-git clone https://github.com/HKUDS/LightRAG.git
-```
+◼ <b><u>서로 다른 형식의 소셜 데이터를 공통 체계로 구조화하는 방법 제시/구현</u></b><br>
+&nbsp;&nbsp;메일·메신저 등 <b>서로 다른 형식과 구조</b>를 가진 소셜 데이터를 <b>공통 체계로 구조화</b>한다.  회의록·통화 녹음 등 새로운 유형의 소셜 데이터를 추가하여도, 해당 유형에 맞는 처리 모듈만 구현하면 된다. 이러한 방식은 <b>분석·검색의 대상을 손쉽게 확장</b>할 수 있게 한다.<br><br>
 
-### 2. LightRAG 엔진 전환
+◼ <b><u>높은 확장성과 이식성을 갖춘 오픈소스 소프트웨어 구조</u></b><br>
+&nbsp;&nbsp;지식 그래프 모듈화를 통해 목적·용도에 맞게 지식 그래프 생성 모듈을 쉽게 <b>교체·확장</b>할 수 있다. 앞서 언급한 바와 같이 소셜 데이터 유형의 확장도 용이하다. 이러한 모듈화된 구조를 기반으로, 본 시스템은 <b>누구나 자유롭게 수정·확장·이식·재구성</b>할 수 있는 유연한 오픈소스 소프트웨어 구조를 갖는다.
 
-`src/config/settings.py`의 `RAG_ENGINE` 값을 바꾼다.
+---
 
-```python
-RAG_ENGINE = "lightrag"   # 기본값은 "graphrag"
-```
+## 🧰 기술 스택
 
-## RAG 사용자 편의/프롬프트 설정
+### 개발 환경
+![Windows](https://img.shields.io/badge/Windows-0078D4?logo=windows&logoColor=white)
 
-### 1. 사용자 편의 설정 (인덱싱/질의/통계 추출)
+### 개발 언어
+![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white) ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black) ![SCSS](https://img.shields.io/badge/SCSS-CC6699?logo=sass&logoColor=white) ![HTML](https://img.shields.io/badge/HTML-E34F26?logo=html5&logoColor=white) ![Jinja](https://img.shields.io/badge/Jinja-B41717?logo=jinja&logoColor=white)
 
-- `src/util/graphrag_*.py` — GraphRAG 엔진 전용 로직
+### 개발 도구 및 라이브러리
+![Flask](https://img.shields.io/badge/Flask-000000?logo=flask&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white) ![GraphRAG](https://img.shields.io/badge/GraphRAG-2088FF?logoColor=white) ![LanceDB](https://img.shields.io/badge/LanceDB-25A0A0?logoColor=white) ![NetworkX](https://img.shields.io/badge/NetworkX-2C7BB6?logoColor=white) ![pandas](https://img.shields.io/badge/pandas-150458?logo=pandas&logoColor=white) ![NumPy](https://img.shields.io/badge/NumPy-013243?logo=numpy&logoColor=white) ![Apache Arrow](https://img.shields.io/badge/Apache_Arrow-1A1A2E?logo=apachearrow&logoColor=white) ![spaCy](https://img.shields.io/badge/spaCy-09A3D5?logo=spacy&logoColor=white) ![NLTK](https://img.shields.io/badge/NLTK-154F5B?logoColor=white) ![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white) ![Pydantic](https://img.shields.io/badge/Pydantic-E92063?logo=pydantic&logoColor=white)
 
-- `src/util/jobs/job_run_graphrag.py` — GraphRAG 인덱싱 파이프라인
+---
 
-- `src/graphrag_parquet2json.py` — GraphRAG 그래프 시각화용 JSON 변환기
+## 📒 참고 자료
+- Microsoft GraphRAG: https://github.com/microsoft/graphrag
+- HKUDS LightRAG: https://github.com/HKUDS/LightRAG
+- Meta Llama: https://github.com/meta-llama/llama3
+- Qwen: https://github.com/QwenLM
+- BAAI FlagEmbedding (BGE-M3): https://github.com/FlagOpen/FlagEmbedding
+- Black Forest Labs FLUX: https://github.com/black-forest-labs/flux
 
-- `src/util/lightrag_backend/*.py` — LightRAG 엔진 전용 로직
+---
 
-- `src/util/jobs/job_run_lightrag.py` — LightRAG 인덱싱 파이프라인
-
-- `src/util/extract_statics.py` — 통계 추출 (GraphRAG/LightRAG 공용)
-
-### 2. 프롬프트 설정
-
-프롬프트를 수정하거나 설계해서 사용하고 싶다면 다음과 같은 프롬프트 내용을 참고해라.
-
-LightRAG는 라이브러리 내 기본 프롬프트를 사용하고 있으니, 프롬프트를 수정하여 사용하는 것을 권장한다.
-
-#### 2-1. LightRAG 프롬프트
-
-현재 LightRAG 모듈은 LightRAG 라이브러리 내부 로직(엔티티 추출, 그래프 검색 응답, 키워드 추출 등)이 잘 다듬어진 프롬프트를 그대로 사용하고 있다. 이 프롬프트를 수정해서 사용할 수 있다.
-
-`LightRAG/lightrag/prompt.py`의 `PROMPTS` 딕셔너리
-(`entity_extraction_system_prompt`, `rag_response`, `naive_rag_response`, `keywords_extraction` 등)을 참고해라.
-
-#### 2-2. GraphRAG 프롬프트
-
-GraphRAG는 인덱싱과 질의(LocalSearch/GlobalSearch) 프롬프트를 프로젝트 안 템플릿 파일로 관리한다.
-
-`parquet_template/src/prompts/*.j2` 원본 템플릿이 도메인별로 렌더링되어
-`parquet_template/rendered/{domain}/prompts/*.txt` 파일로 만들어지고, 인덱싱/질의 코드는
-이 렌더링된 `.txt` 파일을 읽어서 그대로 프롬프트로 쓴다.
-
-#### 2-3. 공통 프롬프트
-
-- 연합 검색 답변 프롬프트 — `lightrag_query.py`의 `system_prompt` 변수
-- 질의 모드 분류 프롬프트 — `lightrag_query.py`의 `prompt` 변수 (`_classify_query_method` 함수 참고)
-- 메일 요약 프롬프트 — `lightrag_mail_summary.py`의 `system 메시지`
-- 날짜 범위 질의 답변 프롬프트 — `lightrag_date_query.py`의 `run_date_range_query()` 안 `messages=[...]`의 `system 메시지`
-
-## 다른 RAG 엔진을 붙이고 싶을 때
-
-GraphRAG/LightRAG 두 엔진이 비슷한 패턴으로 설계되어 있으니, 세 번째 엔진(예: 다른 RAG 프레임워크)도 같은 패턴을 따라가면 된다.
-아래 순서를 참고해라.
-
-### 1. 엔진 이름 등록
-
-`src/config/settings.py`의 `SUPPORTED_RAG_ENGINES`에 새 엔진 이름을 추가한다(안 하면 앱 시작 시
-ValueError로 막힌다).
-
-### 2. 전용 패키지 만들기
-
-`src/util/lightrag_backend/`를 따라 `src/util/<엔진명>_backend/`
-패키지를 새로 만들고, 그 안에 `<엔진명>_` 접두사가 붙은 파일들을 채운다. LightRAG나 GraphRAG 엔진 코드를 참고하여 함수 이름을 동일하게 작성하면 `RAG_ENGINE` 값에 따라 import 경로만 바꿔서 그대로 재사용할 수 있다.
-
-- `<엔진명>_engine.py` — 인스턴스/엔진 빌드 및 캐싱
-- `<엔진명>_query.py` — 단일/연합(다중) 데이터 소스 질의 + 다중 검색 모드 지원
-- `<엔진명>_mail_summary.py` — 월별/연별 메일 요약
-- `<엔진명>_date_query.py` — 날짜(시간) 관련 질의
-- `<엔진명>_graph_json.py` — 그래프 시각화용 JSON 변환기
-- `<엔진명>_extract_statics.py` — 키워드/연락처 통계 추출
-- `<엔진명>_db_writer.py` — DB 저장 로직
-- `<엔진명>_mail_parser.py` — 위 통계/요약/DB 저장 코드들이 공통으로 쓰는 파싱 헬퍼
-- `<엔진명>_progress.py` — 인덱싱 진행률 표시
-- `<엔진명>_loop.py` —
-
-### 3. 인덱싱 job 작성
-
-`src/util/jobs/job_run_<엔진명>.py`를 만들고 `job_run_lightrag.py`/`job_run_graphrag.py`와 같은
-함수 시그니처를 맞춘다:
-
-- `start_graph_pipeline_background`
-- `start_graph_update_pipeline_background`
-- `build_*_update`
-- `build_graph_json`
-  함수 이름을 동일하게 작성하면 app.py는 `RAG_ENGINE` 값에 따라 import 경로만 바꿔서 그대로 재사용할 수 있다.
-
-### 4. 경로 세그먼트 추가
-
-`src/util/user_path.py`에 새로운 엔진 전용 작업 디렉터리 경로를 추가한다
-
-- `GRAPHRAG_ROOT`/ `LIGHTRAG_ROOT`처럼 `<엔진명>_ROOT`
-- `GRAPH_JSON_PATH`/ `LIGHTRAG_GRAPH_JSON_PATH`처럼 `<엔진명>_GRAPH_JSON_PATH`
-  `_account_indexed()` 함수에도 `elif RAG_ENGINE == "<엔진명>":` 분기를 추가한다 (안 하면
-  새 엔진으로 인덱싱해도 계정 목록에 "인덱싱 안 됨"으로 표시됨).
-
-### 5. `app.py`에 분기 추가
-
-`RAG_ENGINE`으로 그래프/라이트래그를 나누는 지점마다 새 엔진 분기(`elif`)를 추가해야 한다. 현재 분기 지점은 다음과 같다:
-
-- 모듈 상단 — 인덱싱 시작 함수(`start_graph_pipeline_background` 등) import 스위치
-- 날짜 범위 질의 함수(`run_date_range_query`) import 스위치
-- `_index_ready` 헬퍼 — 인덱스 생성 여부 확인
-- `/run-query-async`, `/run-query` 라우트 — 실제 질의 실행부
-- `/upload` 라우트 — 인덱스 준비 마커 파일 삭제, 인덱싱 파이프라인 트리거
-- `/graph-data` 라우트 — 그래프 JSON 경로 선택
-- `/upload-attachments` 라우트, `util/attachment_manager.py` — 첨부파일 반영 업데이트 함수 선택
-
-- 모듈 상단 인덱싱 시작 함수 - `start_graph_pipeline_background`, `start_graph_update_pipeline_background`
-- 모듈 상단 날짜 범위 질의 함수 - `run_date_range_query`
-- `_index_ready` 헬퍼 — 인덱스 생성 여부 확인
-- `/run-query-async`, `/run-query` 라우트 — 실제 질의 실행부
-- `/upload` 라우트 — 인덱스 준비 마커 파일 삭제, 인덱싱 파이프라인 트리거
-- `/graph-data` 라우트 — 그래프 JSON 경로 선택
-- `/upload-attachments` 라우트, `util/attachment_manager.py` — 첨부파일 반영 업데이트 함수 선택
-
-### 6. DB 저장은 대부분 그대로 재사용 가능
-
-`src/util/database/db_writer.py`의 `save_query_to_db`, `save_mail_summarize_to_db` 등은 엔진에
-상관없이 그냥 행을 저장하는 함수라 새 엔진에서도 그대로 가져다 쓰면 된다. 예외는
-`collect_indexing_stats`인데, 이건 GraphRAG의 캐시 폴더 구조(`community_reporting`,
-`extract_graph` 등)를 하드코딩하고 있어서 GraphRAG 전용이다 — 새 엔진에서 인덱싱 비용/통계를
-집계하고 싶다면 이 함수의 엔진별 버전을 따로 만들어야 한다.
-
-### 7. 프롬프트
-
-위 섹션 중 `RAG 사용자 편의/프롬프트 설정`의 2번 `프롬프트 설정`을 참고해라.
-
-## LightRAG 자체 웹 UI 따로 띄우기 (선택)
-
-### 1. uv 설치
-
-Windows에는 `make` 명령어가 기본으로 없어서, LightRAG 공식 가이드의 `make dev` 대신
-`uv`(파이썬 의존성 관리 도구)를 직접 설치해서 사용.
-
-PowerShell에서 실행, 설치 후 Git Bash 재시작
-
-```powershell
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-- 설치 위치: `C:\Users\2471369\.local\bin`
-
-Git Bash에서 `uv: command not found`가 뜨면(PowerShell/cmd용 PATH 등록이 Git Bash(MINGW64)에는
-적용되지 않아서 생기는 문제) 아래로 PATH를 등록한다.
-
-```bash
-export PATH="$HOME/.local/bin:$PATH"
-uv --version
-```
-
-영구 등록 (한 번만 실행):
-
-```bash
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-```
-
-### 2. 전용 가상환경(`lightrag-venv`) 생성 + 의존성 설치
-
-`socialvisualizer-venv`와 별도로 `lightrag-venv`를 하나 더 만든다(uv가 자체적으로 관리하는 전용 가상환경).
-
-`LightRAG` 폴더 안에서 실행.
-
-```bash
-cd LightRAG
-export UV_PROJECT_ENVIRONMENT=lightrag-venv
-uv venv lightrag-venv
-uv sync --extra test --extra offline
-```
-
-영구 등록 (한 번만 실행):
-
-```bash
-echo 'export UV_PROJECT_ENVIRONMENT=lightrag-venv' >> ~/.bashrc
-```
-
-### 3. 가상환경 활성화
-
-```bash
-source lightrag-venv/Scripts/activate
-```
-
-### 4. 웹 UI 빌드
-
-PowerShell에서 실행, 설치 후 Git Bash 재시작
-
-```powershell
-powershell -c "irm bun.sh/install.ps1|iex"
-```
-
-```bash
-cd lightrag_webui
-bun install --frozen-lockfile
-bun run build
-cd ..
-```
-
-### 5. 설정 파일(.env) 생성
-
-```bash
-cp env.example .env
-```
-
-### 6. 서버 실행
-
-```bash
-lightrag-server
-```
-
-브라우저에서 `http://localhost:9621` 접속 → 확인
+## 🤝 참여자
+[![Contributors](https://contrib.rocks/image?repo=s0-yeon/SocialVisualizer)](https://github.com/s0-yeon/SocialVisualizer/graphs/contributors)

@@ -1,5 +1,9 @@
+# GraphRAG CLI로 질의를 실행해 응답을 정제하고 인덱싱 완료 여부를 확인하며 질의 로그를 DB에 저장한다.
+
+# Runs queries through the GraphRAG CLI, cleans up the response text, checks whether indexing has finished, and logs queries to the database.
+
 import os
-import time 
+import time
 import traceback
 import re
 import subprocess
@@ -10,9 +14,10 @@ from util.database.db_writer import save_query_to_db
 from util.file_manager import _read_json_file
 from util.graphrag_query import strip_ids_for_display
 
-# GraphRAG CLI 실행
+# GraphRAG CLI로 질의를 실행하고 응답 텍스트를 정제해 반환하며 질의 로그를 DB에 저장한다
 def _run_graphrag(message, resMethod, raw_message, paths, resType):
 
+    # 서브프로세스 출력 바이트를 여러 인코딩으로 시도해 문자열로 디코딩한다
     def decode_output(b: bytes) -> str:
         if not b:
             return ""
@@ -66,7 +71,7 @@ def _run_graphrag(message, resMethod, raw_message, paths, resType):
     print(answer)
     return answer.strip()
 
-# 인덱싱 여부 확인
+# 필수 산출 파일(mail_latest, stats.json)이 존재하고 유효한지 확인해 인덱싱 완료 여부를 반환한다
 def _is_index_ready(paths):
     stats_path = os.path.join(paths.GRAPHRAG_ROOT, "output", "stats.json")
 

@@ -1,15 +1,28 @@
-// search.html 전용 스타일 (기존 인라인 <style>에서 이관, 공통 헤더/사이드바 관련 규칙 제외)
+/*
+ * 자연어 검색 페이지 전용 스타일(인라인 <style>에서 이관, 공통 헤더/사이드바 규칙 제외).
+ *
+ * Styles for the natural-language search page (migrated from inline <style>, excluding shared
+ * header/sidebar rules).
+ */
 
-/* ── 공통 ── */
+/* 공통 */
 .gw-spinner {
-  width: 20px; height: 20px;
-  border: 3px solid #e0e0e0; border-top-color: #fb923c;
-  border-radius: 50%; animation: spin 0.8s linear infinite;
-  display: inline-block; flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 3px solid #e0e0e0;
+  border-top-color: #fb923c;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+  flex-shrink: 0;
 }
-@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 
-/* ── 탭 전환 (메일/메시지) ── */
+/* 탭 전환 (메일/메시지) */
 .gw-tabs {
   display: flex;
   gap: 4px;
@@ -23,157 +36,282 @@
   padding: 10px 20px;
   border: none;
   background: transparent;
-  color: #73879C;
+  color: #73879c;
   font-size: 1rem;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2.5px solid transparent;
   margin-bottom: -1.5px;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
-.gw-tab-btn:hover { color: #2A3F54; }
+.gw-tab-btn:hover {
+  color: #2a3f54;
+}
 .gw-tab-btn.active {
   color: #f97316;
   border-bottom-color: #fb923c;
 }
 
-.gw-tab-panel { display: none; }
-.gw-tab-panel.active { display: block; }
+.gw-tab-panel {
+  display: none;
+}
+.gw-tab-panel.active {
+  display: block;
+}
 
-/* ── 검색 CSS ── */
+/* 검색 CSS */
 .gw-search-top {
   padding: 20px 32px 20px 32px;
   border-bottom: 1px solid #e8e8e8;
   margin-bottom: 32px;
 }
-.gw-search-box { width: 100%; position: relative; }
-.gw-search-box input {
-  width: 100%; padding: 17px 56px 17px 24px;
-  // 요청 — 글씨 크기가 반영이 안 됐던 원인: _green-luxury.scss의 전역
-  // input[type="text"] { font-size: 13px !important; ... } 규칙이 여기보다
-  // 늦게 로드되며 !important로 덮어쓰고 있었음. 같은 !important로 맞대응.
-  font-size: 1rem !important; border: 2px solid #e0e0e0;
-  border-radius: 32px; outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+.gw-search-box {
+  width: 100%;
+  position: relative;
 }
-.gw-search-box input::placeholder { font-size: 1rem !important; }
+.gw-search-box input {
+  width: 100%;
+  padding: 17px 56px 17px 24px;
+  font-size: 1rem !important;
+  border: 2px solid #e0e0e0;
+  border-radius: 32px;
+  outline: none;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.gw-search-box input::placeholder {
+  font-size: 1rem !important;
+}
 .gw-search-box input:focus {
-  border-color: #fb923c; box-shadow: 0 2px 14px rgba(251,146,60,0.18);
+  border-color: #fb923c;
+  box-shadow: 0 2px 14px rgba(251, 146, 60, 0.18);
 }
 .gw-search-box button {
-  position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
-  background: #F97316; border: none; border-radius: 50%;
-  width: 40px; height: 40px; display: flex; align-items: center;
-  justify-content: center; cursor: pointer; transition: background 0.2s, box-shadow 0.2s;
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #f97316;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
   box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);
 }
-.gw-search-box button:hover { background: #c2410c; box-shadow: 0 3px 9px rgba(194, 65, 12, 0.4); }
-.gw-search-box button i { color: white; font-size: 1.05rem; }
+.gw-search-box button:hover {
+  background: #c2410c;
+  box-shadow: 0 3px 9px rgba(194, 65, 12, 0.4);
+}
+.gw-search-box button i {
+  color: white;
+  font-size: 1.05rem;
+}
 
 .gw-recent-searches {
-  margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
-.gw-recent-label { font-size: 0.9rem; color: #aaa; margin-right: 4px; white-space: nowrap; }
+.gw-recent-label {
+  font-size: 0.9rem;
+  color: #aaa;
+  margin-right: 4px;
+  white-space: nowrap;
+}
 .gw-recent-tag {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 4px 12px; background: #f4f6f8; border: none;
-  border-radius: 20px; font-size: 0.92rem; color: #2A3F54;
-  cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-  transition: background 0.15s, box-shadow 0.15s; user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: #f4f6f8;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.92rem;
+  color: #2a3f54;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
+  user-select: none;
 }
-.gw-recent-tag:hover { background: #F2F2F2; color: #fb923c; box-shadow: 0 2px 6px rgba(251, 146, 60, 0.25); }
-.gw-recent-tag .gw-tag-del { font-size: 0.85rem; color: #bbb; line-height: 1; padding: 0 2px; border-radius: 50%; }
-.gw-recent-tag .gw-tag-del:hover { color: #e74c3c; background: #fee; }
-.gw-recent-clear { font-size: 1.05rem; color: #bbb; cursor: pointer; margin-left: 4px; text-decoration: underline; }
-.gw-recent-clear:hover { color: #e74c3c; }
+.gw-recent-tag:hover {
+  background: #f2f2f2;
+  color: #fb923c;
+  box-shadow: 0 2px 6px rgba(251, 146, 60, 0.25);
+}
+.gw-recent-tag .gw-tag-del {
+  font-size: 0.85rem;
+  color: #bbb;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 50%;
+}
+.gw-recent-tag .gw-tag-del:hover {
+  color: #e74c3c;
+  background: #fee;
+}
+.gw-recent-clear {
+  font-size: 1.05rem;
+  color: #bbb;
+  cursor: pointer;
+  margin-left: 4px;
+  text-decoration: underline;
+}
+.gw-recent-clear:hover {
+  color: #e74c3c;
+}
 
-.gw-result-wrapper { padding: 0 32px 40px 32px; }
-.gw-query-label { font-size: 1rem; color: #73879C; margin-bottom: 20px; }
-.gw-query-label strong { color: #2A3F54; font-size: 1.1rem; }
-.gw-loading { display: flex; align-items: center; gap: 14px; color: #73879C; font-size: 1.1rem; padding: 32px 0; }
+.gw-result-wrapper {
+  padding: 0 32px 40px 32px;
+}
+.gw-query-label {
+  font-size: 1rem;
+  color: #73879c;
+  margin-bottom: 20px;
+}
+.gw-query-label strong {
+  color: #2a3f54;
+  font-size: 1.1rem;
+}
+.gw-loading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: #73879c;
+  font-size: 1.1rem;
+  padding: 32px 0;
+}
 .gw-result-card {
-  flex: 1 1 auto; box-sizing: border-box;
-  background: #fff; border: none; border-radius: 12px;
-  padding: 32px 36px; line-height: 1.9; color: #2A3F54; font-size: 1.15rem;
-  white-space: pre-wrap; word-break: break-word; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  background: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 32px 36px;
+  line-height: 1.9;
+  color: #2a3f54;
+  font-size: 1.15rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
 }
-.gw-error { color: #e74c3c; padding: 20px 0; font-size: 1.1rem; }
-.gw-empty { padding: 80px 0; text-align: center; color: #bbb; }
-.gw-empty i { font-size: 3.5rem; display: block; margin-bottom: 16px; color: #e0e0e0; }
-.gw-empty p { font-size: 1.1rem; }
-
-.gw-source-emails { margin-top: 20px; padding-top: 16px; border-top: 1px solid #e8e8e8; }
-.gw-source-label { font-size: 0.92rem; color: #73879C; margin-bottom: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-.gw-source-btns { display: flex; flex-wrap: wrap; gap: 8px; }
-.gw-source-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 16px; background: #fff; border: none;
-  border-radius: 20px; font-size: 0.98rem; color: #fb923c;
-  text-decoration: none; box-shadow: 0 1px 4px rgba(251, 146, 60, 0.2);
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s; white-space: nowrap;
+.gw-error {
+  color: #e74c3c;
+  padding: 20px 0;
+  font-size: 1.1rem;
 }
-.gw-source-btn:hover { background: #fb923c; color: #fff; text-decoration: none; box-shadow: 0 2px 7px rgba(251, 146, 60, 0.4); }
-.gw-source-btn-plain { cursor: default; color: #73879C; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
-.gw-source-btn-plain:hover { background: #fff; color: #73879C; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
-.gw-source-count {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 18px; height: 18px; padding: 0 5px; margin-left: 2px;
-  background: #d8dde2; color: #55606b; border-radius: 999px;
-  font-size: 0.8rem; font-weight: 700;
+.gw-empty {
+  padding: 80px 0;
+  text-align: center;
+  color: #bbb;
+}
+.gw-empty i {
+  font-size: 3.5rem;
+  display: block;
+  margin-bottom: 16px;
+  color: #e0e0e0;
+}
+.gw-empty p {
+  font-size: 1.1rem;
 }
 
-/* ── 근거메일 보기(요청 — 근거 메일 하나하나에 버튼 붙여서 오른쪽에 본문 표시) ── */
+/* 근거메일 보기(근거 메일 하나하나에 버튼 붙여서 오른쪽에 본문 표시) */
 
-/* 요청 — 답변을 줄 단위로 렌더링(gw-result-card 안, escapeHtml(text)+white-space:pre-wrap 대신)
+/* 답변을 줄 단위로 렌더링(gw-result-card 안, escapeHtml(text)+white-space:pre-wrap 대신)
    해서 "근거메일 보기" 버튼을 근거인 불릿 줄 바로 왼쪽에 붙일 수 있게 한다. */
-.gw-answer-line { line-height: 1.9; font-size: 1.15rem; color: #2A3F54; word-break: break-word; }
+.gw-answer-line {
+  line-height: 1.9;
+  font-size: 1.15rem;
+  color: #2a3f54;
+  word-break: break-word;
+}
 .gw-answer-line-with-source {
-  display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap;
-  line-height: 1.9; font-size: 1.15rem; color: #2A3F54;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  line-height: 1.9;
+  font-size: 1.15rem;
+  color: #2a3f54;
 }
-.gw-answer-line-with-source .gw-view-source-mail-btn { margin-top: 3px; }
-.gw-answer-line-text { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+.gw-answer-line-with-source .gw-view-source-mail-btn {
+  margin-top: 3px;
+}
+.gw-answer-line-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+}
 
-// 요청 — "근거메일 보기" 버튼이 답변 줄과 매칭 안 될 때 답변 아래에 따로 쌓아
-// 보여주던 목록(.gw-source-mail-list/.gw-source-mail-item)은 UI가 지저분하다는
-// 피드백으로 없앴다 — 이제 버튼은 매칭된 줄 옆(.gw-answer-line-with-source)에만
-// 나온다. .gw-view-source-mail-btn 자체는 그 인라인 버튼에 계속 쓰이므로 남겨둔다.
 .gw-view-source-mail-btn {
-  flex-shrink: 0; border: none; border-radius: 20px;
-  padding: 7px 16px; font-size: 0.95rem; font-weight: 600; color: #fb923c;
-  background: #fff; box-shadow: 0 1px 4px rgba(251, 146, 60, 0.2); cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s; white-space: nowrap;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 20px;
+  padding: 7px 16px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fb923c;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(251, 146, 60, 0.2);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    box-shadow 0.15s;
+  white-space: nowrap;
 }
-.gw-view-source-mail-btn:hover { background: #fdba74; color: #fff; box-shadow: 0 2px 7px rgba(251, 146, 60, 0.35); }
-.gw-view-source-mail-btn.active { background: #F97316; color: #fff; box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4); }
+.gw-view-source-mail-btn:hover {
+  background: #fdba74;
+  color: #fff;
+  box-shadow: 0 2px 7px rgba(251, 146, 60, 0.35);
+}
+.gw-view-source-mail-btn.active {
+  background: #f97316;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.4);
+}
 
-/* 요청 — 버튼을 누르기 전엔 오른쪽에 아무 창도 없다가(폭 0, 완전히 안 보임), 누르는
-   순간 오른쪽에서 서랍처럼 튀어나오도록. gw-answer-frame을 flex row로 두고,
-   gw-answer-main(답변, flex:1)과 gw-mail-drawer(flex:0 0 auto, 평소 width:0)를
-   나란히 배치 — 서랍이 열리면 실제로 폭을 차지하며 늘어나므로, 오버레이로 버튼을
-   가리는 게 아니라 답변 카드가 그만큼 자연히 왼쪽으로 밀려 줄어든다. align-items가
-   기본값 stretch라서 서랍 높이는 항상 답변 카드와 위/아래 선이 정확히 일치한다. */
-.gw-answer-frame { display: flex; align-items: stretch; }
-// 요청 — 서랍이 답변 카드보다 길어지면(내용이 길 때) 카드 쪽에 흰 여백만 남고
-// 카드 박스 자체는 짧아서 밑선이 안 맞았음. gw-answer-main을 세로 flex로 바꾸고
-// gw-result-card를 flex:1로 늘려서, 카드 박스 자체가 서랍과 같은 높이까지
-// 늘어나 밑선이 항상 일치하도록 한다.
-.gw-answer-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.gw-answer-frame {
+  display: flex;
+  align-items: flex-start;
+}
+.gw-answer-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
 .gw-mail-drawer {
-  // 요청 — 닫기(×) 버튼이 안 보이던 원인: gw-mail-drawer-close가 position:absolute인데
-  // 이 요소 자체엔 position이 없어서(static) 가장 가까운 위치지정 조상까지 붕 떠서
-  // 페이지 맨 위 구석에 엉뚱하게 붙어있었음 — position:relative를 줘서 기준점을 잡는다.
   position: relative;
   box-sizing: border-box;
   flex: 0 0 auto;
-  width: 0; overflow: hidden;
+  width: 0;
+  overflow: hidden;
   opacity: 0;
-  background: #fff; border-radius: 12px; padding: 0;
+  background: #fff;
+  border-radius: 12px;
+  padding: 0;
   box-shadow: none;
   margin-left: 0;
-  transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease,
-    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1), margin-left 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+  transition:
+    width 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.25s ease,
+    padding 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    margin-left 0.35s cubic-bezier(0.22, 1, 0.36, 1),
     box-shadow 0.35s ease;
 }
 .gw-mail-drawer.is-open {
@@ -181,48 +319,104 @@
   opacity: 1;
   padding: 38px 36px 34px;
   margin-left: 32px;
-  box-shadow: 0 10px 34px rgba(0,0,0,0.2);
-  // max-height는 search.js가 렌더링 직후 답변 카드(.gw-answer-main)의 실제 높이를
-  // 재서 인라인 스타일로 채워 넣는다(syncDrawerHeight) — 서랍이 항상 카드와 같은
-  // 높이로 늘어나되, 메일 본문이 그보다 길면 서랍이 더 커지는 대신 여기 overflow-y:
-  // auto로 내부에서만 스크롤되게 하기 위함.
-  overflow-y: auto;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.2);
 }
 .gw-mail-drawer-close {
-  position: absolute; top: 12px; right: 12px;
-  width: 28px; height: 28px; border: none; border-radius: 50%;
-  background: #f4f6f8; color: #73879C; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.85rem; transition: background 0.15s, color 0.15s;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: #f4f6f8;
+  color: #73879c;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  z-index: 1;
 }
-.gw-mail-drawer-close:hover { background: #fee; color: #e74c3c; }
+.gw-mail-drawer-close:hover {
+  background: #fee;
+  color: #e74c3c;
+}
 
-.gw-mail-detail-panel { min-height: 160px; }
-.gw-mail-detail-empty { color: #aaa; font-size: 1rem; line-height: 1.7; }
-.gw-mail-detail-loading { display: flex; align-items: center; gap: 12px; color: #73879C; font-size: 1rem; }
-.gw-mail-detail-subject { font-size: 1.15rem; font-weight: 700; color: #2A3F54; margin-bottom: 14px; word-break: break-word; }
-.gw-mail-detail-meta {
-  font-size: 0.95rem; color: #73879C; margin-bottom: 16px; padding-bottom: 16px;
-  border-bottom: 1px solid #e8e8e8; display: flex; flex-direction: column; gap: 6px;
+.gw-mail-detail-panel {
+  min-height: 160px;
+  max-height: 70vh;
+  overflow-y: auto;
+  margin-right: -24px;
+  padding-right: 24px;
 }
-.gw-mail-detail-meta strong { color: #2A3F54; margin-right: 8px; }
+.gw-mail-detail-empty {
+  color: #aaa;
+  font-size: 1rem;
+  line-height: 1.7;
+}
+.gw-mail-detail-loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #73879c;
+  font-size: 1rem;
+}
+.gw-mail-detail-subject {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #2a3f54;
+  margin-bottom: 14px;
+  word-break: break-word;
+}
+.gw-mail-detail-meta {
+  font-size: 0.95rem;
+  color: #73879c;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.gw-mail-detail-meta strong {
+  color: #2a3f54;
+  margin-right: 8px;
+}
 .gw-mail-detail-body {
-  font-size: 1.02rem; line-height: 1.8; color: #2A3F54;
-  white-space: pre-wrap; word-break: break-word;
+  font-size: 1.02rem;
+  line-height: 1.8;
+  color: #2a3f54;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 @media (max-width: 900px) {
   .gw-mail-drawer {
     position: fixed;
-    top: auto; bottom: 0; right: 0; left: 0;
-    width: 100%; max-width: 100%; border-radius: 16px 16px 0 0;
+    top: auto;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: 100%;
+    max-width: 100%;
+    border-radius: 16px 16px 0 0;
     max-height: 70vh;
-    padding: 30px 26px 26px; opacity: 1; margin-left: 0;
-    box-shadow: 0 -6px 24px rgba(0,0,0,0.18);
+    padding: 30px 26px 26px;
+    opacity: 1;
+    margin-left: 0;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
     transform: translateY(100%);
     transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .gw-mail-drawer.is-open { transform: translateY(0); }
+  .gw-mail-drawer.is-open {
+    transform: translateY(0);
+  }
 }
 
-footer { display: none !important; }
+footer {
+  display: none !important;
+}

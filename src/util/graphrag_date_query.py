@@ -1,3 +1,7 @@
+# 질의문에서 날짜/기간 표현을 추출해 해당 기간의 메일을 계정별로 필터링하고 LLM으로 답변을 생성한다.
+
+# Extracts a date range from the user's query, filters mail within that range across accounts, and generates an answer via LLM.
+
 import os
 import re
 import time
@@ -7,6 +11,7 @@ from dotenv import load_dotenv
 
 load_dotenv("src/parquet/.env")
 
+# 질의문에서 날짜/기간 표현을 정규식으로 파싱해 (시작일, 종료일) 문자열을 반환한다 (없으면 None)
 def _extract_date_range(message: str):
     today = datetime.datetime.now()
     year = today.year
@@ -184,7 +189,7 @@ def _extract_date_range(message: str):
 
     return None
 
-# parquet에서 날짜 범위에 맞는 이메일 필터링 (단일 계정)
+# entities.parquet의 EMAIL 엔티티 중 날짜 범위에 드는 메일을 골라 제목/ID/날짜/요약 dict 리스트로 반환한다 (단일 계정)
 def _filter_emails_by_date(paths, start_date: str, end_date: str) -> list:
     import pandas as pd
     entity_path = os.path.join(paths.GRAPHRAG_ROOT, 'output', 'entities.parquet')
@@ -232,8 +237,7 @@ def _filter_emails_by_date(paths, start_date: str, end_date: str) -> list:
     results.sort(key=lambda x: x['date'])
     return results
 
-# 질의에서 날짜 범위 측정하여 parquet 에서 날짜 필터링 하여 llm 답변.
-# accounts_paths: 연합 대상 계정 목록 (인덱싱된 계정 전체) — 계정별로 각자 parquet을 필터링한 뒤 합친다.
+# 질의의 날짜 범위로 여러 계정의 메일을 필터링·병합해 LLM 답변을 생성한다 (날짜 질의가 아니면 None 반환)
 def run_date_range_query(message: str, accounts_paths: list) -> str:
     import openai
     date_range = _extract_date_range(message) # 질의에서 날짜 범위 추출, 날짜 패턴 없으면 None 반환
@@ -303,7 +307,7 @@ def run_date_range_query(message: str, accounts_paths: list) -> str:
                 "content": f"[이메일 목록]\n{context}\n\n[질문]\n{message}"
             }
         ],
-        temperature=0.0 # 날짜 기반 질문은 창의성 필요 ㄴㄴ
+        temperature=0.0 # 날짜 기반 질문이므로 창의성 0
     )
     print(f'date_query execution_time : {time.time() - start_time}')  # 답변 시간 출력
     print(f'date_query answer : {response.choices[0].message.content.strip()}')  # 답변 출력

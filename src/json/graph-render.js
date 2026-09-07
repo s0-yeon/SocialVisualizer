@@ -1,7 +1,11 @@
-/**
- * graph-render.js — 고급 그래프 렌더링 함수
- * 의존성: window.d3 (v7)
- */
+/*
+graph-render.js — D3 기반 지식 그래프 렌더링 함수. 노드/엣지를 힘 기반 시뮬레이션으로 배치하고, 확대/축소·드래그·호버 툴팁·화면 맞춤 기능을 제공한다.
+의존성: window.d3 (v7)
+
+graph-render.js — D3-based knowledge graph rendering function. Lays out nodes/edges via force simulation and provides zoom/pan, drag, hover tooltips, and fit-to-view functionality.
+Dependency: window.d3 (v7)
+*/
+
 (function (global) {
   const COLORS = {
     // 메일 도메인

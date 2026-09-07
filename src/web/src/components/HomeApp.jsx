@@ -1,12 +1,12 @@
-import { createRoot } from 'react-dom/client';
-import Header from './Header.jsx';
-import Footer from './Footer.jsx';
-import HeroContent from './HeroOrbit.jsx';
+import { createRoot } from "react-dom/client";
+import Header from "./Header.jsx";
+import Footer from "./Footer.jsx";
+import HeroContent from "./HeroContent.jsx";
 
 /**
- * 홈 화면(index.html) 전체를 감싸는 최상위 컴포넌트.
- * 예전엔 #app-header / <main> / #app-footer 세 곳에 각각 다른 방식(innerHTML)으로
- * 내용을 채워 넣었는데, 지금은 이 컴포넌트 하나가 셋을 전부 그려냄.
+홈 화면(index.html) 전체를 감싸는 최상위 React 컴포넌트 — Header/HeroContent/Footer 세 영역을 한 번에 그려서 마운트한다.
+
+Top-level React component wrapping the entire home page (index.html) — renders Header, HeroContent, and Footer together in one mount.
  */
 function HomeApp() {
   return (
@@ -20,6 +20,7 @@ function HomeApp() {
   );
 }
 
+// #containerId 엘리먼트에 HomeApp을 React 루트로 마운트
 export function mountHomeApp(containerId) {
   const el = document.getElementById(containerId);
   if (!el) return;

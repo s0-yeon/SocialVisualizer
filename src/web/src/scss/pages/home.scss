@@ -1,4 +1,10 @@
-/* ── 등장 애니메이션 기본 상태 ── */
+/*
+ 홈 화면 전용 스타일 — 히어로 등장 애니메이션, 미리보기 카드, 배경 그리드 등.
+ 
+ Styles for the home page — hero entrance animations, preview cards, background grid, etc.
+ */
+
+/* 등장 애니메이션 기본 상태 */
 .gw-anim {
   opacity: 0;
   transform: translateY(28px);
@@ -11,304 +17,7 @@
   transform: translateY(0);
 }
 
-/* ── 인덱싱 로그 패널 ── */
-.log-fab {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 16px;
-  border-radius: 999px;
-  background: #f97316;
-  color: #fff;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition:
-    background 0.18s,
-    transform 0.15s;
-  box-shadow: 0 2px 10px rgba(249, 115, 22, 0.35);
-}
-.log-fab:hover {
-  background: #c2410c;
-  transform: translateY(-1px);
-}
-.log-fab:active {
-  transform: scale(0.97);
-}
-.fab-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #fff;
-  opacity: 0.85;
-  display: inline-block;
-}
-.fab-dot.running {
-  background: #cdcdcd;
-  animation: dot-pulse 1.2s ease-in-out infinite;
-}
-@keyframes dot-pulse {
-  0%,
-  100% {
-    opacity: 0.85;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.35);
-  }
-}
-.fab-badge {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: #e24b4a;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 500;
-  border-radius: 999px;
-  padding: 1px 5px;
-  min-width: 16px;
-  text-align: center;
-  display: none;
-}
-.fab-badge.show {
-  display: block;
-}
-
-.panel-wrap {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: 480px;
-  border: none;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #fff;
-  z-index: 9999;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
-  max-height: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    max-height 0.35s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.3s;
-  max-width: calc(100vw - 24px);
-}
-.panel-wrap.open {
-  max-height: 480px;
-  opacity: 1;
-  pointer-events: all;
-}
-
-.panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  background: #f4f4f4;
-  border-bottom: 1px solid #e4e4e4;
-}
-.panel-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #272727;
-}
-.panel-status {
-  font-size: 11px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  font-weight: 500;
-  background: rgba(249, 115, 22, 0.12);
-  color: #f97316;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.panel-status.idle {
-  background: #f4f4f4;
-  color: #888;
-}
-.panel-status.done {
-  background: #eeeeee;
-  color: #545454;
-}
-.panel-status.failed {
-  background: #fcebeb;
-  color: #a32d2d;
-}
-.status-indicator {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  display: inline-block;
-}
-.status-indicator.running {
-  animation: dot-pulse 1.1s ease-in-out infinite;
-}
-
-.panel-actions {
-  display: flex;
-  gap: 6px;
-}
-.panel-btn {
-  background: #fff;
-  border: none;
-  color: #f97316;
-  border-radius: 6px;
-  padding: 3px 9px;
-  font-size: 11px;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
-  transition:
-    background 0.15s,
-    box-shadow 0.15s;
-}
-.panel-btn:hover {
-  background: rgba(249, 115, 22, 0.08);
-  box-shadow: 0 2px 5px rgba(249, 115, 22, 0.22);
-}
-
-.progress-bar-wrap {
-  height: 3px;
-  background: #e4e4e4;
-}
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #f97316, #fdba74);
-  width: 0%;
-  transition: width 0.5s ease;
-  border-radius: 0 2px 2px 0;
-}
-
-.log-body {
-  height: 260px;
-  overflow-y: auto;
-  padding: 10px 14px;
-  font-size: 12px;
-  line-height: 1.7;
-  scrollbar-width: thin;
-  scrollbar-color: #e4e4e4 transparent;
-}
-.log-body::-webkit-scrollbar {
-  width: 4px;
-}
-.log-body::-webkit-scrollbar-thumb {
-  background: #e4e4e4;
-  border-radius: 4px;
-}
-
-.log-line {
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
-  padding: 2px 0;
-  animation: line-in 0.2s ease;
-  min-width: 0;
-  width: 100%;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-@keyframes line-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-.log-ts {
-  color: #bdbdbd;
-  flex-shrink: 0;
-  font-size: 11px;
-  padding-top: 1px;
-  min-width: 0;
-}
-.log-tag {
-  flex-shrink: 0;
-  font-size: 10px;
-  font-weight: 500;
-  padding: 1px 6px;
-  border-radius: 4px;
-  min-width: 36px;
-  text-align: center;
-  white-space: nowrap;
-  display: inline-block;
-  overflow: visible;
-  height: auto;
-}
-.log-tag.running {
-  background: #eeeeee;
-  color: #4f4f4f;
-}
-.log-tag.done {
-  background: #eeeeee;
-  color: #545454;
-}
-.log-tag.failed {
-  background: #fcebeb;
-  color: #a32d2d;
-}
-.log-msg {
-  color: #333;
-  word-break: break-word;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.log-pct {
-  color: #f97316;
-  font-weight: 500;
-  margin-left: 4px;
-}
-
-.log-empty {
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #aaa;
-  font-size: 12px;
-  font-family: sans-serif;
-  flex-direction: column;
-  gap: 6px;
-}
-.log-empty svg {
-  opacity: 0.35;
-}
-
-.panel-footer {
-  padding: 8px 14px;
-  border-top: 1px solid #e4e4e4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #f9fcfb;
-}
-.footer-count {
-  font-size: 11px;
-  color: #888;
-}
-.footer-scroll-btn {
-  font-size: 11px;
-  color: #f97316;
-  cursor: pointer;
-  background: none;
-  border: none;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.footer-scroll-btn:hover {
-  text-decoration: underline;
-}
-
+// 홈 화면은 히어로 섹션이 전체 화면을 채우므로 공통 푸터를 숨기고, 내부 스크롤 컨테이너로 바꿈
 footer {
   display: none;
 }
@@ -323,107 +32,53 @@ html {
   overflow-x: hidden;
 }
 
-/* ══ [2컬럼 레이아웃 : 수직 정렬 하강 및 타이틀 커스텀] ══ */
+// 히어로 전체를 창 크기에 맞춰 통째로 줄었다 커졌다 하도록 감싸는 바깥 컨테이너.
+// 안쪽(.gw-orbit-hero)의 요소·크기 값은 전혀 건드리지 않고, JS(HeroContent.jsx)가
+// 여기 담긴 원본 크기를 기준으로 transform:scale()만 적용한다.
+.gw-hero-scale-wrap {
+  width: 100%;
+  height: calc(100vh - 80px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* [2컬럼 레이아웃 : 수직 정렬 하강 및 타이틀 커스텀] */
 .gw-orbit-hero {
   position: relative;
   z-index: 1;
   display: flex !important;
   flex-direction: row !important;
-  align-items: center !important; /* ⭐ 좌/우 수직 가운데 맞춰 내림 ⭐ */
+  align-items: center !important; /* 좌/우 수직 가운데 맞춰 내림 */
   justify-content: space-between !important;
-  gap: 40px !important;
+  gap: 80px !important; // 문구 영역과 미리보기 카드 두 개 사이 간격을 더 벌림(기존 40px)
   // 오른쪽 미리보기 카드를 더 키우면서도 전체가 화면에 들어오도록 컨테이너 자체를 넓힘
   max-width: 1480px !important;
   margin: 0 auto !important;
   min-height: calc(100vh - 80px); /* 화면 전체에 대해 가운데 위치 조율 */
-  // 왼쪽 문구를 더 왼쪽으로 보내달라는 요청 — 왼쪽 여백을 더 줄여서 문구
-  // 블록 전체를 왼쪽으로 더 당김(예전 20px에서 재요청으로 0으로).
-  // 요청 — 아래쪽 여백이 너무 커서(60px) 미리보기 카드가 세로로 길어졌을 때
-  // 화면 높이를 넘겨 스크롤이 생기고 밑이 잘렸음 → 32px로 줄임(위쪽 80px은
-  // 고정 헤더(73px) 밑에서 겹치지 않게 하는 최소 여백이라 그대로 유지).
   padding: 80px 40px 32px 0 !important;
   box-sizing: border-box !important;
 }
 
-.gw-layer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.gw-globe-belt {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 33vw;
-  max-height: 420px;
-  overflow: hidden;
-  z-index: 1;
-  pointer-events: none;
-}
-.gw-globe-belt-inner {
-  position: absolute;
-  top: 0;
-  left: 73%;
-  transform: translateX(-50%);
-  width: 100vw;
-  max-width: 1260px;
-}
-
-.gw-skills-orbit {
-  position: absolute;
-  left: 73%;
-  bottom: calc(min(33vw, 420px) - 120px);
-  transform: translateX(-50%);
-  z-index: 6;
-  pointer-events: none;
-}
-.gw-skills-orbit * {
-  pointer-events: auto;
-}
-
-/* ── [왼쪽 영역] 문구 정렬 및 위치 하강 ── */
+/* [왼쪽 영역] 문구 정렬 및 위치 하강 */
 .gw-orbit-left {
   position: relative;
   z-index: 4;
   flex: 1 1 44% !important;
-  // 한 줄로 표시되는 설명 문구를 넉넉히 담을 수 있도록 폭을 넓힘 — 제목을
-  // 줄바꿈 없이 한 줄로 표시하도록 바꾸면서(아래 .gw-hero-headline 참고)
-  // 720px로는 살짝 부족해 폭을 더 넉넉히 늘림.
+  // 한 줄로 표시되는 설명 문구를 넉넉히 담을 수 있도록 폭을 넓힘 — 제목을 줄바꿈 없이 한 줄로 표시하도록 바꾸면서(아래 .gw-hero-headline 참고) 720px로는 살짝 부족해 폭을 더 넉넉히 늘림.
   max-width: 820px;
   text-align: left !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: flex-start !important;
   justify-content: center !important;
-  // 요청 — 문구가 너무 아래로 내려가 있어서 다시 위로. 부모(.gw-orbit-hero)가
-  // 이미 align-items:center로 좌/우를 같은 높이 기준 정가운데에 맞춰주므로,
-  // 여기서 따로 margin-top으로 더 내릴 필요가 없음(예전엔 오른쪽 카드가
-  // justify-content:flex-end로 아래에 붙어있어서 균형 맞추려 내렸었는데,
-  // 오른쪽도 이번에 center로 되돌려서 더 이상 필요 없음).
-  // 요청 — 아주 살짝만 더 내려달라는 재요청. 정렬 방식은 그대로 두고 숫자만 조정.
+  // 부모(.gw-orbit-hero)가 이미 align-items:center로 좌/우를 같은 높이 기준 정가운데에 맞춰주므로, 여기서 따로 margin-top으로 더 내릴 필요가 없음.
+  // 정렬 방식은 그대로 두고 숫자만 조정.
   margin-top: 10px !important;
 }
-.gw-hero-eyebrow {
-  margin: 0 0 16px;
-  font-family:
-    "Geist",
-    "Inter",
-    -apple-system,
-    sans-serif;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b6b6b;
-  letter-spacing: 0.04em;
-  text-align: left !important;
-}
 
-/* ⭐ 1. Social Visualizer 타이틀 훨씬 더 크게 확대 ⭐ */
+/* 1. Social Visualizer 타이틀 훨씬 더 크게 확대 */
 .gw-hero-headline {
   margin: 0 0 28px !important;
   font-family:
@@ -433,32 +88,16 @@ html {
     sans-serif;
   font-style: normal;
   font-weight: 800 !important;
-  // "Social Visualizer"를 좀 더 크게 키워달라는 요청 — clamp 상/하한을 함께 올림
-  font-size: clamp(
-    3.4rem,
-    5.6vw,
-    5.6rem
-  ) !important; /* 메인 타이틀 크기 확장 */
+  font-size: clamp(3.4rem, 5.6vw, 5.6rem) !important; /* 메인 타이틀 크기 확장 */
   line-height: 1.15 !important;
   letter-spacing: -0.02em;
   color: #262626;
   text-align: left !important;
-  // 요청 — "Social Visualizer"가 줄바꿈 없이 항상 한 줄로 보이도록. 좁은
-  // 화면(모바일)에서는 아래 @media (max-width: 900px)에서 다시 normal로
-  // 풀어서 화면 밖으로 잘리지 않게 함.
+  // 좁은 화면(모바일)에서는 아래 @media (max-width: 900px)에서 다시 normal로 풀어서 화면 밖으로 잘리지 않게 함.
   white-space: nowrap !important;
 }
 
-.gw-hero-headline-muted {
-  color: #696969;
-}
-
-.gw-hero-headline-glow {
-  color: #fbf0d9 !important;
-  filter: url(#glow-4);
-}
-
-/* ⭐ 2. 서브 문구 한 줄 고정(요청) ⭐ */
+/* 2. 서브 문구 한 줄 고정 */
 .gw-hero-desc {
   margin: 0 0 32px !important;
   max-width: none !important; /* 한 줄로 이어지도록 폭 제한을 없앰 */
@@ -475,6 +114,7 @@ html {
   white-space: nowrap !important; /* 항상 한 줄로 표시 */
 }
 
+// 히어로 좌측 하단 CTA 버튼 묶음
 .gw-hero-cta {
   display: flex;
   align-items: center;
@@ -510,25 +150,7 @@ html {
   box-shadow: 0 10px 28px rgba(251, 146, 60, 0.48);
 }
 
-.gw-hero-cta-secondary {
-  font-family:
-    "Geist",
-    "Inter",
-    -apple-system,
-    sans-serif;
-  font-size: 1rem;
-  font-weight: 500;
-  color: #b8853a !important;
-  text-decoration: none !important;
-  border-bottom: 1px solid transparent;
-  transition: border-color 0.2s;
-}
-.gw-hero-cta-secondary:hover {
-  color: #b8853a !important;
-  border-color: #b8853a;
-}
-
-/* ── [오른쪽 영역] 미리보기 카드 : 세로 1줄 및 위치 하강 ── */
+/* [오른쪽 영역] 미리보기 카드 : 세로 1줄 및 위치 하강 */
 .gw-hero-previews {
   position: relative;
   z-index: 4;
@@ -536,26 +158,12 @@ html {
   display: flex !important;
   flex-direction: column !important; /* 세로 1줄 고정 */
   align-items: flex-end !important; /* 오른쪽 수평 정렬 */
-  // 요청 — 카드를 일부러 아래로 붙이던 것(flex-end)과 그 상단 여백(padding-top:50)이
-  // 왼쪽 문구를 억지로 더 내리는 원인이자, 카드가 세로로 길어졌을 때 화면 아래로
-  // 넘쳐서 스크롤/잘림이 생기는 원인이었음 → 왼쪽과 똑같이 가운데 정렬로 되돌림.
   justify-content: center !important;
   gap: 22px !important;
   width: 100% !important;
-  // 요청 — 문구는 그대로 두고 카드 2개만 아주 살짝 더 아래로.
   margin-top: 14px !important;
 }
 
-/* 오른쪽 두 미리보기 카드를 더 크게 키워달라는 요청 — max-width를 500px→660px로 확장
-   ⭐ 두 미리보기 창의 "비율" 조절 지점 — 카드 2장(My People / My Time) ⭐
-   요청 — 스크롤 없이 항상 한 화면(뷰포트) 안에 다 들어와야 함. aspect-ratio만으로
-   높이를 정하면 화면이 낮을 때(카드가 세로로 긴 비율일수록) 두 카드 높이 합이
-   뷰포트를 넘어서 스크롤이 생기고 아래가 잘림 — 그래서 max-height를 뷰포트 높이(vh)
-   기준으로 같이 걸어서, 화면이 아무리 작아도 "카드 2장 + 사이 간격(22px) + 위/아래
-   여백(.gw-orbit-hero의 padding 80+32=112px, .gw-hero-previews의 margin-top 14px)"이
-   항상 100vh 안에 맞도록 상한을 둠.
-   (계산: 2*H + 22 = 100vh-112-14  →  H = 50vh - 74px. max-height가 실제로 이 상한에
-   걸리면 이미지가 object-fit:cover라 찌그러짐 없이 위아래만 살짝 더 잘려 보임.) */
 .gw-preview-card {
   display: block;
   width: 100% !important;
@@ -573,11 +181,6 @@ html {
 }
 
 .gw-preview-card--static {
-  // 요청(이전) — 가로:세로를 1903:927(≈2.05:1)에서 1903:1150(≈1.65:1)으로 올렸다가
-  // 스크롤 문제로 1903:1000(≈1.9:1)으로 낮췄음. 요청(이번) — 카드 높이를 조금만 더
-  // 키워달라는 재요청으로 1903:1060(≈1.8:1)으로 살짝 다시 올림 + 바로 위
-  // .gw-preview-card의 max-height가 최종 안전장치 역할(화면이 작으면 이 비율보다
-  // 더 낮아질 수 있음 — 그래도 스크롤은 안 생김).
   aspect-ratio: 1903 / 1100;
   width: 100% !important;
   max-width: 660px !important;
@@ -588,6 +191,7 @@ html {
   box-shadow: 0 18px 42px rgba(48, 37, 34, 0.24);
 }
 
+// 미리보기 카드 내부 — 실제 페이지를 축소된 iframe으로 넣거나(동적) 정적 스크린샷 이미지로 채우고, 마우스 올리면 어두운 오버레이+안내 텍스트를 띄움
 .gw-preview-frame {
   position: relative;
   width: 100%;
@@ -642,39 +246,6 @@ html {
   opacity: 1;
 }
 
-/* ── 하단 지원 메일 서비스 ── */
-.gw-trusted {
-  position: relative;
-  z-index: 4;
-  margin-top: 24px;
-  text-align: left;
-}
-.gw-trusted-label {
-  margin: 0 0 10px;
-  font-size: 0.85rem;
-  color: #696969;
-  letter-spacing: 0.06em;
-}
-.gw-trusted-logos {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 24px;
-}
-.gw-trusted-logo {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #3c3c3c;
-  opacity: 0.55;
-}
-
-.gw-orbit-right {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  pointer-events: none;
-}
-
 /* 반응형 (모바일) */
 @media (max-width: 900px) {
   .gw-orbit-hero {
@@ -686,8 +257,7 @@ html {
     text-align: center !important;
   }
   .gw-hero-headline,
-  .gw-hero-desc,
-  .gw-hero-eyebrow {
+  .gw-hero-desc {
     text-align: center !important;
   }
   .gw-hero-headline,

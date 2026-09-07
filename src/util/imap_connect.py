@@ -1,4 +1,7 @@
-# IMAP 수집 유틸
+# IMAP 서버에 로그인해 선택한 폴더의 메일을 가져오고, 폴더명 인코딩/디코딩과 플랫폼 판별 등 수집에 필요한 기능을 처리한다.
+
+# Logs into the IMAP server to fetch mail from the selected folders, handling folder-name encoding/decoding and platform detection needed for collection.
+
 import base64
 import re
 import imaplib
@@ -19,6 +22,7 @@ _IMAP_HOST_PLATFORM_MAP = {
     "imap.mail.yahoo.com": "yahoo",
 }
 
+# IMAP 호스트명으로 메일 플랫폼 이름을 판별한다 (매핑에 없으면 도메인에서 추정)
 def _detect_imap_platform(host: str) -> str:
     host_lower = (host or "").strip().lower()
     if host_lower in _IMAP_HOST_PLATFORM_MAP:
@@ -29,7 +33,7 @@ def _detect_imap_platform(host: str) -> str:
         return labels[-2]
     return host_lower or "imap"
 
-# IMAP 폴더명(RFC 3501 Modified UTF-7)에 한글 등 비-ASCII 문자가 있을 때 인코딩
+# 폴더명을 IMAP Modified UTF-7(RFC 3501)로 인코딩한다
 def _imap_utf7_encode_folder(folder: str) -> str:
     result = bytearray()
     i, n = 0, len(folder)
@@ -53,7 +57,7 @@ def _imap_utf7_encode_folder(folder: str) -> str:
         i = j
     return result.decode("ascii")
 
-# IMAP 폴더명(RFC 3501 Modified UTF-7) 디코딩
+# IMAP Modified UTF-7(RFC 3501) 폴더명을 일반 문자열로 디코딩한다
 def _imap_utf7_decode_folder(name: str) -> str:
     result = []
     i, n = 0, len(name)
@@ -79,8 +83,7 @@ def _imap_utf7_decode_folder(name: str) -> str:
         i = j + 1
     return "".join(result)
 
-# 폴더를 여러 개 선택해서 같은 메일이 두 폴더 모두에 걸려있는 경우, 블록을 또 만들지 않고
-# 이미 만든 블록의 '[폴더 정보]' 줄에 새 폴더 이름만 추가한다 (Gmail 다중 라벨과 동일하게 콤마로 나열).
+# 이미 만든 메일 블록의 '[폴더 정보]' 줄에 새 폴더 이름을 콤마로 덧붙인다 (중복 메일 재생성 방지)
 def _add_folder_label(block_text: str, new_folder: str) -> str:
     m = re.search(r'(\[폴더 정보\]\s*)(.*)', block_text)
     if not m:
@@ -91,7 +94,7 @@ def _add_folder_label(block_text: str, new_folder: str) -> str:
     existing.append(new_folder)
     return block_text[:m.start(2)] + ", ".join(existing) + block_text[m.end(2):]
 
-# IMAP LIST 응답에서 실제 폴더명을 추출
+# IMAP LIST 응답 한 줄을 파싱해 선택 가능한 폴더명을 반환한다 (Noselect/파싱 실패 시 None)
 def _imap_parse_list_line(line: bytes):
     try:
         text = line.decode("utf-8", errors="replace").strip()
@@ -112,7 +115,7 @@ def _imap_parse_list_line(line: bytes):
 
     return _imap_utf7_decode_folder(raw_name)
 
-# IMAP 서버에 접속해서 선택한 폴더들의 메일을 가져옴
+# IMAP 서버에 로그인해 선택한 폴더들의 메일을 가져와 (블록 텍스트, 첨부 payload 리스트)로 반환한다
 def _imap_fetch_content(host: str, port: int, use_ssl: bool, user: str, password: str,
                          folders: list[str], limit: int, my_email: str, on_batch=None) -> tuple[str, list[dict]]:
     conn = imaplib.IMAP4_SSL(host, port) if use_ssl else imaplib.IMAP4(host, port)

@@ -25,6 +25,7 @@ args = parser.parse_args()
 
 id_maps = json.load(open(os.path.join(args.work_dir, "id_maps.json"), encoding="utf-8"))
 
+# 엔티티 제목/관계 쌍을 해당 커뮤니티의 human_readable_id로 변환해 '[Data: ...]' 인용 문자열을 만듦
 def cite(community, entity_titles=(), rel_pairs=()):
     """Resolve entity titles / relationship (src,tgt) pairs to their human_readable_id for
     this specific community's trimmed context, and return the '[Data: ...]' citation string.
@@ -100,6 +101,7 @@ def report_87():
               [("9BA310047D6945C0", OWNER), ("573E0C460A84FF05", OWNER)])
     f3 = cite(c, ["정림대학교", "SUN.CHAN.MIN@MINWOOCHUNG.UNIV.KR", "WON.SUN.YOUNG@JINSAEBYEOK.AC.KR", "EUN.SU.YEON@RIMINBARAM.ACADEMY.NET"],
               [("SUN.CHAN.MIN@MINWOOCHUNG.UNIV.KR", "정림대학교"), ("WON.SUN.YOUNG@JINSAEBYEOK.AC.KR", "정림대학교"), ("EUN.SU.YEON@RIMINBARAM.ACADEMY.NET", "정림대학교")]),
+    # 위 cite() 호출 끝에 trailing comma가 있어 f3가 (문자열,) 튜플로 감싸짐 — 원래 문자열만 꺼내 다시 f3에 대입
     f3 = f3[0] if isinstance(f3, tuple) else f3
     f4 = cite(c, ["DCA31E8E40042598", "E497665DBCC7A190", "논문 제출 마감 안내"],
               [("DCA31E8E40042598", OWNER), ("E497665DBCC7A190", OWNER)])
@@ -188,7 +190,7 @@ REPORTS = {
 
 if __name__ == "__main__":
     for cid, rep in REPORTS.items():
-        assert 3 <= len(rep["findings"]) <= 5, cid
+        assert 3 <= len(rep["findings"]) <= 5, cid  # GraphRAG 프롬프트가 요구하는 finding 개수 범위(3~5개) 검증
         json.dumps(rep, ensure_ascii=False)  # sanity check it's serializable
     print("all", len(REPORTS), "hand-written reports composed and citation-verified OK")
     out_path = os.path.join(args.work_dir, "oversized_reports.json")

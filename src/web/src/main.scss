@@ -1,3 +1,10 @@
+/*
+ * 전체 스타일 진입점 — 이 프로젝트의 모든 화면에 적용되는 CSS를 여기 한 곳에서 조립한다.
+ * Bootstrap, 디자인 토큰(변수/색상 테마), 커스텀·전역 오버라이드 레이어, 공용 헤더/플로팅 검색/푸터 스타일, 아이콘 폰트를 순서대로 불러와 하나의 스타일시트로 합친다.
+ *
+ * Global stylesheet entry point — assembles every CSS this project's screens use, in one place.
+ * Pulls in Bootstrap, design tokens (variables/color themes), the custom and global-override layers, shared header/floating-search/footer styles, and icon fonts, in order, into a single stylesheet.
+ */
 // SCSS files using @use (must come first)
 @use "bootstrap/scss/bootstrap";
 
@@ -5,10 +12,11 @@
 @use "./scss/color-schemes";
 
 @use "./scss/custom.scss";
-@use "./scss/green-luxury.scss"; // Luxury Green Design System
+@use "./scss/global-overrides.scss"; // _variables.scss 토큰으로 안 덮이는 세부 오버라이드
 @use "./scss/font-optimization.scss";
-@use "./scss/header.scss"; // 공통 헤더(appHeader.js) 스타일 + 사이드바 제거에 따른 레이아웃 보정
-@use "./scss/floating-search.scss"; // 모든 페이지 우측 하단 떠 있는 검색 버튼/팝업(floatingSearch.js)
+@use "./scss/components/header.scss"; // 공통 헤더(Header.jsx) 스타일 + 사이드바 제거에 따른 레이아웃 보정
+@use "./scss/components/floating-search.scss"; // 모든 페이지 우측 상단 떠 있는 검색 버튼/팝업(floatingSearch.js)
+@use "./scss/components/footer.scss"; // 공통 푸터(Footer.jsx) 스타일
 
 // CSS files using @import (legacy approach for .css files)
 @import "@fortawesome/fontawesome-free/css/all.min.css";

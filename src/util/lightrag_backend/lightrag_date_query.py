@@ -1,18 +1,13 @@
 # src/util/lightrag_backend/lightrag_date_query.py
-#
-# graphrag_date_query.py(GraphRAG 버전)의 LightRAG 대응 파일. 새로 만든 파일이며 graphrag_date_query.py는
-# 건드리지 않았다.
-#
-# 안 바뀐 것: 질의 문장에서 "어제", "3월 22일~25일" 같은 표현을 실제 날짜 범위로 바꾸는
-# _extract_date_range()는 GraphRAG/LightRAG와 무관한 순수 정규식 로직이라 그대로
-# 복사해서 재사용한다.
-#
-# 바뀐 것: 이메일을 어디서 찾아오는지. GraphRAG 버전은 paths.GRAPHRAG_ROOT/output/
-# entities.parquet(GraphRAG가 엔티티 추출로 만든 요약본)에서 "Date: ..." 필드를 정규식으로
-# 읽었는데, LightRAG는 그런 parquet을 안 만들어서 그 파일 자체가 없다. 대신 인덱싱 입력으로
-# 쓰는 원본 mail_latest.txt(모든 메일이 "날짜:", "제목:", "ID:" 같은 필드로 블록화되어
-# 저장된 파일)를 직접 읽어서 필터링한다 — GraphRAG의 LLM 요약을 거치지 않은 원본이라
-# 정보 손실도 없다.
+
+# LightRAG용 날짜 범위 질의 처리 모듈. 
+# 질문 문장에서 정규식으로 날짜/기간 표현을 뽑아내고 (오늘/어제/이번 주/N일 전 등 20여 가지 패턴), 그 범위에 드는 메일만 mail_latest.txt에서 직접 필터링해 LLM에 근거로 넘겨 답변을 생성한다. 
+# LightRAG 그래프 검색을 거치지 않고 날짜 조건이 명확한 질문에 한해 빠르게 답하는 전용 경로다.
+
+# Handles date-range mail queries for LightRAG. 
+# Extracts date/period expressions from the question via regex (today, yesterday, this week, N
+# days ago, and ~20 more patterns), filters mail_latest.txt directly for mails within that range, and feeds them to an LLM as grounding context.
+# A fast path for date-scoped questions that bypasses LightRAG's graph search.
 
 import os
 import re
@@ -23,8 +18,7 @@ import openai
 
 from config.settings import MAIL_BLOCK_SEP
 
-# 질의 문장에서 날짜/기간 표현을 (시작일, 종료일) 문자열로 변환. graphrag_date_query.py와 동일한
-# 순수 로직 — RAG 엔진과 무관해서 그대로 복사했다.
+# 질의문에서 날짜/기간 표현을 정규식으로 파싱해 (시작일, 종료일) 문자열을 반환한다 (없으면 None)
 def _extract_date_range(message: str):
     today = datetime.datetime.now()
     year = today.year
@@ -203,10 +197,7 @@ def _extract_date_range(message: str):
     return None
 
 
-# mail_latest.txt(원본 메일 블록 파일)에서 날짜 범위에 맞는 이메일 필터링.
-# GraphRAG 버전의 _filter_emails_by_date()는 entities.parquet을 읽었지만, 여기서는
-# 인덱싱 입력으로 쓰는 원본 텍스트를 직접 읽는다 — imap_message.py가 만드는 블록 포맷
-# 기준(ID:/제목:/날짜:/[메일 본문] 필드)으로 파싱한다.
+# mail_latest.txt에서 날짜 범위에 드는 메일 블록을 골라 제목/ID/날짜/본문 스니펫 dict 리스트로 반환한다
 def _filter_emails_by_date(paths, start_date: str, end_date: str) -> list:
     if not os.path.exists(paths.MAIL_LATEST_PATH):
         return []
@@ -223,9 +214,7 @@ def _filter_emails_by_date(paths, start_date: str, end_date: str) -> list:
         if not block:
             continue
 
-        # 실제 mail_latest.txt는 "[날짜] ...", "[ID] ..." 같은 대괄호 형식이라, 콜론 형식만
-        # 찾던 정규식은 항상 실패해서 이 함수가 매번 빈 결과를 반환했다(대괄호/콜론 둘 다 받도록
-        # 고침 — lightrag_mail_parser.py의 parse_mail_blocks()와 같은 버그/같은 수정).
+        # 대괄호/콜론 둘 다 가능
         date_m = re.search(r'^\s*(?:\[날짜\]|날짜:)\s*(.+?)\s*$', block, re.MULTILINE)
         if not date_m:
             continue  # 날짜 필드 없으면 걍 넘어감
@@ -241,8 +230,7 @@ def _filter_emails_by_date(paths, start_date: str, end_date: str) -> list:
         id_m = re.search(r'^\s*(?:\[ID\]|ID:)\s*(.+?)\s*$', block, re.MULTILINE)
         title_m = re.search(r'^\s*(?:\[제목\]|제목:)\s*(.+?)\s*$', block, re.MULTILINE)
 
-        # [메일 본문] 섹션 이후를 본문으로 사용. GraphRAG판의 "summary"는 GraphRAG가 LLM으로
-        # 요약한 값이었지만, 여기는 원본 본문 앞부분을 그대로 잘라 쓴다(컨텍스트 길이 제한용).
+        # 원본 본문 앞부분을 그대로 잘라 쓴다(컨텍스트 길이 제한용).
         body_m = re.search(r'\[메일 본문\]\s*\n(.*)', block, re.DOTALL)
         body = body_m.group(1).strip() if body_m else ''
         snippet = body[:300]
@@ -259,7 +247,7 @@ def _filter_emails_by_date(paths, start_date: str, end_date: str) -> list:
     return results
 
 
-# 질의에서 날짜 범위 추출하여 mail_latest.txt에서 필터링 후 llm 답변
+# 질의의 날짜 범위로 mail_latest.txt를 필터링해 LLM 답변을 생성한다 (날짜 질의가 아니면 None 반환)
 def run_date_range_query(message: str, paths) -> str:
     date_range = _extract_date_range(message)  # 질의에서 날짜 범위 추출, 날짜 패턴 없으면 None 반환
     if not date_range:
@@ -290,9 +278,7 @@ def run_date_range_query(message: str, paths) -> str:
         base_url=os.environ.get("RAG_CHAT_API_BASE") or None,  # 지정 시 로컬 vLLM(라마)으로 라우팅
     )
 
-    # 필터링된 이메일 목록을 근거로 최종 답변을 생성하는 호출이라(단순 분류/요약 같은
-    # 보조 작업이 아니라 사용자에게 보여줄 실제 답) SUB_TASK_CHAT_MODEL이 아니라
-    # RAG_CHAT_MODEL을 쓴다 — run_lightrag_query()의 답변 생성과 같은 급.
+    # 필터링된 이메일 목록을 근거로 최종 답변을 생성한다
     response = client.chat.completions.create(
         model=os.environ.get("RAG_CHAT_MODEL", "gpt-4o-mini"),
         messages=[
@@ -314,7 +300,7 @@ def run_date_range_query(message: str, paths) -> str:
                 "content": f"[이메일 목록]\n{context}\n\n[질문]\n{message}"
             }
         ],
-        temperature=0.0  # 날짜 기반 질문은 창의성 필요 ㄴㄴ
+        temperature=0.0  # 날짜 기반 질문은 창의성 필요 없음
     )
     print(f'date_query(lightrag) execution_time : {time.time() - start_time}')
     print(f'date_query(lightrag) answer : {response.choices[0].message.content.strip()}')

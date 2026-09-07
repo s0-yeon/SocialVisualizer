@@ -1,18 +1,12 @@
 # src/util/lightrag_backend/lightrag_extract_statics.py
-#
-# extract_statics.py(GraphRAG 버전)의 LightRAG 대응 파일. extract_statics.py는 건드리지
-# 않았다. 그 파일의 3개 함수(_save_mail_keyword_stats, _save_mail_contact_stats,
-# generate_person_descriptions) 중 앞의 둘만 여기서 raw-text 버전으로 다시 만든다.
-#
-# generate_person_descriptions는 옮기지 않았다: 조직/주제(Topic) 소속 같은 정보는
-# GraphRAG의 LLM 엔티티 추출 결과에서만 나오고 mail_latest.txt 원문만으로는 재현할 수
-# 없는 정보라서다. LightRAG 자체 그래프(엔티티/관계)를 읽어서 만드는 버전은 별도 작업으로
-# 남겨두고, 지금은 db_writer.save_person_stats_to_db가 이미 갖고 있는 try/except로
-# 빈 프로필({})을 받고 넘어가게 둔다 (person.description이 비게 되는 것 외엔 안전).
-#
-# LLM 호출 헬퍼(_is_friendly_tone_with_llm, extract_keywords_with_llm)와 client는
-# extract_statics.py 것을 그대로 재사용한다 — GraphRAG 전용 로직이 아니라 순수 LLM
-# 호출이라 엔진과 무관하다.
+
+# LightRAG용 메일 통계 집계 모듈. 
+# mail_latest.txt를 파싱해 연락처별 발신/수신/친밀 메일 수와 메일별 LLM 키워드를 뽑아 각각 mail_contact_stats.json, mail_keyword_stats.json으로 저장한다.
+# 어조(friendly) 판정과 처리된 메일 id는 캐시/기록해두고 append 모드에서 재사용해 중복 계산을 막는다.
+
+# Aggregates mail statistics for LightRAG. 
+# Parses mail_latest.txt to compute per-contact sent/received/friendly-tone counts and per-mail LLM keywords, saving them to mail_contact_stats.json and mail_keyword_stats.json. 
+# Tone judgments and processed mail ids are cached so append mode skips rework.
 
 import os
 import json
@@ -22,19 +16,16 @@ from util.jobs.job_store import *  # extract_statics.py와 동일하게 job 로�
 from util.lightrag_backend.lightrag_mail_parser import parse_mail_blocks, extract_email
 from util.extract_statics import extract_keywords_with_llm, _is_friendly_tone_with_llm
 
-# mail_id별 "friendly"/"not_friendly" 판정을 캐시하는 파일. _save_mail_contact_stats_lightrag가
-# 먼저 실행되며 이 캐시를 채워두면, 뒤에 실행되는 database.lightrag_db_writer.save_mail_to_db_lightrag가
-# 같은 본문에 대해 LLM을 또 호출하지 않고 재사용한다 (파이프라인 순서상 contact stats가
-# save_mail_to_db보다 항상 먼저 끝나므로 안전 — job_run_lightrag.py의 run_graph_pipeline/
-# run_graph_update_pipeline 둘 다 _extract_statics_pipeline_lightrag를 save_mail_to_db_lightrag보다
-# 먼저 호출한다).
+# mail_id별 "friendly"/"not_friendly" 판정을 캐시하는 파일
 _TONE_CACHE_FILENAME = "lightrag_tone_cache.json"
 
 
+# 어조 판정 캐시 파일의 전체 경로를 반환한다
 def _tone_cache_path(paths) -> str:
     return os.path.join(paths.MAIL_STATICS_PATH, _TONE_CACHE_FILENAME)
 
 
+# mail_id별 어조 판정 캐시(JSON)를 읽어 dict로 반환한다 (없으면 빈 dict)
 def load_tone_cache(paths) -> dict:
     path = _tone_cache_path(paths)
     if not os.path.exists(path):
@@ -46,21 +37,14 @@ def load_tone_cache(paths) -> dict:
         return {}
 
 
+# 어조 판정 캐시 dict를 JSON 파일로 저장한다
 def _save_tone_cache(paths, cache: dict):
     os.makedirs(paths.MAIL_STATICS_PATH, exist_ok=True)
     with open(_tone_cache_path(paths), "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 
-# 연락처(상대방)별 발신/수신/친밀 메일 수 집계.
-# GraphRAG 버전은 entities.parquet(Person/Email 엔티티) + relationships.parquet(sent_by/sent_to
-# 엣지)로 이 값을 만들었지만, mail_latest.txt에는 애초에 각 메일의 "구분"(발신/수신) 필드와
-# 발신인/수신인이 그대로 있어서 그래프를 거칠 필요가 없다.
-#
-# 주의(알려진 단순화): 수신인 필드에 여러 명이 콤마로 나열된 경우, extract_email()은 첫 번째
-# <email>만 뽑는다. GraphRAG 버전은 relationship 그래프 상 EMAIL↔PERSON 엣지가 수신인별로
-# 나뉘어 있었다면 그룹메일 수신자를 각각 카운트했을 수 있지만, 이 버전은 대표 수신자 1명으로
-# 카운트한다. 필요해지면 receiver 필드를 콤마로 split해서 각 수신자에게 카운트를 나눠주면 된다.
+# mail_latest.txt를 파싱해 연락처별 발신/수신/친밀 메일 수를 집계해 mail_contact_stats.json으로 저장한다 (rewrite/append)
 def _save_mail_contact_stats_lightrag(paths, mode: str = "rewrite"):
     if mode == "append" and os.path.exists(paths.MAIL_CONTACTS_PATH):
         with open(paths.MAIL_CONTACTS_PATH, "r", encoding="utf-8") as f:
@@ -137,10 +121,7 @@ def _save_mail_contact_stats_lightrag(paths, mode: str = "rewrite"):
     print(f"[STATS][lightrag] ({mode}) 계정 {len(stats)}개 집계 완료 → {paths.MAIL_CONTACTS_PATH}")
 
 
-# 메일 본문에서 키워드 추출 → 키워드별/사람별/날짜별 카운트. GraphRAG 버전과 산출 JSON
-# 형식(keywords/keyword_person_date_map/processed_mail_ids)은 동일하게 맞춰서
-# database/db_writer.py의 save_keyword_stats_to_db(), db_reader의 소비 코드가
-# 엔진과 무관하게 그대로 동작하게 했다.
+# mail_latest.txt의 메일마다 LLM 키워드를 뽑아 키워드별 언급 수·사람·날짜 맵을 mail_keyword_stats.json으로 저장한다
 def _save_mail_keyword_stats_lightrag(paths, mode: str = "rewrite"):
     if mode == "append" and os.path.exists(paths.MAIL_KEYWORDS_PATH):
         with open(paths.MAIL_KEYWORDS_PATH, "r", encoding="utf-8") as f:
@@ -197,6 +178,7 @@ def _save_mail_keyword_stats_lightrag(paths, mode: str = "rewrite"):
     print(f"[KEYWORD][lightrag] ({mode}) 키워드 {len(keyword_stats)}개 저장 완료 → {paths.MAIL_KEYWORDS_PATH}")
 
 
+# 키워드 통계 → 연락처 통계 순으로 실행하는 LightRAG용 메일 통계 파이프라인
 def _extract_statics_pipeline_lightrag(paths, mode: str = "rewrite"):
     os.makedirs(paths.MAIL_STATICS_PATH, exist_ok=True)
     _save_mail_keyword_stats_lightrag(paths, mode)

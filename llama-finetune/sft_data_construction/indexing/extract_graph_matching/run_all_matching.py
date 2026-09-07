@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_sft_pairs import match_room  # noqa: E402
 
 
+# CLI 엔트리포인트: 이메일 도메인 + 메신저 13개 방 전체를 순회하며 match_room을 돌리고 요약을 출력함
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--root", required=True, type=Path)
@@ -58,6 +59,7 @@ def main():
 
     summary = []  # (domain, room, matched, total, n_exact, n_relaxed)
 
+    # 도메인/방 하나에 대해 match_room을 실행하고 matched/unmatched 결과를 파일로 쓴 뒤 summary에 누적함
     def run_one(graphrag_dir, domain, room_label, out_name):
         matched, unmatched, ambiguous, unused_docs, (n_exact, n_relaxed) = match_room(
             graphrag_dir, None, domain, room_label, args.relaxed_threshold

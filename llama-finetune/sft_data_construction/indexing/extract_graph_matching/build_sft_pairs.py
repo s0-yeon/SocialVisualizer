@@ -103,6 +103,7 @@ REL_RE = re.compile(
 )
 
 
+# graphrag 파일 캐시(JSON) 하나에서 LLM 응답 본문 텍스트만 꺼냄
 def load_cache_response(path: Path) -> str | None:
     """graphrag 파일 캐시(JSON) 하나에서 LLM 응답 본문 텍스트만 꺼낸다."""
     try:
@@ -115,6 +116,7 @@ def load_cache_response(path: Path) -> str | None:
         return None
 
 
+# delimiter 포맷 응답을 (entity_name 집합, (source,target) 관계 쌍 집합)으로 파싱함
 def parse_response(text: str):
     """delimiter 포맷 응답을 (entity_name 집합, (source,target) 관계 쌍 집합)으로 파싱."""
     entities = set()
@@ -138,6 +140,7 @@ def parse_response(text: str):
     return frozenset(entities), frozenset(relationships)
 
 
+# 두 집합의 Jaccard 유사도를 계산함 (둘 다 비어있으면 1.0으로 취급)
 def jaccard(a: frozenset, b: frozenset) -> float:
     if not a and not b:
         return 1.0
@@ -147,6 +150,7 @@ def jaccard(a: frozenset, b: frozenset) -> float:
     return len(a & b) / len(u)
 
 
+# text_units.parquet + entities/relationships.parquet로 text_unit별 기대 시그니처를 만듦
 def build_text_unit_signatures(graphrag_dir: Path):
     """text_units.parquet + entities/relationships.parquet로 text_unit별 기대 시그니처를 만든다.
 
@@ -187,6 +191,7 @@ def build_text_unit_signatures(graphrag_dir: Path):
     return sigs
 
 
+# 한 방(room)/도메인의 GraphRAG 캐시를 text_unit과 매칭함 (Pass 1 완전일치 -> Pass 2 최근접 매칭 순으로 시도)
 def match_room(
     graphrag_dir: Path,
     input_csv: Path | None,
@@ -334,6 +339,7 @@ def match_room(
     return matched, unmatched, ambiguous, unused_doc_ids, (n_exact, n_relaxed)
 
 
+# CLI 엔트리포인트: 방/도메인 하나에 대해 match_room을 실행하고 결과를 jsonl로 저장함
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--graphrag-dir", required=True, type=Path)

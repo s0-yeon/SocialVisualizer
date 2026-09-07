@@ -48,6 +48,7 @@ BGE_M3_MODEL = "BAAI/bge-m3"
 BATCH_SIZE = 64
 
 
+# bge-m3 vLLM 임베딩 서버에 텍스트 배치를 보내 임베딩 벡터를 받아옴
 def embed_batch(texts: list[str]) -> list[list[float]]:
     """bge-m3 vLLM OpenAI 호환 임베딩 엔드포인트 호출."""
     resp = requests.post(
@@ -62,6 +63,7 @@ def embed_batch(texts: list[str]) -> list[list[float]]:
     return [d["embedding"] for d in data]
 
 
+# 도메인/방별 entities.parquet에서 description을 모아 배치 단위로 재임베딩함
 def embed_entities(entities_parquet_paths: dict[str, Path]) -> pd.DataFrame:
     """도메인/방별 entities.parquet에서 description을 뽑아 bge-m3로 재임베딩.
 
@@ -93,6 +95,7 @@ def embed_entities(entities_parquet_paths: dict[str, Path]) -> pd.DataFrame:
     return out_df
 
 
+# 재임베딩된 엔티티로 새 LanceDB 벡터스토어를 생성함
 def build_lancedb_index(entities_with_embeddings: pd.DataFrame, out_dir: Path, collection_name: str):
     """graphrag의 LanceDBVectorStore로 새 벡터스토어 생성."""
     store = LanceDBVectorStore(collection_name=collection_name)
@@ -112,6 +115,7 @@ def build_lancedb_index(entities_with_embeddings: pd.DataFrame, out_dir: Path, c
     print(f"{collection_name}: {len(documents)}개 문서 -> {out_dir}")
 
 
+# 질문 목록을 미리 bge-m3로 임베딩해서 JSON으로 저장함
 def embed_queries(questions_json: Path, out_json: Path):
     """질문 143개를 미리 bge-m3로 임베딩해서 저장 (StubTextEmbedder가 이걸 읽어서 사용)."""
     questions = json.loads(questions_json.read_text(encoding="utf-8"))
@@ -124,6 +128,7 @@ def embed_queries(questions_json: Path, out_json: Path):
     print(f"질문 {len(out)}개 사전 임베딩 완료 -> {out_json}")
 
 
+# CLI 인자를 파싱해 엔티티 재임베딩, lancedb 생성, (선택) 질문 사전임베딩을 실행함
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mail-entities", type=Path, required=True)

@@ -1,3 +1,7 @@
+# 소셜 데이터 유형별 config(JSON)와 Jinja2 템플릿(.j2)을 기반으로, GraphRAG 워크플로우별 프롬프트 텍스트와 설정 파일(settings.yaml)을 렌더링하여 저장한다.
+
+#This script renders workflow-specific prompt texts and a settings.yaml configuration file for GraphRAG, based on domain-specific JSON configs and Jinja2 (.j2) templates.
+
 import json
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 from pathlib import Path
@@ -10,7 +14,7 @@ class PromptTemplate:
         "global_search" : ["map", "reduce", "knowledge"]
     }
 
-    # 생성자
+    # 생성자:  config 경로/출력 경로를 설정하고, .j2 템플릿을 로드할 Jinja2 환경을 생성
     def __init__(self, domain: str):
         self.domain = domain
         self.config_path = Path(__file__).parent/"configs"/f"{domain}.json"
@@ -31,8 +35,6 @@ class PromptTemplate:
     def _render_one_prompt(self, name: str, context: dict, prompts_dir: Path): 
         template = self.env.get_template(f"{name}.j2")
         rendered = template.render(**context)   # j2 템플릿의 context에 실제 값을 채워 완성된 문자열을 리턴
-
-        # assert "{{" not in rendered and "{%" not in rendered, f"unrendered tag left in {name}.txt"     # 렌더링 성공 여부 검사. 잔존 태그가 있으면 에러 발생
 
         output_path = prompts_dir/f"{name}.txt"
         output_path.write_text(rendered, encoding="utf-8")

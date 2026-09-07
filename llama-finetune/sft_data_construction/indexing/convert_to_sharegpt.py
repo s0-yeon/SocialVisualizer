@@ -17,14 +17,16 @@ VAL_RATIO = 0.08  # ~950 train / ~81 val, matching the split used for v5 trainin
 SEED = 42
 
 
+# instruction 텍스트를 MARKER 문구 기준으로 앞부분(system)과 뒷부분(human)으로 분리함
 def split_system_human(instruction):
     idx = instruction.find(MARKER)
     if idx == -1:
         raise ValueError("split marker not found")
-    split_at = idx + len(MARKER)
+    split_at = idx + len(MARKER)  # MARKER 문구 자체는 system 쪽에 포함시킴
     return instruction[:split_at], instruction[split_at:]
 
 
+# 하나의 instruction/output 쌍을 ShareGPT 3-turn(system/human/gpt) 대화 레코드로 변환함
 def to_sharegpt_record(pair):
     system, human = split_system_human(pair["instruction"])
     return {
@@ -36,6 +38,7 @@ def to_sharegpt_record(pair):
     }
 
 
+# 레코드 목록을 JSONL 파일로 저장하고, 메일/메신저 도메인별 건수를 집계해 출력함
 def write_jsonl(records, out_path):
     n_mail, n_msg = 0, 0
     with open(out_path, "w", encoding="utf-8") as f:
@@ -48,6 +51,7 @@ def write_jsonl(records, out_path):
     print(f"{out_path} -> mail: {n_mail}  messenger: {n_msg}  total: {n_mail + n_msg}")
 
 
+# 최종 SFT 쌍을 고정 시드로 셔플/분할한 뒤 train/val ShareGPT JSONL로 각각 저장하는 진입점
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--work-dir", default="./work")
@@ -60,7 +64,7 @@ def main():
     shuffled = pairs[:]
     rng.shuffle(shuffled)
     n_val = max(1, round(len(shuffled) * VAL_RATIO))
-    val_pairs, train_pairs = shuffled[:n_val], shuffled[n_val:]
+    val_pairs, train_pairs = shuffled[:n_val], shuffled[n_val:]  # 셔플된 앞부분을 val, 나머지를 train으로 사용
 
     train_records = [(to_sharegpt_record(p), p["_meta"]) for p in train_pairs]
     val_records = [(to_sharegpt_record(p), p["_meta"]) for p in val_pairs]

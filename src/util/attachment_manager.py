@@ -1,3 +1,7 @@
+# 첨부파일/문서 파일(PDF, DOCX, HWP, TXT, PPTX, XLSX, CSV)에서 텍스트를 추출하는 유틸 함수 모음과, base64로 전달된 첨부파일을 서버 로컬 디스크에 저장하는 함수를 제공한다.
+
+# Utility functions for extracting text from attachment/document files (PDF, DOCX, HWP, TXT, PPTX, XLSX, CSV), plus a function for saving base64-encoded attachments to local disk on the server.
+
 import os
 import zlib
 import uuid
@@ -19,7 +23,7 @@ from util.file_manager import _sanitize_filename
 
 load_dotenv("src/parquet/.env")
 
-# PDF 파일에서 텍스트 추출
+# PDF 파일의 모든 페이지에서 텍스트를 추출해 이어붙여 반환한다
 def _extract_text_from_pdf(file_path):
     text = ""
     try:
@@ -30,7 +34,7 @@ def _extract_text_from_pdf(file_path):
         print(f"[PDF Extract Error] {e}")
     return text
 
-# Word 파일에서 텍스트 추출
+# Word(docx) 파일의 모든 문단 텍스트를 추출해 반환한다
 def _extract_text_from_docx(file_path):
     text = ""
     try:
@@ -41,7 +45,7 @@ def _extract_text_from_docx(file_path):
         print(f"[Docx Extract Error] {e}")
     return text
 
-# HWP 파일에서 텍스트 추출
+# HWP 파일의 BodyText 스트림을 압축 해제·디코딩해 텍스트를 추출한다
 def _extract_text_from_hwp(file_path):
     text = ""
     try:
@@ -63,7 +67,7 @@ def _extract_text_from_hwp(file_path):
         print(f"[HWP Extract Error] {e}")
     return text
 
-# TXT 파일에서 텍스트 추출
+# TXT 파일을 utf-8 → cp949 순으로 시도해 읽어 텍스트를 반환한다
 def _extract_text_from_txt(file_path):
     text = ""
     try:
@@ -79,7 +83,7 @@ def _extract_text_from_txt(file_path):
         print(f"[TXT Extract Error] {e}")
     return text
 
-# PPTX 파일에서 텍스트 추출
+# PPTX 파일의 모든 슬라이드 도형에서 텍스트를 추출해 반환한다
 def _extract_text_from_pptx(file_path):
     text = ""
     try:
@@ -92,7 +96,7 @@ def _extract_text_from_pptx(file_path):
         print(f"[PPTX Extract Error] {e}")
     return text
 
-# XLSX 파일에서 텍스트 추출
+# XLSX 파일의 모든 시트 셀 값을 시트별로 이어붙여 텍스트로 반환한다
 def _extract_text_from_xlsx(file_path):
     text = ""
     try:
@@ -108,7 +112,7 @@ def _extract_text_from_xlsx(file_path):
         print(f"[XLSX Extract Error] {e}")
     return text
 
-# CSV 파일에서 텍스트 추출
+# CSV 파일의 각 행을 " | "로 이어붙여 텍스트로 반환한다 (utf-8 → cp949 순 시도)
 def _extract_text_from_csv(file_path):
     text = ""
     try:
@@ -130,7 +134,7 @@ def _extract_text_from_csv(file_path):
         print(f"[CSV Extract Error] {e}")
     return text
 
-# attachment payload에서 base64를 받아 서버 로컬에 파일 저장
+# 첨부 payload의 base64 데이터를 디코딩해 고유 파일명으로 저장하고 (저장경로, 원본이름)을 반환한다
 def _save_attachment_from_base64(file_info: dict, save_dir: str) -> tuple[str, str]:
     original_name = file_info.get("name") or "attachment.bin"
     safe_name = _sanitize_filename(original_name)
