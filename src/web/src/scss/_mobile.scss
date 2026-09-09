@@ -1,0 +1,570 @@
+/*
+ 모바일(좁은 화면) 전용 오버라이드 레이어.
+ 데스크톱 레이아웃은 그대로 두고, 좁은 화면(≤768px, 네비는 ≤1180px)에서만 적용된다.
+ main.scss 맨 끝에서 @use → 컴포넌트 스타일보다 나중 로드. 단 페이지별 청크 CSS
+ (pages/*.scss)는 이보다 더 나중이라, 겹치는 선언은 !important + body 페이지클래스
+ (.page-mypeople 등, 명시도 0-2-0)로 못박는다.
+
+ 구성:
+  1. 상단 네비 햄버거
+  2. 좌측 필터 사이드바 → 오프캔버스 드로어
+  3. 전역: 사이드바 변수 0, 세로 스크롤 허용, 가로 overflow 차단
+  4. useScaleToFit 페이지(mypeople / mytime / imap-collect / home) — scale 해제 후
+     세로로 흐르게 (JS 가드는 useScaleToFit.js 에 별도)
+  5. 페이지별 잘림 수정 (recap, graphviz, search)
+  6. 플로팅 검색 버튼 → 우하단
+*/
+
+$nav-bp: 1180px;
+$mobile-bp: 768px;
+
+// 데스크톱에서 완전히 숨기는 요소들 (아래 미디어쿼리가 나중이라 좁은 화면에서 켜짐)
+.gw-nav-toggle,
+.gws-mobile-open,
+.gws-rail-backdrop {
+  display: none;
+}
+
+/* ═══════════════ 1. 상단 네비 햄버거 ═══════════════ */
+
+.gw-nav-toggle {
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #000;
+  font-size: 1.35rem;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+}
+
+@media (max-width: $nav-bp) {
+  .gw-nav-toggle {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .gw-top-links.is-open {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+
+    position: fixed;
+    top: 70px;
+    left: 0;
+    right: 0;
+    z-index: 1200;
+    padding: 8px 12px 14px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    max-height: calc(100vh - 70px);
+    overflow-y: auto;
+
+    .gw-tl {
+      width: 100%;
+      justify-content: flex-start;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    .gw-tl-dropdown {
+      display: flex;
+      flex-direction: column;
+    }
+    .gw-tl-dd-btn .bi-chevron-down {
+      display: none;
+    }
+    .gw-tl-dd-menu {
+      display: block;
+      position: static;
+      transform: none;
+      box-shadow: none;
+      min-width: 0;
+      padding: 0 0 4px;
+
+      a {
+        padding: 10px 14px 10px 30px;
+        font-size: 0.95rem;
+      }
+    }
+  }
+
+  .gw-nav-backdrop {
+    position: fixed;
+    inset: 70px 0 0;
+    z-index: 1150;
+    background: rgba(20, 20, 20, 0.35);
+  }
+}
+
+/* ═══════════════ 2·3. 전역 폰 레이아웃 ═══════════════ */
+
+@media (max-width: $mobile-bp) {
+  // 3a. 여러 페이지가 body/html 에 overflow:hidden 을 걸어 세로 스크롤까지 막는다 → 해제.
+  //     가로는 clip 으로 막되(페이지가 옆으로 안 밀림), overflow-clip-margin 으로
+  //     카드 그림자 정도는 가장자리까지 번지게 허용.
+  html,
+  body {
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+  body {
+    overflow-clip-margin: 28px;
+  }
+
+  // 3b. 사이드바 폭 변수 강제 0
+  :root {
+    --gw-sidebar-w: 0px !important;
+  }
+
+  .top_nav,
+  .right_col {
+    margin-left: 0 !important;
+  }
+
+  /* ── 2. 좌측 필터 사이드바 → 오프캔버스 드로어 ── */
+  .gws-rail {
+    top: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 1300 !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.28);
+
+    &.is-mobile-open {
+      transform: translateX(0) !important;
+    }
+  }
+  .gws-rail-shadow {
+    display: none !important;
+  }
+  .gws-mobile-open {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1250;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 52px;
+    padding: 0 6px 0 2px;
+    border: none;
+    border-radius: 0 12px 12px 0;
+    background: var(--gt-primary, #f97316);
+    color: #fff;
+    font-size: 1.05rem;
+    box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+  }
+  .gws-rail.is-mobile-open ~ .gws-mobile-open {
+    display: none;
+  }
+  .gws-rail-backdrop:not([hidden]) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1280;
+    background: rgba(20, 20, 20, 0.45);
+  }
+
+  /* ── 6. 플로팅 검색 버튼 — 우상단 유지(_floating-search.scss 기본값). 패널만 폰 폭에 맞춤 ── */
+  .gwfs-panel {
+    left: 12px !important;
+    right: 12px !important;
+    top: 64px !important;
+    width: auto !important;
+    max-height: 72vh !important;
+  }
+  // 검색 페이지엔 이미 검색창이 있으므로 플로팅 위젯 숨김
+  .page-search .gwfs-btn,
+  .page-search .gwfs-panel {
+    display: none !important;
+  }
+
+  /* ═══════════════ 4. useScaleToFit 페이지 — scale 해제 + 세로 흐름 ═══════════════ */
+  /* (JS 가드가 transform 을 안 걸지만, 늦게 로드되는 페이지 청크가 고정 폭을
+     유지하므로 여기서 폭/overflow/position 을 함께 푼다) */
+
+  /* ── My People ── */
+  .page-mypeople {
+    .right_col {
+      position: static !important;
+      inset: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+      padding: 80px 0 32px !important;
+    }
+    .mp-page {
+      position: static !important;
+      inset: auto !important;
+      height: auto !important;
+      bottom: auto !important;
+      display: block !important;
+      padding: 12px !important;
+    }
+    .mp-content {
+      display: block !important;
+      overflow: visible !important;
+    }
+    .mp-left,
+    .mp-right {
+      width: 100% !important;
+      min-height: 0 !important;
+    }
+    // scale 캔버스들 — 자연 크기 대신 전체폭, 안쪽 줄바꿈
+    .mp-panel-header,
+    .mp-panel-header-canvas,
+    .mp-detail,
+    .mp-detail-canvas {
+      transform: none !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+      height: auto !important;
+    }
+    .mp-header-left {
+      flex-wrap: wrap !important;
+      gap: 8px 12px !important;
+    }
+    .mp-title {
+      font-size: 1.6rem !important;
+    }
+    .mp-detail-canvas {
+      overflow-x: auto !important;
+    }
+    // 사람 카드 그리드
+    .mp-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
+    }
+    .mp-grid.mp-room-grid {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+    // 이름 잘림: 정사각형 카드(aspect-ratio:1/1 + overflow:hidden)가 이름 2번째 줄을 자름
+    .mp-card {
+      aspect-ratio: auto !important;
+      height: auto !important;
+      padding: 6px 4px 8px !important;
+    }
+    .mp-avatar {
+      width: 60% !important;
+    }
+    .mp-name {
+      // cardHtml 이 인라인 style 로 font-size 를 박으므로 !important 로만 이길 수 있음
+      font-size: clamp(0.62rem, 3cqw, 0.8rem) !important;
+      -webkit-line-clamp: 3 !important;
+      line-clamp: 3 !important;
+      word-break: break-word !important;
+    }
+    // "무관한 관계" 밴드 카드 — 모바일에서 5열(66px)로 떨어져 이름이 최악 → 3열
+    .mp-band-cards .mp-card {
+      flex-basis: calc((100% - 2 * 7px) / 3) !important;
+      width: auto !important;
+    }
+    // 하단 고정 타임라인(1600px 캔버스) → 모바일에선 숨김(부가 필터, 가로 스크롤 방지)
+    .mp-timeline {
+      display: none !important;
+    }
+    // 워드클라우드가 카드 밖으로 안 나가게
+    .mp-wc-wrap {
+      max-width: 100% !important;
+      overflow: hidden !important;
+    }
+  }
+
+  /* ── My Time ── (1500px 캔버스 → 전체폭. .mt-two-col 은 이미 @820px 에서 세로 스택) */
+  .page-mytime {
+    .right_col {
+      position: static !important;
+      inset: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+      padding: 80px 0 24px !important;
+    }
+    .mt-page {
+      position: static !important;
+      inset: auto !important;
+      height: auto !important;
+      padding: 12px !important;
+    }
+    .mt-page-header,
+    .mt-view {
+      transform: none !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      overflow: visible !important;
+      // display 는 건드리지 않음 — #mt-messenger-view 의 인라인 display:none 을 살려야 함.
+      // flex 중앙정렬만 해제해서 1500px 캔버스가 왼쪽부터 전체폭을 쓰게.
+      justify-content: flex-start !important;
+      align-items: stretch !important;
+    }
+    .mt-page-header-canvas,
+    .mt-view-canvas {
+      transform: none !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      flex-shrink: 1 !important;
+    }
+    .mt-two-col {
+      overflow-y: visible !important;
+    }
+    .mt-pointer-wrap {
+      padding: 14px 14px 12px !important;
+    }
+    .mt-node-label,
+    .mt-pa-lbl {
+      font-size: 0.8rem !important;
+    }
+  }
+
+  /* ── imap-collect ── (1900px 2열 캔버스 → 1열 세로 스택: ①→왼쪽→②→오른쪽)
+     imap-collect.scss 의 @media(max-width:1px) 죽은 블록(L670·710·793)을 이식 */
+  .page-imap-collect {
+    .right_col {
+      position: static !important;
+      inset: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+      padding: 80px 0 24px !important;
+    }
+    .ic-scale-wrap {
+      display: block !important;
+      transform: none !important;
+      width: 100% !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .gw-collect-wrap {
+      transform: none !important;
+      width: auto !important;
+      max-width: 100% !important;
+      padding: 8px 12px 24px !important;
+    }
+    .gw-split-grid-wrapper {
+      grid-template-columns: 1fr !important;
+      gap: 20px !important;
+      margin-top: 16px !important;
+    }
+    .gw-split-grid-wrapper::after {
+      display: none !important;
+    }
+    .gw-split-header-left {
+      grid-column: 1 !important;
+      order: 1;
+      height: auto !important;
+      flex-wrap: wrap !important;
+      gap: 8px 10px !important;
+    }
+    .gw-tab-btn {
+      padding: 7px 14px !important;
+      font-size: 0.95rem !important;
+      white-space: nowrap;
+    }
+    .gw-split-left-content {
+      grid-column: 1 !important;
+      order: 2;
+      width: 100% !important;
+      margin-bottom: 24px;
+    }
+    .gw-split-header-right {
+      grid-column: 1 !important;
+      order: 3;
+      height: auto !important;
+      margin-top: 0 !important;
+    }
+    .gw-split-right-content {
+      grid-column: 1 !important;
+      order: 4;
+      width: 100% !important;
+    }
+    .gw-collect-cards-column {
+      grid-template-columns: 1fr !important;
+      grid-template-rows: none !important;
+    }
+    .gw-collect-cards-column .gw-card {
+      display: block !important;
+      grid-template-rows: none !important;
+      grid-row: auto !important;
+    }
+    .gw-folder-list {
+      height: auto !important;
+      max-height: 120px !important;
+    }
+    #tab-panel-message .gw-form-grid {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
+  /* ── Home ── 스크롤 없이 한 화면: 장식용 미리보기 숨기고 히어로만 */
+  .page-index {
+    // 정적 스크린샷 2장(장식) — 제거해야 [제목+설명+CTA] 가 한 화면에 들어옴
+    .gw-hero-previews {
+      display: none !important;
+    }
+    .gw-hero-scale-wrap {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+      align-items: flex-start !important;
+    }
+    .gw-orbit-hero {
+      transform: none !important;
+      max-width: 100% !important;
+      // 세로 가운데 살짝 위: 헤더(70) + 여백. 프리뷰 숨겨 한 화면에 들어옴
+      padding: clamp(110px, 27vh, 240px) 18px 24px !important;
+      min-height: 0 !important;
+    }
+    .gw-orbit-left {
+      margin-top: 0 !important;
+      align-items: center !important;
+      text-align: center !important;
+    }
+    .gw-hero-headline,
+    .gw-hero-desc {
+      white-space: normal !important;
+      max-width: 100% !important;
+    }
+    // home.scss 의 clamp 하한(3.4rem)이 폰에서 "Visualizer" 한 단어를 못 담아 잘림 → 축소
+    .gw-hero-headline {
+      font-size: clamp(1.9rem, 8.5vw, 3rem) !important;
+      margin-bottom: 10px !important;
+    }
+    .gw-hero-desc {
+      font-size: 0.98rem !important;
+      margin-bottom: 22px !important;
+    }
+  }
+
+  /* ═══════════════ 5. 페이지별 잘림 수정 ═══════════════ */
+
+  /* ── Recap ── */
+  .page-recap {
+    .right_col {
+      padding: 78px 0 40px !important;
+    }
+    .rc-content {
+      padding: 0 12px 32px !important;
+    }
+    .rc-card {
+      padding: 16px !important;
+      max-width: 100% !important;
+      overflow: hidden !important;
+    }
+    // 동기화 타일 3열 → 2열
+    .rc-sync-tiles {
+      grid-template-columns: 1fr 1fr !important;
+    }
+    .rc-sync-tile {
+      overflow: visible !important;
+      height: auto !important;
+    }
+    // 잘린 글 전부 자동 줄바꿈으로 (truncation 해제)
+    .rc-rank1-name,
+    .rc-rank1-email,
+    .rc-bar-name,
+    .rc-af-legend-name,
+    .rc-af-legend-email,
+    .rc-sync-tile-num,
+    .rc-sync-date,
+    .rc-mm-count,
+    .rc-mm-label {
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      word-break: break-word !important;
+    }
+    .rc-sync-tile-num,
+    .rc-sync-date {
+      font-size: 0.82rem !important;
+    }
+    // 도넛: 고정 240px 대신 카드/뷰포트 비례
+    .rc-af-chart-container {
+      width: min(240px, 62vw) !important;
+      height: min(240px, 62vw) !important;
+    }
+    .rc-af-legend {
+      max-width: 100% !important;
+    }
+    // 워드클라우드 카드 밖으로 안 나가게
+    .rc-wc-wrap {
+      max-width: 100% !important;
+      overflow: hidden !important;
+    }
+    .rc-wc-word {
+      font-size: clamp(12px, 4.5vw, 30px) !important;
+    }
+    // 월별 막대는 내부 가로 스크롤 유지 (min-width 축소)
+    .rc-mm-col {
+      min-width: 26px !important;
+    }
+  }
+
+  /* ── Knowledge graph ── */
+  .page-graph-viz {
+    .right_col {
+      padding: 70px 0 0 !important;
+    }
+    #graph-section {
+      height: calc(100dvh - 70px) !important;
+      min-height: 420px;
+    }
+    // 계정 픽커 패널: 절대배치 유지하되 줄바꿈 + 폭 제한(우상단 검색 버튼 공간 확보)
+    .gv-picker-panel {
+      flex-wrap: wrap !important;
+      max-width: calc(100vw - 72px) !important;
+      row-gap: 6px !important;
+      padding: 8px 10px !important;
+    }
+    .gw-account-picker {
+      max-width: 100% !important;
+    }
+    .gv-domain-toggle {
+      flex-shrink: 0;
+    }
+  }
+
+  /* ── Search ── */
+  .page-search {
+    .gw-tabs,
+    .gw-search-top,
+    .gw-result-wrapper {
+      padding-left: 16px !important;
+      padding-right: 16px !important;
+    }
+    .gw-mail-drawer.is-open {
+      width: 100% !important;
+    }
+    // 입력창 좌우 패딩 줄여 placeholder 더 보이게
+    .gw-search-box input {
+      padding: 15px 50px 15px 16px !important;
+    }
+    // 최근 검색 칩: 긴 질의가 줄 밖으로 안 나가게
+    .gw-recent-tag {
+      max-width: 100% !important;
+      white-space: normal !important;
+      word-break: break-word !important;
+      text-align: left;
+    }
+  }
+
+  /* ── AnalysisHub ── (거의 반응형이지만 상단 여백만 정리) */
+  .page-analysis-hub .right_col {
+    padding: 78px 16px 32px !important;
+  }
+}

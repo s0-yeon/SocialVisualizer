@@ -43,10 +43,26 @@ export function renderAppSidebar(containerId = "app-sidebar") {
          블러 없는 얇은 그라디언트 띠를 별도 엘리먼트로 둬서, 사이드바 높이와
          정확히 같은 범위(top:60px~bottom:0)에만 그림자가 지도록 함. -->
     <div class="gws-rail-shadow" aria-hidden="true"></div>
+    <!-- 좁은 화면 전용(_mobile.scss 에서만 표시): 드로어를 여는 플로팅 버튼 + 백드롭 -->
+    <button type="button" id="gws-mobile-open" class="gws-mobile-open" aria-label="소셜 데이터 선택 열기">
+      <i class="bi bi-funnel-fill"></i>
+    </button>
+    <div class="gws-rail-backdrop" id="gws-rail-backdrop" hidden></div>
   `;
 
   const sidebarEl = document.getElementById("sidebar");
   const toggleBtn = document.getElementById("sidebar-toggle-btn");
+
+  // 좁은 화면: 사이드바를 오프캔버스 드로어로 열고 닫는다. (데스크톱에서는 버튼/백드롭이 CSS로 숨겨져 있어 무해)
+  const mobileOpenBtn = document.getElementById("gws-mobile-open");
+  const backdrop = document.getElementById("gws-rail-backdrop");
+  if (mobileOpenBtn) {
+    mobileOpenBtn.onclick = () => {
+      sidebarEl.classList.add("is-mobile-open");
+      if (backdrop) backdrop.hidden = false;
+    };
+  }
+  if (backdrop) backdrop.onclick = closeMobileSidebar;
 
   // 사이드바 너비를 CSS 변수(--gw-sidebar-w)로 노출해서, 오른쪽 페이지가 어떤 구조든(position:fixed인 .mp-page, 일반 흐름인 .right_col 등) 이 변수 하나만 보고 자기 폭/패딩을 늘리고 줄이게 한다.
   const SIDEBAR_W = { expanded: "288px", collapsed: "84px" };
@@ -71,6 +87,13 @@ export function renderAppSidebar(containerId = "app-sidebar") {
   store.setFilter("mail", null);
 
   refreshSidebarList();
+}
+
+// 좁은 화면에서 열린 오프캔버스 드로어를 닫는다(백드롭 클릭 / 항목 선택 후).
+function closeMobileSidebar() {
+  document.getElementById("sidebar")?.classList.remove("is-mobile-open");
+  const bd = document.getElementById("gws-rail-backdrop");
+  if (bd) bd.hidden = true;
 }
 
 // XSS 방지용 최소 HTML 이스케이프 (텍스트 노드용)
@@ -189,6 +212,7 @@ function bindSidebarEvents() {
         store.setFilter("room", value);
       }
 
+      closeMobileSidebar();
       refreshSidebarList();
     };
   });

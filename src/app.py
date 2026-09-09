@@ -817,7 +817,7 @@ def init_storage():
   window.location.replace('/dashboard/');
 </script>
 <p>설정 중... 자동으로 이동합니다.</p>
-</body></html>""", 200, {{'Content-Type': 'text/html; charset=utf-8'}}
+</body></html>""", 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 # dist 루트의 favicon.ico를 서빙한다 (브라우저 기본 요청의 404 로그 방지)
 @app.route('/favicon.ico')
