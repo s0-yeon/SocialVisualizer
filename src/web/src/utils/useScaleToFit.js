@@ -27,6 +27,13 @@ export function useScaleToFit(ref, origin = "top center") {
 
     function measureAndScale() {
       content.style.transform = "none";
+      // 모바일(≤768px)에서는 통째로 축소하지 않는다 — 축소하면 내용이 읽을 수 없이
+      // 작아지고 아래에 빈 letterbox 공간만 남는다. _mobile.scss 가 이 캔버스들을
+      // 자연 크기 + 세로 흐름 / 자체 가로 스크롤로 다시 배치한다.
+      if (window.matchMedia("(max-width: 768px)").matches) {
+        content.style.transformOrigin = "";
+        return;
+      }
       const naturalW = content.offsetWidth;
       const naturalH = content.offsetHeight;
       const availW = wrap.clientWidth;

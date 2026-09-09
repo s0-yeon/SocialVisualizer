@@ -9,6 +9,7 @@ import android.webkit.WebViewClient
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
 
@@ -18,7 +19,7 @@ import androidx.core.view.updatePadding
  * - 웹 자산을 담지 않는다. START_URL 만 로드한다.
  * - START_URL 은 ngrok 고정 도메인으로 교체할 것. 도메인이 바뀌면 여기만 고치고 재빌드.
  */
-private const val START_URL = "https://YOUR-STATIC-DOMAIN.ngrok-free.app/init"
+private const val START_URL = "https://interatrial-tana-wishfully.ngrok-free.dev/init"
 
 class MainActivity : AppCompatActivity() {
 
@@ -27,6 +28,9 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 웹 콘텐츠가 상태바/네비바 밑으로 깔리지 않도록(edge-to-edge 해제).
+        WindowCompat.setDecorFitsSystemWindows(window, true)
 
         webView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -60,8 +64,8 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
 
-        // targetSdk 35+ 는 edge-to-edge 가 기본이라 웹 콘텐츠가 상태바 밑으로 깔린다.
-        // 시스템 바 높이만큼 패딩을 줘서 웹 상단 고정 헤더가 안 가리게 한다.
+        // 일부 기기에서 setDecorFitsSystemWindows 만으로 하단 제스처바가 안 밀릴 때 대비 —
+        // 시스템 바 인셋을 패딩으로 한 번 더 반영.
         ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.updatePadding(top = bars.top, bottom = bars.bottom, left = bars.left, right = bars.right)
