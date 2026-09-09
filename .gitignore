@@ -39,3 +39,10 @@ user_data/*
 __pycache__/
 *.pyc
 .venv/
+
+# Android WebView 앱: 실제 Gradle 프로젝트는 한글 경로 문제로 저장소 밖
+# (C:\Users\<name>\AndroidStudioProjects\MailGrapherWebView) 에 둔다.
+# android-app/ 에는 README.md 와 reference/ 만 커밋. 혹시 모를 생성물 방어:
+android-app/**/build/
+android-app/**/.gradle/
+android-app/**/*.apk

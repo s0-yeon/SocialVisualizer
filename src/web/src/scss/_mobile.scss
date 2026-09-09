@@ -1,0 +1,196 @@
+/*
+ 모바일(좁은 화면) 전용 오버라이드 레이어 — "수준 0".
+ 데스크톱 레이아웃은 그대로 두고, 좁은 화면에서만 아래 규칙이 적용된다.
+ 이 파일은 main.scss 맨 끝에서 @use 되므로 다른 컴포넌트 스타일보다 나중에 로드된다.
+ (단, 페이지별 청크 CSS 는 이보다 더 나중에 로드되므로, 그쪽과 겹치는 선언은 !important 로 못박는다.)
+
+ 다루는 것:
+  1) 상단 네비(.gw-top-links) — 좁아지면 기존 코드가 그냥 숨겨버려서 이동 수단이 없어짐 → 햄버거 토글
+  2) 좌측 필터 사이드바(.gws-rail) — position:fixed 288px 가 콘텐츠를 덮음 → 오프캔버스 드로어 + 플로팅 열기 버튼
+  3) 사이드바 폭 변수(--gw-sidebar-w) 를 0 으로 강제해 본문이 전체폭을 쓰게 함
+  4) 가로 스크롤 방지
+
+ 다루지 않는 것(수준 1): My People 상세/타임라인, My Time 본문의 useScaleToFit 재설계, D3 그래프 터치.
+*/
+
+// 상단 네비가 원래 사라지는 지점(_header.scss 의 @media max-width:1180px)과 맞춤
+$nav-bp: 1180px;
+// 폰/작은 태블릿 레이아웃 전환 지점
+$mobile-bp: 768px;
+
+// 햄버거 버튼 / appSidebar.js 가 항상 주입하는 요소들(플로팅 열기 버튼·백드롭) 은
+// 데스크톱에서 완전히 숨긴다. 아래 미디어쿼리가 이보다 나중에 나오므로 좁은 화면에서 켜진다.
+.gw-nav-toggle,
+.gws-mobile-open,
+.gws-rail-backdrop {
+  display: none;
+}
+
+/* ───────────────────────── 1. 상단 네비 햄버거 ───────────────────────── */
+
+.gw-nav-toggle {
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #000;
+  font-size: 1.35rem;
+  cursor: pointer;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+}
+
+@media (max-width: $nav-bp) {
+  .gw-nav-toggle {
+    display: inline-flex;
+    margin-left: auto; // .nav_menu(justify-content:space-between) 안에서 오른쪽 끝으로
+  }
+
+  // _header.scss 의 `@media (max-width:1180px){ .gw-top-links{display:none} }` 를
+  // 이겨서, 열림 상태일 때만 세로 패널로 펼친다.
+  .gw-top-links.is-open {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+
+    position: fixed;
+    top: 70px; // .top_nav min-height
+    left: 0;
+    right: 0;
+    z-index: 1200;
+    padding: 8px 12px 14px;
+    background: #fff;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+    max-height: calc(100vh - 70px);
+    overflow-y: auto;
+
+    .gw-tl {
+      width: 100%;
+      justify-content: flex-start;
+      padding: 12px 14px;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    // 드롭다운(View results) 자식 메뉴는 hover 대신 항상 펼쳐서 들여쓰기
+    .gw-tl-dropdown {
+      display: flex;
+      flex-direction: column;
+    }
+    .gw-tl-dd-btn .bi-chevron-down {
+      display: none;
+    }
+    .gw-tl-dd-menu {
+      display: block;
+      position: static;
+      transform: none;
+      box-shadow: none;
+      min-width: 0;
+      padding: 0 0 4px;
+
+      a {
+        padding: 10px 14px 10px 30px;
+        font-size: 0.95rem;
+      }
+    }
+  }
+
+  .gw-nav-backdrop {
+    position: fixed;
+    inset: 70px 0 0;
+    z-index: 1150;
+    background: rgba(20, 20, 20, 0.35);
+  }
+}
+
+/* ───────────────────── 2·3·4. 폰 레이아웃 ───────────────────── */
+
+@media (max-width: $mobile-bp) {
+  // 4. 가로 스크롤 방지
+  html,
+  body {
+    overflow-x: hidden;
+    max-width: 100%;
+  }
+
+  // 3. 사이드바 폭 변수 강제 0 — appSidebar.js 가 documentElement 에 인라인으로
+  //    288px/84px 를 넣지만, 스타일시트의 !important 가 인라인 non-important 를 이긴다.
+  :root {
+    --gw-sidebar-w: 0px !important;
+  }
+
+  // 레거시 admin 템플릿에서 남은 사이드바 오프셋 잔재 무력화
+  .top_nav,
+  .right_col {
+    margin-left: 0 !important;
+  }
+
+  // 참고: My People(.mp-page)·My Time(.mt-page) 은 자체 scss 가 ≤640px 에서 이미
+  // 좌우 패딩을 줄이고(--gw-sidebar-w 를 0 으로 강제했으므로 그 값이 그대로 먹음),
+  // 본문은 useScaleToFit 로 축소 렌더된다 → 수준 1에서 재작업. 여기서는 건드리지 않음.
+
+  // 2. 좌측 필터 사이드바 → 오프캔버스 드로어.
+  //    (페이지 청크의 base .gws-rail 이 이 파일보다 나중에 로드되므로 !important 로 못박음)
+  .gws-rail {
+    top: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    z-index: 1300 !important; // 헤더(1000)·백드롭 위
+    transform: translateX(-100%) !important;
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 0 40px rgba(0, 0, 0, 0.28);
+
+    &.is-mobile-open {
+      transform: translateX(0) !important;
+    }
+  }
+
+  // 데스크톱 접기 그림자 띠는 모바일에서 불필요
+  .gws-rail-shadow {
+    display: none !important;
+  }
+
+  // 드로어를 여는 손잡이 (appSidebar.js 가 주입). 왼쪽 가장자리 중앙에서 살짝
+  // 튀어나온 반쪽 탭 — 헤더(로고/검색)·페이지 제목·하단 타임라인 어느 것과도 안 겹침.
+  .gws-mobile-open {
+    position: fixed;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1250;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 52px;
+    padding: 0 6px 0 2px;
+    border: none;
+    border-radius: 0 12px 12px 0;
+    background: var(--gt-primary, #f97316);
+    color: #fff;
+    font-size: 1.05rem;
+    box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+  }
+  // 드로어가 열려 있으면 여는 버튼은 숨김 (DOM 상 .gws-rail 뒤 형제)
+  .gws-rail.is-mobile-open ~ .gws-mobile-open {
+    display: none;
+  }
+
+  // 드로어 백드롭 (hidden 속성으로 토글) — base 규칙의 display:none 을 이겨야 하므로 명시
+  .gws-rail-backdrop:not([hidden]) {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 1280;
+    background: rgba(20, 20, 20, 0.45);
+  }
+}
