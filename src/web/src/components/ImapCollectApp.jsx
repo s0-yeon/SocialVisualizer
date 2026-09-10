@@ -1,8 +1,7 @@
 import { createRoot } from "react-dom/client";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import Header from "./Header.jsx";
 import { initImapCollectPage } from "../features/imapCollectEngine.js";
-import { useScaleToFit } from "../utils/useScaleToFit.js";
 
 /**
 "소셜 데이터 분석" 페이지(imap-collect.html) 전체를 감싸는 최상위 React 컴포넌트 — 헤더와 메일/메신저 탭 폼, job 로그 패널 마크업을 마운트한다.
@@ -11,30 +10,22 @@ IMAP 로그인, 폴더 조회, 수집 시작, SSE로 진행상황 추적, 카카
 참고: 원본 HTML에는 사이드바(#app-sidebar)와 푸터(#app-footer)가 없다 — 이 페이지는 헤더만 쓴다.
 그대로 유지했다.
 
-Top-level React component wrapping the entire "social data collection" page (imap-collect.html) — mounts the header and the mail/messenger tab forms + job log panel markup.
+Top-level React component wrapping the entire "social data analysis" page (imap-collect.html) — mounts the header and the mail/messenger tab forms + job log panel markup.
 Actual behavior (IMAP login, folder listing, starting a collection, SSE progress tracking, KakaoTalk chat upload) is owned by imapCollectEngine.js (a module that ports the original logic nearly verbatim); this component just calls initImapCollectPage() once right after mount to wire that engine up to this DOM (same pattern as My Time/My People — structure drawn by React, behavior owned by the existing engine inside a useEffect).
 
 Note: the original HTML has no sidebar (#app-sidebar) or footer (#app-footer) — this page only uses the header.
 Kept as-is.
  */
 function ImapCollectApp() {
-  const contentRef = useRef(null);
-
   useEffect(() => {
     initImapCollectPage();
   }, []);
-
-  // 창 크기가 바뀌어도 이 페이지 안의 요소·크기 값(카드 크기, 6:4 분할 비율, 구분선 위치 등)은
-  // 전혀 건드리지 않고, 원래 크기 그대로 렌더링된 상태를 매번 다시 측정해서 그 비율만큼
-  // transform:scale()로 통째로 줄이거나 키운다(home.scss의 히어로와 같은 방식).
-  useScaleToFit(contentRef, "top center", 1180);
 
   return (
     <>
       <Header activePage="imap-collect" />
       <main className="right_col" role="main" aria-label="Main content">
-        <div className="ic-scale-wrap">
-        <div className="gw-collect-wrap" ref={contentRef}>
+        <div className="gw-collect-wrap">
           {/* 반반 분할 레이아웃 컨테이너 */}
           <div className="gw-split-grid-wrapper">
             {/* 왼쪽 헤더: 데이터 수집 + 메일/메신저 탭 */}
@@ -381,7 +372,6 @@ function ImapCollectApp() {
           {/* /.gw-split-grid-wrapper */}
         </div>
         {/* /.gw-collect-wrap */}
-        </div>
       </main>
     </>
   );

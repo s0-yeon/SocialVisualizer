@@ -1,7 +1,7 @@
 /*
- * "Recap" 통계 페이지 전용 스타일(인라인 <style>에서 이관, 공통 헤더/사이드바 규칙 제외).
- *
- * Styles for the "Recap" stats page (migrated from inline <style>, excluding shared header/sidebar rules).
+"Recap" 통계 페이지 전용 스타일(인라인 <style>에서 이관, 공통 헤더/사이드바 규칙 제외).
+
+Styles for the "Recap" stats page (migrated from inline <style>, excluding shared header/sidebar rules).
  */
 
 /* 페이지 배경 */
@@ -15,7 +15,7 @@
 .rc-hero {
   background: #ffffff;
   border-bottom: 1px solid #ececec;
-  padding: clamp(24px, 4vw, 36px) clamp(24px, 4.2vw, 40px) clamp(56px, 8.4vw, 80px);
+  padding: 36px 40px 80px;
   position: relative;
   overflow: hidden;
 }
@@ -32,14 +32,14 @@
   margin-bottom: 8px;
 }
 .rc-hero-title {
-  font-size: clamp(1.5rem, 2.4vw, 2rem);
+  font-size: 2rem;
   font-weight: 800;
   color: #302522;
   margin-bottom: 6px;
   letter-spacing: -0.02em;
 }
 .rc-hero-sub {
-  font-size: clamp(0.82rem, 1vw, 0.9rem);
+  font-size: 0.9rem;
   color: rgba(48, 37, 34, 0.55);
   font-weight: 400;
 }
@@ -85,7 +85,7 @@
 /* 컨텐츠 영역 (히어로와 겹치게) */
 .rc-content {
   margin-top: -44px;
-  padding: 0 clamp(16px, 3.4vw, 32px) clamp(24px, 4.2vw, 40px);
+  padding: 0 32px 40px;
   position: relative;
   z-index: 2;
 }
@@ -94,16 +94,10 @@
 .rc-card {
   background: #fff;
   border-radius: 20px;
-  padding: clamp(18px, 2.9vw, 28px) clamp(20px, 3.3vw, 32px);
+  padding: 28px 32px;
   margin-bottom: 22px;
   box-shadow: 0 8px 28px rgba(67, 20, 7, 0.2);
   border: none;
-  // .rc-grid2(1fr 1fr) 안에 도넛차트+범례처럼 고정폭 콘텐츠가 든 카드가 있으면, 그리드
-  // 트랙의 기본 min-width(auto = 콘텐츠의 최소 크기)가 반반 분할을 깨고 그 칸을 더 넓게
-  // 밀어버린다. min-width:0으로 그 제약을 없애서 항상 정확히 반반으로 나뉘게 한다.
-  min-width: 0;
-  // 안쪽 요소들이 전체 화면 폭이 아니라 이 카드의 실제 폭 기준으로 비율이 줄어들도록.
-  container-type: inline-size;
 }
 .rc-card-header {
   display: flex;
@@ -112,7 +106,7 @@
   margin-bottom: 24px;
 }
 .rc-card-title {
-  font-size: clamp(0.92rem, 4.4cqw, 1rem);
+  font-size: 1rem;
   font-weight: 800;
   color: #431407;
   display: flex;
@@ -197,8 +191,8 @@
   pointer-events: none;
 }
 .rc-rank1-avatar {
-  width: clamp(44px, 9.5cqw, 56px);
-  height: clamp(44px, 9.5cqw, 56px);
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   background: linear-gradient(135deg, #f7b731, #e67e22);
   display: flex;
@@ -226,7 +220,7 @@
   letter-spacing: 0.5px;
 }
 .rc-rank1-name {
-  font-size: clamp(1rem, 5.4cqw, 1.15rem);
+  font-size: 1.15rem;
   font-weight: 800;
   color: #1a2a3a;
   white-space: nowrap;
@@ -246,7 +240,7 @@
   flex-shrink: 0;
 }
 .rc-rank1-num {
-  font-size: clamp(1.5rem, 9cqw, 2rem);
+  font-size: 2rem;
   font-weight: 800;
   background: linear-gradient(135deg, #f7b731, #e67e22);
   -webkit-background-clip: text;
@@ -333,7 +327,7 @@
 .rc-grid2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: clamp(14px, 1.8vw, 22px); // 다른 요소들과 같은 비율로 줄었다 커지도록(기존 22px)
+  gap: 22px;
 }
 @media (max-width: 900px) {
   .rc-grid2 {
@@ -392,15 +386,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap; // 카드가 아주 좁아지면 도넛과 범례가 겹치지 않고 아래로 떨어지도록
-  gap: clamp(16px, 6cqw, 40px);
+  gap: 40px;
   padding: 20px 0;
 }
 .rc-af-chart-container {
   position: relative;
-  width: clamp(140px, 46cqw, 280px);
-  height: clamp(140px, 46cqw, 280px);
-  flex-shrink: 1;
+  width: 280px;
+  height: 280px;
+  flex-shrink: 0;
 }
 .rc-af-donut-svg {
   width: 100%;
@@ -432,7 +425,7 @@
   pointer-events: none;
 }
 .rc-af-center-num {
-  font-size: clamp(1.4rem, 11cqw, 2.5rem);
+  font-size: 2.5rem;
   font-weight: 800;
   color: #431407;
   line-height: 1;
@@ -540,20 +533,12 @@
   margin-bottom: 8px;
 }
 .rc-sync-tile-num {
-  font-size: clamp(1.15rem, 5.4cqw, 1.55rem);
+  font-size: 1.55rem;
   font-weight: 900;
   letter-spacing: -0.03em;
   line-height: 1;
   margin-bottom: 6px;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  white-space: nowrap;
-}
-// "동기화 소요"(00:03:01.05 같은 시:분:초.밀리초 문자열)는 다른 두 타일 값보다
-// 글자 수가 훨씬 많아서 같은 크기로는 타일 폭을 넘어 잘려 보였음 — 이 타일만
-// 더 작은 기준으로 줄어들게 함.
-.rc-sync-tile--violet .rc-sync-tile-num {
-  font-size: clamp(0.86rem, 4cqw, 1.2rem);
-  letter-spacing: -0.04em;
 }
 .rc-sync-date {
   font-size: 0.92rem !important;
@@ -565,60 +550,6 @@
   opacity: 0.82;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-}
-
-/* 월별 대화량 막대차트 (메신저 Recap) */
-.rc-mm-wrap {
-  width: 100%;
-  margin-top: 4px;
-  padding: 18px 14px 12px;
-  border-radius: 14px;
-  background: #fafbff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-around;
-  gap: 6px;
-  min-height: 220px;
-  overflow-x: auto;
-}
-.rc-mm-col {
-  flex: 1 1 0;
-  min-width: 34px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: default;
-}
-.rc-mm-count {
-  font-size: 0.72rem;
-  font-weight: 800;
-  color: #c2410c;
-  white-space: nowrap;
-}
-.rc-mm-track {
-  width: 60%;
-  max-width: 34px;
-  height: 150px;
-  display: flex;
-  align-items: flex-end;
-}
-.rc-mm-bar {
-  width: 100%;
-  height: 0;
-  border-radius: 8px 8px 4px 4px;
-  background: linear-gradient(180deg, #fcd34d, #f59e0b);
-  transition: height 0.8s cubic-bezier(0.22, 1, 0.36, 1);
-}
-.rc-mm-col:hover .rc-mm-bar {
-  filter: brightness(1.05);
-}
-.rc-mm-label {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: #7a8a9a;
-  white-space: nowrap;
 }
 
 /* 반응형 */

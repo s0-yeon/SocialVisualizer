@@ -458,6 +458,32 @@ HS_MEMBER_DESCRIPTIONS = {
     ),
 }
 
+# 요청 — My Time "주요 연락처" 툴팁(mytimeEngine.js formatContactTooltip)이 description과
+# 똑같은 문장(참여 패턴/자주 하는 이야기/말투 3줄)을 그대로 보여줘서 이상해졌다는 지적 —
+# 원래 이 툴팁은 short_bio(한 줄 소개)만 봐야 하는데, 예전엔 이 방(HS_CHATROOM_ID)이
+# 실인덱싱 없이 만들어져 short_bio가 채워질 기회가 없어서 description을 그대로
+# short_bio에도 복사해 넣었었다(하단 cp_sql 주석 참고) — 그때는 description이 짧아서
+# 문제가 안 됐는데, 이번에 description을 3줄 형식으로 새로 채우면서 그대로 같이
+# 새어나온 것. description과 별개로, 실제 short_bio 생성 프롬프트(message_statics.py
+# generate_chatroom_people_short_bios)와 같은 톤(한 문장, 존댓말 "~습니다./~입니다.",
+# 반말·영어·한자 금지)으로 진짜 한 줄 소개를 따로 만들어서 short_bio 컬럼에는 이걸 쓴다.
+HS_MEMBER_SHORT_BIOS = {
+    "이수빈": "꾸준히 대화에 참여하며 근황과 진로 고민을 서로 다독이는 이야기를 자주 나누는 친구입니다.",
+    "박재현": "운동과 등산 같은 취미 이야기를 즐겨 나누며 활발하게 대화에 참여하는 친구입니다.",
+    "최유나": "맛집과 여행, 요즘 유행하는 이야기를 발랄하게 공유하며 매우 활발히 참여하는 친구입니다.",
+    "정하늘": "자기계발과 재테크 이야기를 담백하게 나누며 꾸준히 대화에 참여하는 친구입니다.",
+    "오승민": "게임과 신작 소식 이야기를 즐겨 나누며 가끔 대화에 참여하는 친구입니다.",
+    "한지원": "제자들의 취업과 진로, 근황을 다정하게 챙기는 고3 때 담임 선생님입니다.",
+    "배수아": "근황과 연애 이야기를 다정하게 나누며 서로 위로해주는 꾸준한 참여자입니다.",
+    "임찬우": "동창회와 술자리 약속을 주도적으로 잡으며 유쾌하게 대화를 이끄는 친구입니다.",
+    "신예진": "노래방과 최근 들은 음악 이야기를 밝게 나누며 활발히 참여하는 친구입니다.",
+    "강태오": "장난스러운 드립으로 분위기를 띄우며 매우 활발하게 대화에 참여하는 친구입니다.",
+    "문서영": "그림과 전시회, 감성적인 일상 이야기를 차분하게 나누는 친구입니다.",
+    "조은비": "사진과 카페 나들이 같은 소소한 일상을 차분하게 공유하는 친구입니다.",
+    "윤도경": "짧게나마 안부를 묻고 응원의 말을 남기는, 드물지만 다정한 참여자입니다.",
+    "백하은": "약속 일정과 동창회 계획을 또박또박 잘 챙기는 꾸준한 참여자입니다.",
+}
+
 # 요청 — 김도현은 2022년(갓 대학 새내기 때)엔 거의 매번 말할 정도로 활발했지만,
 # 그 이후로는 "찔끔찔끔 아주 조금씩만" 말하는 걸로. 총합은 정확히 1382건.
 # 요청(후속) — 2023년 1~4월까지는 메신저 통계에 여전히 눈에 띄게 남아있다가, 그
@@ -1682,7 +1708,8 @@ def seed_messenger_domain(conn, room, block_counter_start):
             if member == "김도현" and chatroom_id == HS_CHATROOM_ID:
                 continue
             description = HS_MEMBER_DESCRIPTIONS.get(member, f"'{room['new_name']}' 멤버입니다.")
-            cur.execute(cp_sql, (member, chatroom_id, index_date, user_id, member, 0, description, description))
+            short_bio = HS_MEMBER_SHORT_BIOS.get(member, description)
+            cur.execute(cp_sql, (member, chatroom_id, index_date, user_id, member, 0, description, short_bio))
         conn.commit()
 
         # 요청 — "위에서 만든 사람 15명"에 대한 관계가 관계 창에 전부 떠야 함. 이 방은

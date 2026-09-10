@@ -1,39 +1,9 @@
 /*
- * 관리자 템플릿(Gentelella) 유래의 선택형 테마 컬러 스킴 모음 — data-theme 속성이나 클래스로 전환 가능. 현재 실제 페이지들은 _variables.scss의
- * 앰버 테마를 기본으로 쓴다.
- *
- * A collection of optional color schemes inherited from the Gentelella admin template, switchable via
- * a data-theme attribute or class. The actual pages currently use the amber theme from _variables.scss
- * by default.
+ 관리자 템플릿(Gentelella) 유래의 선택형 테마 컬러 스킴 모음 — data-theme 속성이나 클래스로 전환 가능. 현재 실제 페이지들은 _variables.scss의 앰버 테마를 기본으로 쓴다.
+ 
+ A collection of optional color schemes inherited from the Gentelella admin template, switchable via a data-theme attribute or class. The actual pages currently use the amber theme from _variables.scss by default.
  */
-// =============================================================================
-// Gentelella Color Schemes - 2026 Modern Collection
-// =============================================================================
-// A curated collection of modern color schemes for the Gentelella admin template.
-// Each scheme is designed with accessibility and modern design trends in mind.
-//
-// HOW TO USE:
-// 1. Add a data attribute to your <html> tag: <html data-theme="ocean">
-// 2. Or apply a class to <body>: <body class="theme-ocean">
-// 3. For JavaScript toggle, see README.md
-//
-// AVAILABLE THEMES:
-// - default (Emerald - the base modern theme)
-// - ocean (Deep blue professional)
-// - sunset (Warm coral/orange)
-// - lavender (Soft purple/violet)
-// - forest (Natural green tones)
-// - midnight (Dark mode optimized)
-// - rose (Modern pink/magenta)
-// - slate (Neutral monochrome)
-// =============================================================================
 
-// =============================================================================
-// THEME: Ocean - Deep Blue Professional
-// =============================================================================
-// A professional blue theme inspired by deep ocean tones. Perfect for
-// corporate dashboards and enterprise applications.
-// =============================================================================
 [data-theme="ocean"],
 .theme-ocean {
   // Brand Colors

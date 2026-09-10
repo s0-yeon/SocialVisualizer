@@ -7,18 +7,14 @@
 /* 공통 레이아웃
    창 높이에 상관없이 화면 가운데 쪽에 자연스럽게 오도록, 고정 여백 대신
    .right_col을 세로로도 가운데 정렬하는 flex 컨테이너로 바꿈. */
-.page-analysishub.right_col {
+.right_col {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: calc(100vh - 60px); // 헤더(60px) 높이만큼 빼고 남은 화면을 기준으로 중앙
   box-sizing: border-box;
 }
-// .gw-collect-wrap은 imap-collect 페이지 등 다른 페이지에서도 같은 이름으로 쓰이는
-// 범용 클래스라서, 여기서 스코프 없이 정의하면 두 페이지의 스타일시트가 같이 로드될 때
-// 캐스케이드 순서(어느 페이지를 먼저 방문했는지)에 따라 폭 규칙이 서로 덮어써서
-// 창마다 다르게 보이는 버그가 생겼음 — .page-analysishub로 반드시 스코프.
-.page-analysishub .gw-collect-wrap {
+.gw-collect-wrap {
   padding: 28px 32px;
   width: 100%;
   // 버튼(카드)을 전체적으로 최대 폭도 함께 넓힘
@@ -92,8 +88,6 @@
     .gw-hub-title {
       color: #fb923c;
     }
-    // 요청 — 카드에 마우스 올렸을 때 안쪽 이미지가 확대(줌인)되던 효과를 제거.
-    // 카드 자체가 살짝 떠오르는 효과(translateY)와 제목 색 변화는 그대로 둠.
   }
 }
 
