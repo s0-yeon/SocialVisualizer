@@ -181,8 +181,26 @@ $mobile-bp: 768px;
     z-index: 1280;
     background: rgba(20, 20, 20, 0.45);
   }
+  // 드로어 안 계정/방 이름이 길면 잘리지 말고 줄바꿈 (F-4)
+  .gws-rail .gws-item {
+    align-items: flex-start !important;
+  }
+  .gws-rail .gws-item-text {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    word-break: break-all !important;
+  }
 
-  /* ── 6. 플로팅 검색 버튼 — 우상단 유지(_floating-search.scss 기본값). 패널만 폰 폭에 맞춤 ── */
+  /* ── 6. 플로팅 검색 버튼 — 우상단, 로고/햄버거와 세로 정렬 (F-7 → I-1 34px → J-3 살짝 위로) ── */
+  .gwfs-btn {
+    top: 26px !important;
+  }
+  // My People 상세 패널(전체화면)이 열려 있으면 플로팅 검색 버튼 숨김 (닫기 버튼과 충돌 방지)
+  body:has(.mp-detail.open) .gwfs-btn,
+  body:has(.mp-detail.open) .gws-mobile-open {
+    display: none !important;
+  }
   .gwfs-panel {
     left: 12px !important;
     right: 12px !important;
@@ -226,11 +244,9 @@ $mobile-bp: 768px;
       width: 100% !important;
       min-height: 0 !important;
     }
-    // scale 캔버스들 — 자연 크기 대신 전체폭, 안쪽 줄바꿈
+    // 헤더 scale 캔버스 — 자연 크기 대신 전체폭, 안쪽 줄바꿈
     .mp-panel-header,
-    .mp-panel-header-canvas,
-    .mp-detail,
-    .mp-detail-canvas {
+    .mp-panel-header-canvas {
       transform: none !important;
       width: 100% !important;
       max-width: 100% !important;
@@ -243,9 +259,6 @@ $mobile-bp: 768px;
     }
     .mp-title {
       font-size: 1.6rem !important;
-    }
-    .mp-detail-canvas {
-      overflow-x: auto !important;
     }
     // 사람 카드 그리드
     .mp-grid {
@@ -275,14 +288,386 @@ $mobile-bp: 768px;
       flex-basis: calc((100% - 2 * 7px) / 3) !important;
       width: auto !important;
     }
-    // 하단 고정 타임라인(1600px 캔버스) → 모바일에선 숨김(부가 필터, 가로 스크롤 방지)
+    // H-4: 하단 타임 슬라이드 복구. .mp-timeline 은 position:fixed + 1600px 캔버스 +
+    //   overflow:hidden 레터박스. 내부(fill·ticks·range input)는 전부 % 기반이라
+    //   캔버스만 width:100% + position:static 으로 바꾸면 유동 슬라이더가 됨.
     .mp-timeline {
-      display: none !important;
+      position: static !important;
+      inset: auto !important;
+      left: auto !important;
+      right: auto !important;
+      bottom: auto !important;
+      height: auto !important;
+      overflow: visible !important;
+      display: block !important;
+      margin: 10px 0 4px !important;
+      z-index: auto !important;
+    }
+    .mp-timeline-canvas {
+      width: 100% !important; // 1600px → 유동 (유일한 blocker)
+      height: auto !important;
+      flex-shrink: 1 !important;
+      transform: none !important;
+      padding: 8px 12px 10px !important;
+    }
+    .mp-tl-tick-lbl {
+      font-size: 0.72rem !important;
     }
     // 워드클라우드가 카드 밖으로 안 나가게
     .mp-wc-wrap {
       max-width: 100% !important;
       overflow: hidden !important;
+    }
+
+    /* ── F-5. 사람카드 상세 패널 — 전체화면 오버레이 + 내부 세로 스택 ──
+       #mp-detail 은 .mp-left 기준 position:absolute; inset:0; overflow:hidden 이고
+       .mp-detail-header{height:25%; container-type:size} 가 캔버스 height:auto 에서
+       붕괴하며 "메일 통계" 세로글자·검은 탭 pill·겹침 발생 */
+    .mp-detail {
+      position: relative !important;
+      inset: auto !important;
+      overflow: visible !important;
+    }
+    .mp-detail.open {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 3000 !important;
+      display: block !important;
+      background: #fff !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      // I-3: 안드로이드 네비바에 하단 목록 안 가리게 최소 버퍼
+      padding-bottom: max(24px, env(safe-area-inset-bottom)) !important;
+    }
+    // 우상단엔 플로팅 검색 버튼(z-index 2.1e9)이 있어 닫기 버튼을 좌상단으로
+    .mp-detail-close {
+      position: fixed !important;
+      top: 12px !important;
+      left: 12px !important;
+      right: auto !important;
+      width: 36px !important;
+      height: 36px !important;
+      background: rgba(255, 255, 255, 0.92) !important;
+      border-radius: 50% !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+      z-index: 2147483647 !important;
+    }
+    .mp-detail-canvas {
+      transform: none !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      display: block !important;
+      padding-top: 44px !important; // 좌상단 닫기 버튼 자리
+      container-type: normal !important;
+    }
+    // 헤더를 세로 스택으로 — [아바타 쌍] → [이름/설명] → [탭] 각각 전체폭 블록.
+    // (base 는 flex row + 탭 absolute + namewrap-wide 가 폭 다 먹어서 좁은 화면에서
+    //  이름이 글자마다 줄바꿈되고 탭이 겹쳤음)
+    .mp-detail-header {
+      height: auto !important;
+      container-type: normal !important;
+      overflow: visible !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      flex-wrap: nowrap !important;
+      gap: 8px !important;
+      padding: 14px 16px 12px !important;
+    }
+    .mp-detail-tab-group {
+      position: static !important;
+      margin: 4px 0 0 !important;
+      width: 100% !important;
+      justify-content: center !important;
+      flex-wrap: wrap !important;
+    }
+    #mp-detail-namewrap,
+    .mp-detail-namewrap-wide {
+      padding-right: 0 !important;
+      width: 100% !important;
+      flex: none !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      text-align: center !important;
+      gap: 6px !important;
+    }
+    #mp-detail-namewrap .mp-detail-name,
+    #mp-detail-namewrap .mp-detail-email,
+    .mp-detail-nametitle {
+      white-space: normal !important;
+      word-break: keep-all !important;
+    }
+    // ── L-1. 메신저 설명(참여 패턴/자주 하는 이야기/말투) 이 nowrap 라 자연폭(≈671px)
+    //   으로 화면 밖까지 뻗어 가로 슬라이드 유발 (namewrap 이 align-items:center 라
+    //   shrink-wrap 됨). 전체폭 stretch + 줄바꿈 허용해 화면 안에 가둔다.
+    .mp-detail-messenger-desc,
+    .mp-detail-messenger-desc.show {
+      align-self: stretch !important;
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+    .mp-detail-messenger-desc .mp-msg-desc-row {
+      width: 100% !important;
+      max-width: 100% !important;
+      flex-wrap: wrap !important;
+    }
+    .mp-detail-messenger-desc .mp-msg-desc-line-text {
+      min-width: 0 !important;
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+    }
+    .mp-detail-avatar,
+    .mp-detail-avatar-self {
+      width: 60px !important;
+      height: 60px !important;
+    }
+    .mp-detail-avatar-ring,
+    .mp-detail-avatar-ring.mp-ring-off {
+      width: 74px !important;
+      height: 74px !important;
+    }
+    .mp-detail-name {
+      font-size: 1.15rem !important;
+    }
+    .mp-detail-relation {
+      width: 104px !important;
+      flex-shrink: 0 !important;
+    }
+    // 메신저 모드: pair 는 링 아바타 하나만 보이므로 가운데
+    .mp-detail-pair {
+      justify-content: center !important;
+      width: 100% !important;
+      flex-wrap: wrap !important;
+    }
+
+    /* ── L-2. 메일 상세 헤더 = 2열: 사진 밑에 각자 정보, 관계는 사진 사이 가운데 ──
+       .mp-detail-pair(= self-info + self아바타 + relation + ring) 를 display:contents 로
+       풀어 .mp-detail-header 를 3열(1fr / auto / 1fr) grid 로 배치.
+       상대 이름/이메일(#mp-detail-namewrap)은 pair 밖 형제라 3열째 2행에 놓는다.
+       (메신저 모드 `.mp-detail-messenger` 는 위 세로 스택 그대로) */
+    #mp-detail:not(.mp-detail-messenger) {
+      .mp-detail-header {
+        display: grid !important;
+        grid-template-columns: 1fr auto 1fr !important;
+        align-items: start !important;
+        justify-items: center !important;
+        row-gap: 4px !important;
+        column-gap: 6px !important;
+      }
+      .mp-detail-pair {
+        display: contents !important;
+      }
+      .mp-detail-avatar-self {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        align-self: center !important;
+      }
+      .mp-detail-relation {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        height: 96px !important;
+      }
+      .mp-detail-avatar-ring,
+      .mp-detail-avatar-ring.mp-ring-off {
+        grid-column: 3 !important;
+        grid-row: 1 !important;
+        align-self: center !important;
+      }
+      .mp-detail-self-info {
+        grid-column: 1 !important;
+        grid-row: 2 !important;
+        text-align: center !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+      }
+      #mp-detail-namewrap {
+        grid-column: 3 !important;
+        grid-row: 2 !important;
+        width: auto !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        align-items: center !important;
+        text-align: center !important;
+      }
+      .mp-detail-tab-group {
+        grid-column: 1 / -1 !important;
+        grid-row: 3 !important;
+        justify-self: center !important;
+        margin-top: 6px !important;
+      }
+      // 좁은 열(≈120px)에 맞게 이메일 폰트 축소 + 정 안 되면 아무데서나 줄바꿈
+      .mp-detail-self-info .mp-detail-email,
+      #mp-detail-namewrap .mp-detail-email {
+        justify-content: center !important;
+        white-space: normal !important;
+        font-size: 0.72rem !important;
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+      }
+      .mp-detail-self-info .mp-detail-email-primary,
+      #mp-detail-namewrap .mp-detail-email-primary {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        overflow-wrap: anywhere !important;
+        min-width: 0 !important;
+      }
+      .mp-detail-name,
+      .mp-detail-email {
+        text-align: center !important;
+      }
+      .mp-detail-self-info .mp-detail-name,
+      #mp-detail-namewrap .mp-detail-name {
+        font-size: 1.02rem !important;
+      }
+    }
+    // 관계/친밀도 라벨(absolute) — nowrap + max-content 로 한 줄 유지, 화면 밖 안 나가게 캡
+    .mp-detail-relation-label,
+    .mp-detail-affinity-label {
+      width: max-content !important;
+      max-width: 46vw !important;
+      white-space: nowrap !important;
+      text-align: center !important;
+    }
+    // "메일 통계" 가 1글자씩 세로로 쪼개지던 것: nowrap + 안 줄어들게
+    .mp-detail-section-title {
+      white-space: nowrap !important;
+      flex-shrink: 0 !important;
+    }
+    #mp-stats-legend {
+      flex-wrap: wrap !important;
+    }
+    // #mp-detail-body-stats 는 여기서 display 를 건드리면 안 됨 — switchDetailTab 이
+    // 인라인 display:none 으로 탭 전환하는데 !important 가 그걸 이겨서 설명·키워드 탭에도
+    // 통계가 계속 보였음. base .mp-detail-body{display:grid} 가 정상 fallback.
+    .mp-detail-body {
+      overflow: visible !important;
+      flex: none !important;
+    }
+    .mp-detail-col {
+      overflow: visible !important;
+      padding: 12px !important;
+    }
+    .mp-detail-desc,
+    .mp-detail-desc.show,
+    .mp-detail-kw,
+    .mp-detail-kw.show {
+      overflow: visible !important;
+      flex: none !important;
+      padding: 14px !important;
+    }
+    #mp-echange-row {
+      flex-direction: column !important;
+      gap: 12px !important;
+    }
+    #mp-echange-chartview {
+      flex: none !important;
+      width: auto !important;
+      min-width: 0 !important;
+      min-height: 260px !important;
+    }
+    // H-2/H-3: 막대 드릴다운 드로어 — 데스크톱은 옆에서 슬라이드('가로 슬라이드'),
+    //   모바일은 차트 아래로 세로 펼침. openEmailDrawer/openMessengerDayList 가
+    //   class 없이 인라인 스타일(!important 없음)로만 여닫으므로 !important 로 못박음.
+    #mp-echange-listview {
+      display: flex !important;
+      flex: none !important; // 인라인 flex:"0 0 0%" / "1 1 44%" 이김
+      width: 100% !important; // 인라인 width:0 이김
+      min-width: 0 !important;
+      opacity: 1 !important; // 인라인 opacity:0 이김
+      pointer-events: auto !important; // 인라인 pointer-events:none 이김
+      padding-left: 0 !important; // 데스크톱 좌측 거터 제거
+      border-left: none !important; // 데스크톱 세로 구분선 제거
+      border-top: 1px solid rgba(28, 28, 30, 0.1) !important;
+      padding-top: 12px !important;
+      overflow: visible !important; // 인라인 overflow:hidden 이김
+    }
+    #mp-echange-list-body {
+      flex: none !important; // 인라인 flex:1 (auto-height column 에서 붕괴) 이김
+      min-height: 0 !important;
+      max-height: 55vh !important;
+      overflow-y: auto !important;
+      padding-bottom: 12px !important;
+    }
+    // 세로 배치라 차트-드로어 사이 닫기(X) 버튼은 불필요 (내부 '날짜 목록' 뒤로가기는 유지)
+    #mp-echange-back {
+      display: none !important;
+    }
+    // 캔버스 height:auto 라 flex:1 1 0 차트가 0 으로 붕괴(눈금 "2 1 0" 뭉침) → flex 끄고 높이 명시
+    .mp-vchart-wrap {
+      flex: none !important;
+      height: 220px !important;
+    }
+    // 데이터 1~2개일 때 막대가 왼쪽에 외롭게 있지 말고 가운데
+    .mp-vchart-row {
+      justify-content: center !important;
+    }
+
+    /* ── J-2. 막대그래프 가로 스크롤 제거 — 컨테이너 폭에 맞춰 균등 축소 ──
+       base 는 달마다 34px 고정 + #mp-chart/.mp-vchart-area overflow-x:auto 로 스크롤.
+       모바일에선 스크롤 대신 flex 균등분배로 한 화면에 다 담는다(막대가 얇아짐). */
+    .mp-vchart-area {
+      overflow-x: hidden !important;
+    }
+    #mp-chart {
+      overflow-x: hidden !important;
+      width: 100% !important;
+    }
+    .mp-vchart-row {
+      width: 100% !important;
+      min-width: 0 !important;
+      gap: 4px !important;
+      padding: 0 2px !important;
+    }
+    .mp-vchart-year-group {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      padding: 4px 4px 6px !important;
+    }
+    .mp-vchart-year-months {
+      gap: 2px !important;
+    }
+    .mp-vchart-group {
+      flex: 1 1 0 !important;
+      width: auto !important;
+      min-width: 0 !important;
+      padding: 0 !important;
+      // base 는 align-items:center 라 .mp-vchart-bars 가 폭에 stretch 안 됨 → 그 안의
+      // 막대 width:100% 가 0 으로 붕괴함. stretch 로 바꿔 막대가 폭을 받게 한다.
+      align-items: stretch !important;
+    }
+    .mp-vchart-bars {
+      gap: 2px !important;
+      justify-content: center !important;
+    }
+    .mp-vchart-bar {
+      flex: 1 1 0 !important; // 달 수가 많아지면 얇아지되 0 은 안 됨
+      width: auto !important;
+      min-width: 1px !important;
+      max-width: 8px !important;
+    }
+    .mp-vchart-month {
+      font-size: 0.58rem !important;
+    }
+    // 드릴다운 드로어 제목/부제 — 인라인 white-space:nowrap 라 "막대를 누르면 …" 안내가
+    // 잘림. 줄바꿈 허용해 전부 보이게.
+    #mp-echange-list-title,
+    #mp-echange-list-count {
+      white-space: normal !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      word-break: break-word !important;
+    }
+    #mp-detail-wc.mp-wc-wrap {
+      min-height: 180px !important;
+    }
+    .mp-desc-profile-row {
+      flex-direction: column !important;
+      gap: 4px !important;
+    }
+    .mp-desc-profile-key {
+      min-width: 0 !important;
     }
   }
 
@@ -327,15 +712,67 @@ $mobile-bp: 768px;
     .mt-pointer-wrap {
       padding: 14px 14px 12px !important;
     }
+    // H-4: 년도 슬라이더 트랙이 회색 2px 라 잘 안 보임 → 살짝 진하게
+    .mt-pointer-bg {
+      height: 3px !important;
+      background: #cfcfcf !important;
+    }
     .mt-node-label,
     .mt-pa-lbl {
       font-size: 0.8rem !important;
     }
+    // F-6. 키워드 막대: 132px 단어열 + 54px 개수열 + 40px 패딩이 트랙을 ~42px 로 압축
+    //      → 단어/개수는 1줄, 트랙은 그 아래 전체폭으로 (개수차 명확)
+    .mt-kw-panel {
+      padding: 20px 14px !important;
+    }
+    .mt-kw-row {
+      flex-wrap: wrap !important;
+      gap: 6px 8px !important;
+      row-gap: 5px !important;
+      padding: 8px 10px !important;
+    }
+    .mt-kw-row-word {
+      width: auto !important;
+      flex: 0 1 auto !important;
+      max-width: 66% !important;
+    }
+    .mt-kw-row-count {
+      width: auto !important;
+      margin-left: auto !important;
+    }
+    .mt-kw-row-track {
+      flex-basis: 100% !important;
+      order: 3;
+      height: 12px !important;
+    }
+    .mt-kw-row-fill {
+      border-radius: 3px !important;
+    }
+  }
+
+  /* ── K-4. 키워드 막대 hover/탭 시 뜨는 언급자 툴팁 — 긴 이메일 아이디가 상자 밖으로
+     튀어나옴. showTooltip() 이 left 를 innerWidth-280 로 클램프하지만 상자 안의
+     `이메일 · N회` 텍스트가 끊기지 않는 토큰이라 max-width:260px 를 넘겨 넘침. ──
+     (.mt-tooltip 은 body 직속이라 .page-mytime 밖에 둔다) */
+  .mt-tooltip {
+    max-width: min(260px, calc(100vw - 20px)) !important;
+    box-sizing: border-box !important;
+  }
+  .mt-tooltip-row {
+    min-width: 0 !important;
+  }
+  .mt-tooltip-row > span:not(.mt-tooltip-avatar) {
+    min-width: 0 !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
   }
 
   /* ── imap-collect ── (1900px 2열 캔버스 → 1열 세로 스택: ①→왼쪽→②→오른쪽)
-     imap-collect.scss 의 @media(max-width:1px) 죽은 블록(L670·710·793)을 이식 */
-  .page-imap-collect {
+     imap-collect.scss 의 @media(max-width:1px) 죽은 블록(L670·710·793)을 이식.
+     imap-collect.scss:17 `.page-imap-collect .right_col{position:fixed}` 와 명시도가
+     같아 나중 로드로 이기므로 `body.` 를 붙여 0-2-1 로 올림 (F-3) */
+  body.page-imap-collect {
     .right_col {
       position: static !important;
       inset: auto !important;
@@ -396,11 +833,30 @@ $mobile-bp: 768px;
     .gw-collect-cards-column {
       grid-template-columns: 1fr !important;
       grid-template-rows: none !important;
+      min-width: 0 !important;
     }
     .gw-collect-cards-column .gw-card {
       display: block !important;
       grid-template-rows: none !important;
       grid-row: auto !important;
+      min-width: 0 !important;
+    }
+    // G-3: 카드가 화면 밖으로 나가던 원인 — min-width:auto(=min-content) 로 못 줄어듦.
+    //   min-width:0 + presets 1열 + 입력/셀렉트 폭 제한으로 카드 min-content 축소
+    .gw-presets {
+      grid-template-columns: 1fr !important;
+    }
+    .gw-input,
+    .gw-select {
+      width: 100% !important;
+      min-width: 0 !important;
+      box-sizing: border-box;
+    }
+    .gw-form-group {
+      min-width: 0 !important;
+    }
+    .gw-folder-label {
+      max-width: 100% !important;
     }
     .gw-folder-list {
       height: auto !important;
@@ -411,12 +867,8 @@ $mobile-bp: 768px;
     }
   }
 
-  /* ── Home ── 스크롤 없이 한 화면: 장식용 미리보기 숨기고 히어로만 */
+  /* ── Home ── 한 화면 안에 [제목+설명+CTA+바로가기]. (F-1: 미리보기=My People/My Time 링크라 되살림) */
   .page-index {
-    // 정적 스크린샷 2장(장식) — 제거해야 [제목+설명+CTA] 가 한 화면에 들어옴
-    .gw-hero-previews {
-      display: none !important;
-    }
     .gw-hero-scale-wrap {
       height: auto !important;
       min-height: 0 !important;
@@ -426,9 +878,11 @@ $mobile-bp: 768px;
     .gw-orbit-hero {
       transform: none !important;
       max-width: 100% !important;
-      // 세로 가운데 살짝 위: 헤더(70) + 여백. 프리뷰 숨겨 한 화면에 들어옴
-      padding: clamp(110px, 27vh, 240px) 18px 24px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      padding: 78px 16px 28px !important;
       min-height: 0 !important;
+      gap: 0 !important;
     }
     .gw-orbit-left {
       margin-top: 0 !important;
@@ -440,15 +894,34 @@ $mobile-bp: 768px;
       white-space: normal !important;
       max-width: 100% !important;
     }
-    // home.scss 의 clamp 하한(3.4rem)이 폰에서 "Visualizer" 한 단어를 못 담아 잘림 → 축소
     .gw-hero-headline {
       font-size: clamp(1.9rem, 8.5vw, 3rem) !important;
       margin-bottom: 10px !important;
     }
     .gw-hero-desc {
-      font-size: 0.98rem !important;
-      margin-bottom: 22px !important;
+      font-size: 0.96rem !important;
+      margin-bottom: 18px !important;
     }
+    // 미리보기 카드 = <a href="mypeople.html/mytime.html"> 바로가기.
+    // 기존 웹처럼 세로로 쌓고, "OO 바로가기" 라벨은 hover 때만(모바일엔 사실상 안 뜸).
+    .gw-hero-previews {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 14px !important;
+      width: 100% !important;
+      margin-top: 22px !important;
+    }
+    .gw-preview-card,
+    .gw-preview-card--static {
+      flex: none !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      max-height: none !important;
+      aspect-ratio: 1903 / 1100 !important;
+      margin: 0 !important;
+    }
+    // .gw-preview-overlay 는 base(opacity:0, hover 시 1) 그대로 — 오버라이드 없음
   }
 
   /* ═══════════════ 5. 페이지별 잘림 수정 ═══════════════ */
@@ -550,9 +1023,18 @@ $mobile-bp: 768px;
     .gw-mail-drawer.is-open {
       width: 100% !important;
     }
-    // 입력창 좌우 패딩 줄여 placeholder 더 보이게
+    // 입력창 좌우 패딩·폰트 + 버튼 축소 → placeholder 안 잘리게 (H-1: 메신저 문구가 더 김)
+    .gw-search-box input,
+    .gw-search-box input::placeholder {
+      font-size: 0.72rem !important;
+    }
     .gw-search-box input {
-      padding: 15px 50px 15px 16px !important;
+      padding: 15px 42px 15px 12px !important;
+    }
+    .gw-search-box button {
+      width: 32px !important;
+      height: 32px !important;
+      right: 8px !important;
     }
     // 최근 검색 칩: 긴 질의가 줄 밖으로 안 나가게
     .gw-recent-tag {

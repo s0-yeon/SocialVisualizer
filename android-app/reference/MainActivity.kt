@@ -29,8 +29,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 웹 콘텐츠가 상태바/네비바 밑으로 깔리지 않도록(edge-to-edge 해제).
-        WindowCompat.setDecorFitsSystemWindows(window, true)
+        // targetSdk 35+ 는 edge-to-edge 가 강제라 setDecorFitsSystemWindows(true) 는 no-op.
+        // 명시적으로 edge-to-edge 로 두고, 아래 inset 리스너가 WebView 에 패딩을 직접 반영한다.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
 
         webView = WebView(this).apply {
             layoutParams = ViewGroup.LayoutParams(
@@ -64,12 +65,21 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
 
-        // 일부 기기에서 setDecorFitsSystemWindows 만으로 하단 제스처바가 안 밀릴 때 대비 —
-        // 시스템 바 인셋을 패딩으로 한 번 더 반영.
+        // 시스템 바 + 노치 + 키보드(IME) 인셋을 WebView 패딩으로 반영 →
+        // 웹 콘텐츠가 상태바/네비바 밑으로 안 깔리고, 키보드가 입력창을 안 가림.
         ViewCompat.setOnApplyWindowInsetsListener(webView) { v, insets ->
-            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-            v.updatePadding(top = bars.top, bottom = bars.bottom, left = bars.left, right = bars.right)
-            insets
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars()
+                    or WindowInsetsCompat.Type.displayCutout()
+                    or WindowInsetsCompat.Type.ime(),
+            )
+            v.updatePadding(
+                left = bars.left,
+                top = bars.top,
+                right = bars.right,
+                bottom = bars.bottom,
+            )
+            WindowInsetsCompat.CONSUMED
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
