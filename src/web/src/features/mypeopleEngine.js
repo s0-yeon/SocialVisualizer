@@ -423,9 +423,17 @@ function setupBrandLogo(img) {
   if (img.complete && img.naturalWidth) autoFitBrandLogo(img);
   else img.addEventListener("load", () => autoFitBrandLogo(img), { once: true });
 }
+// 요청 — "Alexander Erdl"이 광고 제거 토글에 같이 걸려서 사라지는데, 실제로는
+// 광고가 아니니 일단 지우지 말고 그대로 냅둬달라는 요청 — 이름을 화이트리스트에
+// 넣어서 광고 판별 로직(로컬파트/표시이름 검사)을 아예 안 타게 만든다.
+const BRAND_FILTER_ALLOWLIST_NAMES = new Set([
+  "alexander erdl",
+]);
+
 // 발신자가 브랜드/발신전용 계정인지 종합 판별(로컬파트 또는 표시이름 기준)
 function isBrandSender(p) {
   if (!p.email) return false;
+  if (BRAND_FILTER_ALLOWLIST_NAMES.has((p.name || "").trim().toLowerCase())) return false;
   const [local] = p.email.split("@");
   return isGenericLocalPart(local) || isBrandDisplayName(p.name);
 }
@@ -610,6 +618,15 @@ async function fetchRoomDateRange(chatroomId) {
   return range;
 }
 let currentChatroomId = null;
+// 요청 — "3학년 4반 고등학교 단톡방"의 관계 탭에 (seed_fake_people.py의
+// HS_CHATROOM_ID에 해당하는 chatroom_relationship/participant 데이터가 꼬여서)
+// 실제 멤버가 아닌 이상한 이름들이 같이 섞여 나오는 문제 — 이 방일 때만 실제
+// 멤버 15명 이름으로 하드코딩 필터링한다.
+const HS_CHATROOM_ID = "64c6eaa5a654c2e3c7948bec2be03b3dbe63fb43";
+const HS_MEMBER_NAMES = new Set([
+  "강태오", "김도현", "문서영", "박재현", "배수아", "백하은", "신예진", "오승민",
+  "윤도경", "이수빈", "임찬우", "정하늘", "조은비", "최유나", "한지원",
+]);
 let currentChatroomPeople = [];
 let currentDetailMode = "mail";
 let currentDetailPersonEmail = "";
@@ -1769,18 +1786,32 @@ function renderBarChart(data) {
   chartArea.innerHTML = `<div class="mp-vchart-row">${groupsHtml}</div>`;
 
   // 오른쪽 원본 확인 창은 처음부터 가장 최근 달로 기본 열림 상태다 — 막대 그래프를 다 그린 다음 마지막(최신) 달을 자동으로 "클릭"한 것처럼 처리한다.
-  const latest = data.monthly[data.monthly.length - 1];
+  // 요청 — data.monthly는 슬라이더 끝(오늘 날짜)까지 달을 채워서 오는데, 실제 시연 데이터는
+  // 2026년 8월까지만 있고 9월은 (오늘 날짜가 이미 9월로 넘어가서) 0건짜리 빈 달로 끼어
+  // 들어온다 — 그대로면 상세보기를 열 때마다 "이 달에는 주고받은 메일이 없어요"인 9월이
+  // 기본으로 뜬다. 실제 메일이 있는 마지막 달을 찾아서 그걸 기본으로 연다(전부 0건이면
+  // 기존처럼 그냥 마지막 달을 연다).
+  const monthsWithMail = data.monthly.filter((m) => (m.sent || 0) + (m.received || 0) > 0);
+  const latest = monthsWithMail.length
+    ? monthsWithMail[monthsWithMail.length - 1]
+    : data.monthly[data.monthly.length - 1];
   const latestGroup = chartArea.querySelector(`.mp-vchart-group[data-month="${latest.month}"]`);
   if (latestGroup) {
     latestGroup.classList.add("active");
     openEmailDrawer(latest.month, latest.sent, latest.received);
-    // 기간이 길어 가로 스크롤이 생긴 경우, 처음 열자마자 가장 최근(=오른쪽 끝) 달이 바로 보이도록 스크롤을 오른쪽 끝으로 옮겨준다.
+    // 기간이 길어 가로 스크롤이 생긴 경우, 처음 열자마자 기본으로 연 달(latestGroup)이
+    // 바로 보이도록 그 위치로 스크롤을 옮겨준다. 예전엔 무조건 오른쪽 끝(scrollWidth)으로
+    // 옮겼는데, 실제 메일이 없는 빈 달(9월 등)이 맨 끝에 붙는 경우 정작 기본으로 연 달(8월)이
+    // 화면 밖으로 밀려나 있는 문제가 있어서 latestGroup 기준으로 바꿨다.
     // scrollIntoView를 쓰면 캔버스(.mp-detail-canvas)에 걸린 scale(transform) 때문에 브라우저가
     // 조상 요소들의 가시성을 잘못 계산해서, 의도한 #mp-chart 가로 스크롤 대신 원래 스크롤될 일이
     // 없는 상위 .mp-detail이 세로로 밀려버리는(작은 화면에서 헤더/닫기 버튼이 위로 밀려 사라져
     // 보이는) 문제가 있었다 — chartArea 자신의 scrollLeft만 직접 옮기고, 혹시 모를 경우를 대비해
     // .mp-detail의 스크롤 위치도 항상 0으로 고정해둔다.
-    chartArea.scrollLeft = chartArea.scrollWidth;
+    chartArea.scrollLeft = Math.max(
+      0,
+      latestGroup.offsetLeft - (chartArea.clientWidth - latestGroup.offsetWidth) / 2
+    );
     const detailElAfterScroll = document.getElementById("mp-detail");
     if (detailElAfterScroll) detailElAfterScroll.scrollTop = 0;
   }
@@ -2648,9 +2679,12 @@ async function openMessengerDetail(person) {
       r.target = applyRoomNameOverride(currentChatroomName, r.target);
     });
     // 관계 카드는 개수를 제한하지 않고 참여자 전원을 표시한다.
-    const mine = rels
+    let mine = rels
       .filter((r) => r.source === person.name || r.target === person.name)
       .sort((a, b) => (b.strength || 0) - (a.strength || 0));
+    if (currentChatroomId === HS_CHATROOM_ID) {
+      mine = mine.filter((r) => HS_MEMBER_NAMES.has(r.source) && HS_MEMBER_NAMES.has(r.target));
+    }
     renderRelationDiagram(person.name, mine);
   } catch (e) {
     console.error("chatroom-relationships 오류:", e);

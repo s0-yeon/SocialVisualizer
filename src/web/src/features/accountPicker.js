@@ -14,8 +14,9 @@ Account/chatroom picker dropdown — fetches indexed accounts via GET /accounts,
 // 바꿔치기한다. 실제 계정 식별자(user_id)는 그대로 유지하므로
 // API 호출/DB 매칭에는 전혀 영향 없음(화면 표시 전용). 필요 없어지면 이 오버라이드
 // 객체만 비우면 원래대로 돌아온다.
+// 요청 — 지식그래프에서 03yeah03@gmail.com이 "3924ewa@gmail.com"으로 잘못 나와서,
+// 원래 계정 03yeah03@gmail.com 그대로 보이도록 오버라이드 제거.
 const DISPLAY_EMAIL_OVERRIDES = {
-  "03yeah03@gmail.com": "3924ewa@gmail.com",
   // 요청 — 지식그래프에서 이 계정 이름이 이상하게(엉뚱한 아이클라우드 주소로)
   // 나와서, 원래 아이디 03yeeun03@naver.com 그대로 보이도록 오버라이드 제거.
   "324dfan@naver.com": "moonlight_haru@icloud.com",

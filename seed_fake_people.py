@@ -45,11 +45,15 @@
 # 되돌리려면 cleanup_fake_people.py를 실행하면 이 스크립트가 넣은 데이터만 깨끗이
 # 지워집니다(실제 인덱싱 데이터는 건드리지 않음).
 
+import calendar
 import datetime
+import hashlib
 import itertools
 import json
 import os
+import shutil
 import sys
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
@@ -373,19 +377,85 @@ HS_MEMBERS = [
     "신예진", "강태오", "문서영", "조은비", "윤도경", "백하은",
 ]
 
-# 요청 — My Time 2022-09 "주요 연락처"에 마우스를 올렸을 때 뜨는 사람 설명(chatroom_people.
-# description)을 아주 간단하게 채워달라는 요청 — 9명만(HS_MONTH_CONTACTS_OVERRIDES[(2022,9)]와
-# 동일한 명단). 나머지 멤버는 기존처럼 방 이름 기반 기본 설명을 그대로 씀.
+# 요청 — "3학년 4반 고등학교 단톡방" 상세보기 상단에 뜨는 참여 패턴/자주 하는
+# 이야기/말투(chatroom_people.description·short_bio) 설명을 15명 전원 가짜
+# 데이터로 채워달라는 요청. 단, 김도현은 예시로 보여준 게 실인덱싱 때 실제로 생성된
+# 진짜 데이터라서 절대 건드리면 안 됨 — 아래 dict에 김도현은 아예 넣지 않고,
+# cp_sql 루프에서도 김도현만 skip해서 그의 기존 DB 값을 그대로 보존한다.
+# 한지원은 다른 14명과 달리 급우가 아니라 "선생님"(HS_MEMBER_RELATION_OVERRIDES 참고)
+# 이라서, 반말로 재잘거리는 다른 친구들과 다르게 존댓말로 제자들 근황을 챙기는
+# 느낌으로 따로 썼다.
 HS_MEMBER_DESCRIPTIONS = {
-    "김도현": "성격 좋고 붙임성 있어서 반에서 인기가 많았던 친구입니다.",
-    "이수빈": "차분하고 배려심 많아서 다들 편하게 의지하는 친구입니다.",
-    "박재현": "운동을 좋아하고 성격이 활발한 친구입니다.",
-    "강태오": "유머 감각이 좋아 분위기를 잘 띄우는 친구입니다.",
-    "문서영": "그림 그리기를 좋아하는 감성적인 친구입니다.",
-    "백하은": "꼼꼼하고 계획적인 성격의 친구입니다.",
-    "신예진": "노래를 잘해서 반 행사 때마다 인기였던 친구입니다.",
-    "오승민": "게임과 컴퓨터를 좋아하는 친구입니다.",
-    "윤도경": "말수는 적지만 정이 많은 친구입니다.",
+    "이수빈": (
+        "참여 패턴: 꾸준히 참여합니다.\n"
+        "자주 하는 이야기: 근황과 진로 고민, 서로 다독이는 이야기를 자주 나눕니다.\n"
+        "말투: 존댓말과 반말을 섞어 차분하게 이야기하며, 이모티콘은 가끔만 씁니다."
+    ),
+    "박재현": (
+        "참여 패턴: 활발히 참여합니다.\n"
+        "자주 하는 이야기: 운동, 헬스, 등산 같은 취미 이야기를 자주 꺼냅니다.\n"
+        "말투: 반말로 씩씩하게 얘기하며, 느낌표를 자주 씁니다."
+    ),
+    "최유나": (
+        "참여 패턴: 매우 활발히 참여합니다.\n"
+        "자주 하는 이야기: 맛집, 여행, 요즘 유행하는 이야기를 자주 공유합니다.\n"
+        "말투: 반말로 발랄하게 얘기하며, 이모티콘과 사진을 자주 올립니다."
+    ),
+    "정하늘": (
+        "참여 패턴: 꾸준히 참여합니다.\n"
+        "자주 하는 이야기: 자기계발, 운동, 재테크 같은 이야기를 자주 나눕니다.\n"
+        "말투: 반말로 담백하게 얘기하며, 이모티콘은 거의 쓰지 않습니다."
+    ),
+    "오승민": (
+        "참여 패턴: 가끔 참여합니다.\n"
+        "자주 하는 이야기: 게임, 신작 소식, 컴퓨터 관련 이야기를 자주 꺼냅니다.\n"
+        "말투: 반말로 짧게 얘기하며, 게임 용어를 자주 섞어 씁니다."
+    ),
+    "한지원": (
+        "참여 패턴: 이따금 들어와 근황을 살펴보는 편입니다.\n"
+        "자주 하는 이야기: 제자들 취업과 진로, 근황을 챙기며 안부를 묻는 이야기를 주로 합니다.\n"
+        "말투: 존댓말로 다정하게 이야기하며, 이모티콘은 거의 쓰지 않습니다."
+    ),
+    "배수아": (
+        "참여 패턴: 꾸준히 참여합니다.\n"
+        "자주 하는 이야기: 근황과 연애, 서로 위로하는 이야기를 자주 나눕니다.\n"
+        "말투: 반말로 다정하게 얘기하며, 이모티콘을 자주 사용합니다."
+    ),
+    "임찬우": (
+        "참여 패턴: 활발히 참여합니다.\n"
+        "자주 하는 이야기: 동창회나 술자리 약속을 주도적으로 잡는 이야기를 자주 합니다.\n"
+        "말투: 반말로 유쾌하게 얘기하며, 느낌표와 이모티콘을 자주 씁니다."
+    ),
+    "신예진": (
+        "참여 패턴: 활발히 참여합니다.\n"
+        "자주 하는 이야기: 노래방, 최근 들은 음악 이야기를 자주 꺼냅니다.\n"
+        "말투: 반말로 밝게 얘기하며, 이모티콘을 자주 사용합니다."
+    ),
+    "강태오": (
+        "참여 패턴: 매우 활발히 참여합니다.\n"
+        "자주 하는 이야기: 장난스러운 드립과 근황 얘기로 분위기를 자주 띄웁니다.\n"
+        "말투: 반말로 유쾌하게 얘기하며, 이모티콘을 아주 자주 사용합니다."
+    ),
+    "문서영": (
+        "참여 패턴: 가끔 참여합니다.\n"
+        "자주 하는 이야기: 그림, 전시회, 감성적인 일상 이야기를 자주 나눕니다.\n"
+        "말투: 반말로 차분하게 얘기하며, 감성적인 이모티콘을 종종 사용합니다."
+    ),
+    "조은비": (
+        "참여 패턴: 가끔 참여합니다.\n"
+        "자주 하는 이야기: 사진, 카페 나들이 같은 소소한 일상 이야기를 자주 올립니다.\n"
+        "말투: 반말로 차분하게 얘기하며, 사진을 자주 첨부합니다."
+    ),
+    "윤도경": (
+        "참여 패턴: 드물게 참여합니다.\n"
+        "자주 하는 이야기: 짧게라도 안부를 묻거나 응원하는 말을 남깁니다.\n"
+        "말투: 반말로 짧고 담백하게 얘기하며, 이모티콘은 거의 쓰지 않습니다."
+    ),
+    "백하은": (
+        "참여 패턴: 꾸준히 참여합니다.\n"
+        "자주 하는 이야기: 약속 일정을 챙기고 동창회 계획을 정리하는 이야기를 자주 합니다.\n"
+        "말투: 반말로 또박또박 얘기하며, 이모티콘은 가끔만 씁니다."
+    ),
 }
 
 # 요청 — 김도현은 2022년(갓 대학 새내기 때)엔 거의 매번 말할 정도로 활발했지만,
@@ -445,6 +515,12 @@ HS_DATE_END = datetime.date(2026, 5, 4)
 # 연락하는 사이 4단계로 순환시켰는데, 그 풀은 이제 안 씀).
 HS_RELATION_DESCRIPTIONS = {
     "친구": "3학년 4반 동창이자, 지금도 자주 연락하며 지내는 친구입니다.",
+    # 요청 — 한지원만 관계를 "선생님"으로.
+    "선생님": "고3 때 담임 선생님이셨는데, 지금도 가끔 안부를 주고받는 사이입니다.",
+}
+# 요청 — 특정 멤버는 관계 라벨을 "친구"가 아니라 여기 지정한 값으로 덮어쓴다.
+HS_MEMBER_RELATION_OVERRIDES = {
+    "한지원": "선생님",
 }
 
 # 요청 — 방 분위기가 "다소 사무적인 분위기"로 뜨던 걸 "활발하고 밝은 분위기"로.
@@ -534,6 +610,11 @@ CHATROOMS = [
         "chatroom_id": HS_CHATROOM_ID,
         # 요청 — 방 이름 변경
         "new_name": "3학년 4반 고등학교 단톡방",
+        # 요청 — 이 chatroom_id가 실제로 인덱싱된 적 없는 계정(DB 초기화 등)에서는
+        # 조용히 건너뛰어서(seed_messenger_domain의 [WARN] 분기) My People 사이드바에
+        # 아예 안 뜨는 문제가 있었음 — create_if_missing을 켜서, 실인덱싱 없이도
+        # 이 chatroom_id로 새 방을 바로 만들도록 함.
+        "create_if_missing": True,
         "members": HS_MEMBERS,  # 요청 — 15명으로 확장
         "keywords": ["동창회", "근황", "결혼", "취업", "여행", "술자리", "단체사진", "동기"],
         "narrative": True,
@@ -884,6 +965,74 @@ def leeseoyeon_mail_plan():
     return plan
 
 
+# 요청 — 이서연 상세보기에서 2026-08-23 정산서류 메일을 실제로 눌러보면 본문이 나와야
+# 하는데, 지금까지 DB(mail 테이블)에는 참조 행만 심고 실제 본문을 documents.parquet에
+# 심는 코드가 아예 없었다(주석에만 "심어둔다"고 적혀 있고 구현이 빠져 있었음). 그래서
+# 그 날짜를 열면 참조(mail 테이블 행)는 있는데 본문이 없어 프론트가 "그날 주고받은
+# 메일을 찾지 못했어요"로 표시했다. get_mail_bodies_by_ids()가 documents.parquet의
+# id/text 컬럼만 보고 [제목]/[날짜]/[발신인]/[수신인]/[메일 본문] 태그를 정규식으로
+# 파싱하므로, 실제 인덱싱된 메일과 똑같은 포맷으로 한 행을 만들어 심어준다.
+# 요청 — 원래 하드코딩된 실제 내용(사용자가 스크린샷으로 다시 알려줌)으로 정정.
+LSY_SETTLE_SUBJECT = "[세미콜론 소모임] 정산서류 보내드려요"
+LSY_SETTLE_BODY = (
+    "안녕! 저번에 얘기했던 팀플 정산서류 정리해서 보내.\n"
+    "발표자료 인쇄비랑 서버 호스팅비 영수증 모아서 엑셀로 정리했어, 총 4명이서 나눠서 계산해봤는데 확인해보고 이상 없으면 알려줘!\n"
+    "다음 주 초까지 조교님한테 제출해야 해서 좀 서둘러야 할 것 같아. 첨부한 정산서류 한번만 봐줘 ㅠㅠ 고마워!"
+)
+
+
+# 이서연의 정산서류 메일 본문을 documents.parquet에 실제 인덱싱된 메일과 같은
+# 포맷(구분자·태그)으로 심는다(재실행 시 같은 mail_id 행을 지우고 새로 심어 중복 방지).
+def apply_leeseoyeon_settlement_document(base_dir):
+    paths = UserPaths(base_dir, MAIL_USER_ID, "mail")
+    documents_path = os.path.join(paths.PARQUET_DIR, "documents.parquet")
+    if not os.path.exists(documents_path):
+        print(f"[WARN] documents.parquet이 없어 이서연 정산서류 본문을 못 심음: {documents_path}")
+        return
+
+    dt = None
+    for (y, m, d), (direction, forced_id) in LSY_SETTLEMENT_SPOTS.items():
+        if forced_id == LSY_SETTLE_MAIL_ID:
+            hour = 10 + (d % 8)
+            minute = (d * 13) % 60
+            dt = datetime.datetime(y, m, d, hour, minute)
+            break
+    if dt is None:
+        return
+    date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    text = (
+        f"[메일 1]\n\n"
+        f"[ID] {LSY_SETTLE_MAIL_ID}\n"
+        f"[제목] {LSY_SETTLE_SUBJECT}\n"
+        f"[구분] 수신\n"
+        f"[날짜] {date_str}\n"
+        f"[발신인] 이서연 <{LEE_SEOYEON_EMAIL}>\n"
+        f"[수신인] 나 <{MAIL_USER_ID}>\n"
+        f"[참조(CC)] 없음\n"
+        f"[폴더 정보] INBOX\n\n"
+        f"[메일 본문]\n{LSY_SETTLE_BODY}\n\n"
+        f"[첨부파일 정보]\n정산내역.xlsx"
+    )
+
+    df = pd.read_parquet(documents_path)
+    df = df[df["id"] != LSY_SETTLE_MAIL_ID]  # 재실행 시 중복 방지 — 있으면 지우고 새로 심음
+    next_hrid = int(df["human_readable_id"].max()) + 1 if len(df) else 0
+    new_row = {
+        "id": LSY_SETTLE_MAIL_ID,
+        "human_readable_id": next_hrid,
+        "title": "이서연 정산서류 데모 메일",
+        "text": text,
+        "text_unit_ids": [],
+        "creation_date": dt.strftime("%Y-%m-%d %H:%M:%S +0900"),
+        "raw_data": {"id": LSY_SETTLE_MAIL_ID, "text": text},
+    }
+    df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    df.to_parquet(documents_path, index=False)
+    print(f"[OK] documents.parquet에 이서연 정산서류 본문 심음(id={LSY_SETTLE_MAIL_ID}) → {documents_path}")
+
+
+
 def cleanup_mail_domain(conn, roster):
     cur = conn.cursor()
     try:
@@ -1182,7 +1331,7 @@ MAIL_SUMMARY_OVERRIDES = {
 }
 
 
-def apply_mail_summary_overrides(base_dir):
+def apply_mail_summary_overrides(base_dir, conn, index_date):
     paths = UserPaths(base_dir, MAIL_USER_ID, "mail")
     if not os.path.exists(paths.MAIL_SUMMARIES_PATH):
         print(f"[WARN] {paths.MAIL_SUMMARIES_PATH} 이 없어 mail 요약 오버라이드를 건너뜁니다.")
@@ -1190,14 +1339,73 @@ def apply_mail_summary_overrides(base_dir):
     with open(paths.MAIL_SUMMARIES_PATH, "r", encoding="utf-8") as f:
         data = json.load(f)
     monthly = data.get("monthly", {})
-    for period, summary in MAIL_SUMMARY_OVERRIDES.items():
-        if period not in monthly:
-            print(f"[WARN] mail_summaries.json에 {period} 항목이 없어 그 항목은 건너뜁니다.")
-            continue
-        monthly[period]["summary"] = summary
+
+    # 요청 — 화면(My Time 요약 카드)은 이 JSON 파일이 아니라 DB mail_summarize
+    # 테이블(get_mail_summaries, db_reader.py)을 읽는다는 걸 뒤늦게 확인 — JSON만
+    # 고쳐서는 화면에 절대 반영 안 되고, 실제 인덱싱이 만든 원본 텍스트가 계속 떴었음.
+    # 그래서 이제 JSON과 DB를 같이 맞춘다(계정/기간 매칭은 PK 그대로 사용, contacts는
+    # JSON에 있는 값을 그대로 같이 넣어 JSON=DB로 완전히 일치시킴).
+    cur = conn.cursor()
+    applied = 0
+    try:
+        for period, summary in MAIL_SUMMARY_OVERRIDES.items():
+            if period not in monthly:
+                print(f"[WARN] mail_summaries.json에 {period} 항목이 없어 그 항목은 건너뜁니다.")
+                continue
+            monthly[period]["summary"] = summary
+            contacts_json = json.dumps(monthly[period].get("contacts", []), ensure_ascii=False)
+            cur.execute(
+                """
+                INSERT INTO mail_summarize (
+                    user_mail_account_id, index_date, summarize_unit, summary_period,
+                    summarized_context, contacts
+                ) VALUES (%s, %s, 'monthly', %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    summarized_context = VALUES(summarized_context),
+                    contacts = VALUES(contacts)
+                """,
+                (MAIL_USER_ID, index_date, period, summary, contacts_json),
+            )
+            applied += 1
+        conn.commit()
+    finally:
+        cur.close()
+
     with open(paths.MAIL_SUMMARIES_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-    print(f"[OK] mail_summaries.json 오버라이드 {len(MAIL_SUMMARY_OVERRIDES)}건 적용 → {paths.MAIL_SUMMARIES_PATH}")
+    print(f"[OK] mail_summaries.json + DB mail_summarize 오버라이드 {applied}건 적용")
+
+
+# 요청 — My Time 연도 슬라이더에 2026년만 찍히지 말고 2017년부터 쭉 나오게 해달라는
+# 요청. "버튼만 있으면 되고 안에 실제 데이터를 채울 필요는 없다"는 요청이라, 진짜
+# 연도별 요약을 만드는 대신 mail_summarize(summarize_unit='yearly')에 빈 자리표시
+# 행만 넣는다 — 프론트(mytimeEngine.js)는 /mail-summaries(type=yearly) 응답의
+# summary_period 키 개수만큼 연도 점을 찍으므로, 내용이 비어 있어도 버튼은 뜬다.
+# 2026년은 이미 실제 인덱싱으로 값이 있으니 건드리지 않는다(ON DUPLICATE KEY UPDATE로
+# 기존 값 보존).
+MAIL_YEAR_BUTTON_RANGE = range(2017, 2026)  # 2017~2025 (2026은 이미 실제 데이터 있음)
+
+
+def apply_mail_year_button_placeholders(conn, index_date):
+    cur = conn.cursor()
+    applied = 0
+    try:
+        sql = """
+            INSERT INTO mail_summarize (
+                user_mail_account_id, index_date, summarize_unit, summary_period,
+                summarized_context, contacts
+            ) VALUES (%s, %s, 'yearly', %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                summarized_context = summarized_context
+        """
+        for y in MAIL_YEAR_BUTTON_RANGE:
+            cur.execute(sql, (MAIL_USER_ID, index_date, str(y), "", json.dumps([], ensure_ascii=False)))
+            applied += 1
+        conn.commit()
+    finally:
+        cur.close()
+    print(f"[OK] mail_summarize에 연도 버튼용 자리표시 {applied}개 추가(2017~2025)")
+
 
 
 # 요청 — Recap "나에게 많이 보낸 사람"/"내가 많이 보낸 사람"이 실제 로스터 데이터가
@@ -1225,7 +1433,159 @@ def apply_mail_contact_stats_overrides(base_dir, roster_stats):
     print(f"[OK] mail_contact_stats.json에 로스터 {len(roster_stats)}명 반영 → {paths.MAIL_CONTACTS_PATH}")
 
 
+# 요청 — My People 로스터 사람들 사진이 화면에 하나도 안 뜨는 문제. 실제 아바타 표시는
+# FLUX로 매번 새로 생성해 person_avatars.json(이메일→URL 캐시)에 저장하는 구조라서
+# (avatar_generator.py generate_person_avatars_batch), ROSTER_RAW에 avatar 파일명을
+# 적어놓는 것만으로는 화면에 전혀 반영되지 않았다 — AVATAR_DIR/AVATAR_FILES는 지금까지
+# 어디에서도 읽어서 쓰이질 않는 죽은 값이었음. 그래서 ROSTER_RAW가 지정한 avatar 파일을
+# 직접 person_avatars.json이 기대하는 위치(<이메일 md5 해시>.png)로 복사해 넣고,
+# person_avatars.json에도 그 URL을 바로 기록해서 FLUX 생성을 건너뛰고 이 사진이
+# 그대로 쓰이게 한다.
+def apply_person_avatars(base_dir, roster):
+    paths = UserPaths(base_dir, MAIL_USER_ID, "mail")
+    os.makedirs(paths.AVATAR_IMAGES_DIR, exist_ok=True)
+
+    avatar_map = {}
+    if os.path.exists(paths.MAIL_AVATARS_PATH):
+        with open(paths.MAIL_AVATARS_PATH, "r", encoding="utf-8") as f:
+            avatar_map = json.load(f)
+
+    applied = 0
+    missing_src = []
+    for person in roster:
+        email = person["email"]
+        src_path = os.path.join(base_dir, AVATAR_DIR, person["avatar"])
+        if not os.path.exists(src_path):
+            missing_src.append(person["avatar"])
+            continue
+        filename = hashlib.md5(email.strip().lower().encode("utf-8")).hexdigest() + ".png"
+        dst_path = os.path.join(paths.AVATAR_IMAGES_DIR, filename)
+        shutil.copyfile(src_path, dst_path)
+        avatar_map[email] = f"/person-avatar-image/{MAIL_USER_ID}/{filename}"
+        applied += 1
+
+    with open(paths.MAIL_AVATARS_PATH, "w", encoding="utf-8") as f:
+        json.dump(avatar_map, f, ensure_ascii=False, indent=2)
+
+    if missing_src:
+        print(f"[WARN] avatar 원본 파일을 못 찾아 건너뜀: {sorted(set(missing_src))}")
+    print(f"[OK] person_avatars.json에 로스터 아바타 {applied}명 반영 → {paths.MAIL_AVATARS_PATH}")
+
+
+# 요청 — "3학년 4반 고등학교 단톡방" 참여자(HS_MEMBERS) 이미지가 하나도 안 뜨는 문제.
+# short_bio 문제와 원인이 같다 — 이 방은 실인덱싱 없이 create_if_missing으로 새로 만든
+# 방이라, 실인덱싱 때만 돌아가는 generate_chatroom_people_avatars_batch()(FLUX 아바타
+# 생성)가 한 번도 실행된 적이 없어서 chatroom_people_avatars.json이 비어있었다.
+# My People 로스터 사진(apply_person_avatars)과 똑같은 방식으로, avatar_stock 사진을
+# 직접 chatroom_avatars/ 캐시에 복사해 넣고 chatroom_people_avatars.json에 매핑을
+# 심어준다(성별은 avatar_stock 썸네일을 직접 눈으로 확인해서 이름과 맞춰 배정함).
+HS_MEMBER_AVATARS = {
+    "김도현": "001_송빈하_66315354.png",
+    "이수빈": "003_류아빈_71639823.png",
+    "박재현": "008_이진_41004722.png",
+    "최유나": "005_정민_58613979.png",
+    "정하늘": "009_안민_67902677.png",
+    "오승민": "012_최우_92259074.png",
+    "한지원": "010_정하수_74104806.png",
+    "배수아": "015_강재_57167054.png",
+    "임찬우": "014_한훈훈_27540406.png",
+    "신예진": "018_장서환_74937666.png",
+    "강태오": "020_서지_26059123.png",
+    "문서영": "021_신영빈_11982417.png",
+    "조은비": "023_한윤태_41507540.png",
+    "윤도경": "024_서은태_55896841.png",
+    "백하은": "025_이서규_75532064.png",
+}
+HS_AVATAR_STOCK_DIR = "avatar_stock"  # 위 파일들은 전부 이 폴더(repo 루트) 안에 있음
+
+
+# 채팅방 참여자(participant_id)→아바타 파일 매핑을 chatroom_avatars/ 캐시에 복사하고
+# chatroom_people_avatars.json에 반영한다(avatar_generator._chatroom_avatar_filename과
+# 동일하게 md5(participant_id).png 파일명 규칙을 그대로 따른다).
+def apply_chatroom_people_avatars(base_dir, chatroom_id, member_avatars):
+    paths = UserPaths(base_dir, chatroom_id, "messenger")
+    os.makedirs(paths.MESSAGE_AVATAR_IMAGES_DIR, exist_ok=True)
+
+    avatar_map = {}
+    if os.path.exists(paths.MESSAGE_AVATARS_PATH):
+        with open(paths.MESSAGE_AVATARS_PATH, "r", encoding="utf-8") as f:
+            avatar_map = json.load(f)
+
+    applied = 0
+    missing_src = []
+    for participant_id, filename_src in member_avatars.items():
+        src_path = os.path.join(base_dir, HS_AVATAR_STOCK_DIR, filename_src)
+        if not os.path.exists(src_path):
+            missing_src.append(filename_src)
+            continue
+        filename = hashlib.md5(participant_id.strip().encode("utf-8")).hexdigest() + ".png"
+        dst_path = os.path.join(paths.MESSAGE_AVATAR_IMAGES_DIR, filename)
+        shutil.copyfile(src_path, dst_path)
+        avatar_map[participant_id] = f"/chatroom-person-avatar-image/{chatroom_id}/{filename}"
+        applied += 1
+
+    with open(paths.MESSAGE_AVATARS_PATH, "w", encoding="utf-8") as f:
+        json.dump(avatar_map, f, ensure_ascii=False, indent=2)
+
+    if missing_src:
+        print(f"[WARN] chatroom avatar 원본 파일을 못 찾아 건너뜀: {sorted(set(missing_src))}")
+    print(f"[OK] chatroom_people_avatars.json({chatroom_id})에 아바타 {applied}명 반영 → {paths.MESSAGE_AVATARS_PATH}")
+
+
+
 # ────────────────────────────── 4. 메신저(카카오) 도메인 시딩 ──────────────────────────────
+
+
+# 요청 — My Time이 "처음 뜰 때" 항상 최신 달을 보여주는데, 실제 인덱싱이 계속 진행되면서
+# 하드코딩해둔 2026-08 이후로 실제 달(예: 2026-09)의 진짜 메일 요약/키워드가 쌓이면
+# 데모용 8월 요약 대신 밋밋한 실제 요약이 최신으로 떠버리는 문제. 시연 때마다 손으로
+# 지우지 않아도 되게, 재실행할 때마다 이 컷오프 이후로 쌓인 데이터를 이 계정에 한해
+# 통째로 지워서 "8월이 최신"인 상태를 계속 유지한다.
+MAIL_DEMO_CUTOFF_PERIOD = "2026-08"
+
+
+def trim_mail_data_after_cutoff(base_dir, conn, index_date):
+    paths = UserPaths(base_dir, MAIL_USER_ID, "mail")
+
+    # 1) mail_summaries.json에서 컷오프 이후 월 제거
+    if os.path.exists(paths.MAIL_SUMMARIES_PATH):
+        with open(paths.MAIL_SUMMARIES_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        monthly = data.get("monthly", {})
+        removed = sorted(p for p in monthly if p > MAIL_DEMO_CUTOFF_PERIOD)
+        for p in removed:
+            del monthly[p]
+        if removed:
+            with open(paths.MAIL_SUMMARIES_PATH, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"[OK] mail_summaries.json에서 {MAIL_DEMO_CUTOFF_PERIOD} 이후 "
+                  f"{len(removed)}개월 제거: {removed}")
+
+    # 2) DB(mail_summarize, mail_keyword)에서도 같은 기준으로 제거
+    year, mon = (int(x) for x in MAIL_DEMO_CUTOFF_PERIOD.split("-"))
+    cutoff_date_end = f"{MAIL_DEMO_CUTOFF_PERIOD}-{calendar.monthrange(year, mon)[1]:02d} 23:59:59"
+
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM mail_summarize WHERE user_mail_account_id=%s AND index_date=%s "
+            "AND summarize_unit='monthly' AND summary_period > %s",
+            (MAIL_USER_ID, index_date, MAIL_DEMO_CUTOFF_PERIOD),
+        )
+        deleted_summaries = cur.rowcount
+
+        cur.execute(
+            "DELETE FROM mail_keyword WHERE user_mail_account_id=%s AND index_date=%s "
+            "AND mail_date > %s",
+            (MAIL_USER_ID, index_date, cutoff_date_end),
+        )
+        deleted_keywords = cur.rowcount
+
+        conn.commit()
+        print(f"[OK] DB에서 {MAIL_DEMO_CUTOFF_PERIOD} 이후 데이터 정리: "
+              f"mail_summarize {deleted_summaries}건, mail_keyword {deleted_keywords}건 삭제")
+    finally:
+        cur.close()
 
 def cleanup_messenger_domain(conn, room):
     cur = conn.cursor()
@@ -1300,18 +1660,29 @@ def seed_messenger_domain(conn, room, block_counter_start):
         # 호버 설명용). description도 ON DUPLICATE KEY UPDATE 대상에 넣어야 재실행 시
         # HS_MEMBER_DESCRIPTIONS를 바꿔도 실제로 반영된다(기존엔 message_count만 갱신돼서
         # 이미 있던 행은 최초 생성 당시 설명에 영원히 고정돼 있었음).
+        # 요청 — My Time "주요 연락처" 툴팁(mytimeEngine.js formatContactTooltip)은
+        # description이 아니라 short_bio 컬럼을 보는데, 이 방은 실인덱싱 없이 새로
+        # 만든 방이라 short_bio가 채워질 기회(실인덱싱 2차 LLM 호출)가 없어서 전원
+        # "등록된 설명이 없습니다"로 떴다 — description과 같은 문장을 short_bio에도
+        # 같이 넣어서 툴팁이 뜨게 한다.
         cp_sql = """
             INSERT INTO chatroom_people (
                 participant_id, chatroom_id, index_date, user_id, chatroom_people_name,
-                message_count, description
-            ) VALUES (%s,%s,%s,%s,%s,%s,%s)
+                message_count, description, short_bio
+            ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
             ON DUPLICATE KEY UPDATE
                 message_count = VALUES(message_count),
-                description = VALUES(description)
+                description = VALUES(description),
+                short_bio = VALUES(short_bio)
         """
         for member in room["members"]:
+            # 요청 — 김도현은 실인덱싱으로 실제 생성된 진짜 description/short_bio가
+            # 있으니 절대 건드리지 말 것 — 이 방(HS_CHATROOM_ID)의 김도현만 UPSERT 자체를
+            # 스킵해서 기존 DB 값을 그대로 보존한다(message_count도 갱신 안 함).
+            if member == "김도현" and chatroom_id == HS_CHATROOM_ID:
+                continue
             description = HS_MEMBER_DESCRIPTIONS.get(member, f"'{room['new_name']}' 멤버입니다.")
-            cur.execute(cp_sql, (member, chatroom_id, index_date, user_id, member, 0, description))
+            cur.execute(cp_sql, (member, chatroom_id, index_date, user_id, member, 0, description, description))
         conn.commit()
 
         # 요청 — "위에서 만든 사람 15명"에 대한 관계가 관계 창에 전부 떠야 함. 이 방은
@@ -1328,11 +1699,16 @@ def seed_messenger_domain(conn, room, block_counter_start):
                     relation_label = VALUES(relation_label),
                     description    = VALUES(description)
             """
-            # 요청 — 15명 사이 관계 라벨을 전부 "친구"로 통일(기존 4단계 순환 풀 제거).
+            # 요청 — 15명 사이 관계 라벨을 기본 "친구"로 통일(기존 4단계 순환 풀 제거)하되,
+            # HS_MEMBER_RELATION_OVERRIDES에 지정된 멤버가 낀 쌍은 그 라벨로 덮어쓴다.
             pairs = list(itertools.combinations(sorted(room["members"]), 2))
-            label = "친구"
-            desc = HS_RELATION_DESCRIPTIONS[label]
             for person_a, person_b in pairs:
+                label = (
+                    HS_MEMBER_RELATION_OVERRIDES.get(person_a)
+                    or HS_MEMBER_RELATION_OVERRIDES.get(person_b)
+                    or "친구"
+                )
+                desc = HS_RELATION_DESCRIPTIONS[label]
                 cur.execute(rel_sql, (chatroom_id, index_date, user_id, person_a, person_b, label, desc))
             conn.commit()
 
@@ -1630,17 +2006,32 @@ def main():
         print("[STEP] 메일 도메인(연락처/친밀도/키워드) 채우는 중...")
         roster_stats = seed_mail_domain(conn, roster, index_date)
 
+        print("[STEP] 이서연 정산서류 메일 본문(documents.parquet) 심는 중...")
+        apply_leeseoyeon_settlement_document(BASE_DIR)
+
         print("[STEP] My Time 메일 요약(mail_summaries.json) 오버라이드 적용 중...")
-        apply_mail_summary_overrides(BASE_DIR)
+        apply_mail_summary_overrides(BASE_DIR, conn, index_date)
+
+        print("[STEP] My Time 연도 슬라이더 버튼용 자리표시(2017~2025) 추가 중...")
+        apply_mail_year_button_placeholders(conn, index_date)
+
+        print(f"[STEP] {MAIL_DEMO_CUTOFF_PERIOD} 이후 실제 데이터 정리 중...")
+        trim_mail_data_after_cutoff(BASE_DIR, conn, index_date)
 
         print("[STEP] Recap 연락처 통계(mail_contact_stats.json) 오버라이드 적용 중...")
         apply_mail_contact_stats_overrides(BASE_DIR, roster_stats)
+
+        print("[STEP] My People 로스터 아바타(person_avatars.json) 반영 중...")
+        apply_person_avatars(BASE_DIR, roster)
 
         print("[STEP] 메신저 채팅방 이름/요약/키워드 채우는 중...")
         block_counter = 0
         for room in CHATROOMS:
             cleanup_messenger_domain(conn, room)
             block_counter = seed_messenger_domain(conn, room, block_counter)
+
+        print("[STEP] '3학년 4반 고등학교 단톡방' 참여자 아바타(chatroom_people_avatars.json) 반영 중...")
+        apply_chatroom_people_avatars(BASE_DIR, HS_CHATROOM_ID, HS_MEMBER_AVATARS)
 
     finally:
         conn.close()
