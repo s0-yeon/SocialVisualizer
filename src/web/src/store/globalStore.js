@@ -61,6 +61,16 @@ class GlobalStore {
         indexed: !!acc.indexed,
       }));
 
+      // 요청 — DB/실제 데이터는 절대 안 건드리고 "화면에 뜨는 순서"만 조정.
+      // 03yeah03@gmail.com이 항상 맨 위에 오도록(그래야 appSidebar.js가 기본으로
+      // 골라주는 mails[0]도 자동으로 이 계정이 됨). 나머지 계정들 순서는 그대로.
+      const PINNED_MAIL_FIRST = "03yeah03@gmail.com";
+      mails.sort((a, b) => {
+        if (a.id === PINNED_MAIL_FIRST) return -1;
+        if (b.id === PINNED_MAIL_FIRST) return 1;
+        return 0;
+      });
+
       const chatrooms = (roomsData.data && roomsData.data.chatrooms) || [];
       const rooms = chatrooms.map((r) => ({
         id: r.chatroom_id,

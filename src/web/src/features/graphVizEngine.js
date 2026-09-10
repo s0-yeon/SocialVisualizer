@@ -10,6 +10,11 @@ import { initAccountPicker } from "./accountPicker.js";
 // My People/My Time/Recap이 공유하는 'gw_user_id'와는 별도의 저장키를 써서, 이 페이지에서 고른 계정이 다른 페이지의 계정 선택에 영향을 주지 않게 한다.
 // URL에 gmail_id가 명시된 경우엔 그걸 그대로 우선한다.
 var GRAPH_MAIL_STORAGE_KEY = "gw_graph_mail_user_id";
+// 요청 — 지식그래프 페이지를 열었을 때 03yeeun03@naver.com 계정이 기본으로 먼저
+// 뜨도록. My People/My Time/Recap이 공유하는 'gw_user_id'와는 별도의 저장키를
+// 써서, 이 페이지의 기본 선택이 다른 페이지의 "나" 계정 표시(03yeah03@gmail.com)에
+// 영향을 주지 않게 한다. URL에 gmail_id가 명시된 경우엔 그걸 그대로 우선한다.
+var DEFAULT_GRAPH_MAIL_USER_ID = "03yeeun03@naver.com";
 
 // user_id로 해당 계정(또는 카카오 대화방)의 그래프 데이터를 불러와 그린다.
 // 계정/도메인 전환 시에도 페이지 새로고침 없이 이 함수만 다시 호출해 그 자리에서 다시 그린다.
@@ -121,6 +126,11 @@ export function initGraphVizPage() {
   });
 
   window.addEventListener("load", function () {
+    if (!gmailIdParam) {
+      // 페이지를 새로 열 때마다(이전 세션에서 다른 계정을 골랐었더라도) 항상
+      // 03yeeun03@naver.com이 먼저 뜨도록 매 로드마다 기본값으로 되돌린다.
+      localStorage.setItem(GRAPH_MAIL_STORAGE_KEY, DEFAULT_GRAPH_MAIL_USER_ID);
+    }
     loadDomain("mail");
   });
 }

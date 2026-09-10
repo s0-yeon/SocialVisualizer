@@ -320,6 +320,14 @@ const BRAND_DISPLAY_NAMES = new Set([
   "마이크로소프트",
   "microsoft 365",
   "xbox",
+  // 요청 — 광고 제거 토글에서 이 시연용 브랜드 계정들도 같이 걸러지도록 추가
+  "무신사",
+  "예스24",
+  "쿠팡",
+  "올리브영",
+  "클래스유",
+  "배달의민족",
+  "네이버",
   "neo4j",
   "the neo4j team",
   "facebook",
@@ -928,6 +936,13 @@ function updateFill() {
   }
 }
 
+// 요청 — 시연 시작 시 타임슬라이더 시작 지점을 2017.01.04로. 왼쪽 경계 라벨
+// (tl-start-lbl, 마찬가지로 2017.01.04로 하드코딩)과 정확히 일치시켜야 "선택된
+// 기간" 텍스트에 다른 날짜(예: 2017.02.05)가 안 뜬다.
+// 버그 수정 — new Date(year, month, day)의 month는 0부터 시작(0=1월)이라
+// new Date(2017, 1, 4)는 실제로 2월 4일이었음. 1월 4일을 만들려면 month에 0을 써야 함.
+const TL_DEFAULT_START_MS = new Date(2017, 0, 4).getTime();
+
 // 전체 기간(firstMs~lastMs)으로 타임슬라이더 초기화
 function initTimeline(firstMs, lastMs) {
   globalFirst = firstMs;
@@ -937,12 +952,21 @@ function initTimeline(firstMs, lastMs) {
 
   const inMin = document.getElementById("tl-min");
   const inMax = document.getElementById("tl-max");
-  inMin.value = 0;
+  const defaultStartMs = Math.min(
+    Math.max(TL_DEFAULT_START_MS, firstMs),
+    lastMs,
+  );
+  const defaultStartVal =
+    firstMs < lastMs ? msToVal(defaultStartMs) : 0;
+  inMin.value = Math.max(0, Math.min(1000, defaultStartVal));
   inMax.value = 1000;
   selMin = valToMs(+inMin.value);
   selMax = lastMs;
 
-  document.getElementById("tl-start-lbl").textContent = fmtDate(firstMs);
+  // 요청 — 03yeah03@gmail.com 타임라인 시작 라벨을 실제 데이터 시작일(2017.01.07)
+  // 대신 2017.01.04로 표시(화면 표시만 바꾼 것, 슬라이더 계산/실제 데이터는 그대로).
+  document.getElementById("tl-start-lbl").textContent =
+    currentChannel === "mail" ? "2017.01.04" : fmtDate(firstMs);
   document.getElementById("tl-end-lbl").textContent = fmtDate(lastMs);
 
   buildTicks(firstMs, lastMs);
@@ -1434,15 +1458,48 @@ async function openChatroom(chatroomId, chatroomName) {
   await fetchAndRenderChatroomPeople(moodPromise);
 }
 
-// 채팅방 이름 표시 오버라이드 훅(현재는 그대로 통과)
+// 요청 — "IT 공과대학" 방 참여자 이름을 화면 표시만 바꿔치기(실제 참여자
+// 식별자/데이터는 그대로 두고, 사람 이름이 나오는 자리마다 이걸로 감싸서 씀).
+const IT_ROOM_NAME = "IT 공과대학";
+const IT_ROOM_NAME_OVERRIDES = {
+  "김동현": "이현우",
+  "성진": "진성",
+  "소윤": "은희",
+  "유승준": "전도빈",
+  "이예빈": "이예나",
+  "준호": "호준",
+};
 function applyRoomNameOverride(chatroomName, name) {
+  if (chatroomName === IT_ROOM_NAME && IT_ROOM_NAME_OVERRIDES[name]) {
+    return IT_ROOM_NAME_OVERRIDES[name];
+  }
   return name;
 }
 
-// 참여자 설명 표시 오버라이드 훅(현재는 person.description 그대로 통과)
+// 요청 — "3학년 4반 고등학교" 단톡방 김도현 상세보기의 "참여 패턴" 설명이 우리
+// UI(참여 패턴/자주 하는 이야기/말투로 나뉜 키:값 카드)를 안 쓰고 그냥 글자만
+// 나와서, 고등학교 동창 모임다운 내용으로 새로 써서 같은 형식으로 하드코딩.
+// 방 이름은 실제 표시값이 "3학년 4반 고등학교"/"...단톡방" 등으로 정확히 뭔지
+// 확실하지 않을 수 있어 includes로 느슨하게 매칭.
+const MESSENGER_DESC_OVERRIDES = {
+  "김도현": {
+    room: "3학년 4반 고등학교",
+    description:
+      "참여 패턴: 활발히 참여합니다.\n" +
+      "자주 하는 이야기: 근황, 취업, 동창회 약속 같은 친구들 사는 이야기를 자주 나눕니다.\n" +
+      "말투: 반말로 편하게 얘기하며, 이모티콘도 자주 사용합니다.",
+  },
+};
+// 참여자 설명 표시 오버라이드 훅 — 위 하드코딩 대상이면 그 내용을, 아니면 person.description 그대로 통과
 function applyMessengerDescriptionOverride(chatroomName, person) {
+  const ov = MESSENGER_DESC_OVERRIDES[person && person.name];
+  if (ov && (chatroomName || "").includes(ov.room)) return ov.description;
   return person ? person.description : null;
 }
+
+// 요청 — 김도현 상세보기를 처음 열었을 때는 메신저 통계가 최신 달(오른쪽 끝) 대신
+// 맨 처음 달(왼쪽 끝)부터 보이도록.
+const MESSENGER_STATS_SCROLL_LEFT_PEOPLE = new Set(["김도현"]);
 
 async function fetchAndRenderChatroomPeople(moodPromise) {
   // 아래 fetch/await가 진행되는 사이 사용자가 다른 방을 누르거나 메일로 돌아가면, 뒤늦게 도착한 이 응답이 최신 화면을 덮어쓰지 않도록 시작 시점의 방 id를 기억해뒀다가 반영 직전에 지금도 같은 방/채널인지 다시 확인한다.
@@ -1773,16 +1830,22 @@ function renderMessengerBarChart(data) {
   // 메일 차트와 동일하게 달 하나당 고정폭 + 가로 스크롤(overflow, #mp-chart)로 바꿔서 기간이 길어도(2020~2026년) 라벨이 겹치지 않게 한다.
   chartArea.innerHTML = `<div class="mp-vchart-row">${groupsHtml}</div>`;
 
-  // 메신저 통계도 메일과 동일하게 최신 달을 기본으로 열어둔다.
-  const target = data.monthly[data.monthly.length - 1];
+  // 메신저 통계도 메일과 동일하게 최신 달을 기본으로 열어둔다(요청) — 다만 김도현은
+  // 처음 열었을 때 맨 처음 달(왼쪽 끝, 고2 시절부터 시작하는 서사)부터 보이도록 예외.
+  const scrollToStart =
+    currentMessengerPerson &&
+    MESSENGER_STATS_SCROLL_LEFT_PEOPLE.has(currentMessengerPerson.name);
+  const target = scrollToStart
+    ? data.monthly[0]
+    : data.monthly[data.monthly.length - 1];
   const targetGroup = chartArea.querySelector(`.mp-vchart-group[data-month="${target.month}"]`);
   if (targetGroup) {
     targetGroup.classList.add("active");
     openMessengerDayList(target.month);
-    // 메일 차트(renderBarChart)와 동일하게 최신(가장 오른쪽) 달로 스크롤한다.
-    // scrollIntoView 대신 chartArea 자신의 scrollLeft만 옮기는 이유는 renderBarChart와 동일
-    // (캔버스 scale transform 때문에 .mp-detail이 세로로 밀려버리는 문제 방지).
-    chartArea.scrollLeft = chartArea.scrollWidth;
+    // 메일 차트(renderBarChart)와 동일하게 스크롤한다(scrollIntoView 대신 chartArea
+    // 자신의 scrollLeft만 옮기는 이유는 캔버스 scale transform 때문에 .mp-detail이
+    // 세로로 밀려버리는 문제 방지 — renderBarChart와 동일).
+    chartArea.scrollLeft = scrollToStart ? 0 : chartArea.scrollWidth;
     const detailElAfterScroll = document.getElementById("mp-detail");
     if (detailElAfterScroll) detailElAfterScroll.scrollTop = 0;
   }
