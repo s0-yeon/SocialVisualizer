@@ -21,7 +21,7 @@
   margin-left: 0 !important; // 사이드바 제거 후에도 남아있는 다른 반응형 규칙(margin-left:70/230px)을 이기기 위함
   background: #ffffff;
   min-height: 70px;
-  display: flex;
+  display: flex !important;
   align-items: center;
   // 맨 위에서는 그림자가 안 보이다가, 스크롤하면 js/init.js가 붙여주는 .gw-header-scrolled 클래스가 붙으면서 자연스럽게 그림자가 나타남
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0);
@@ -119,6 +119,15 @@
 @media (max-width: 1180px) {
   .gw-top-links {
     display: none;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+  .gw-top-links {
+    display: flex !important;
+  }
+  .gw-nav-toggle {
+    display: none !important;
   }
 }
 

@@ -2131,6 +2131,9 @@ footer {
   .mp-content {
     flex-direction: column;
   }
+  .mp-left {
+    min-height: 0;
+  }
   .mp-grid {
     grid-template-columns: repeat(6, 1fr);
   }
