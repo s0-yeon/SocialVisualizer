@@ -10,9 +10,19 @@ Account/chatroom picker dropdown — fetches indexed accounts via GET /accounts,
 (해당 페이지에서만 명시적으로 호출 — bootstrapApp()에는 연결하지 않음)
  */
 
-/** 화면에 보여줄 계정 라벨을 반환 — 항상 실제 계정 id 그대로. */
+// 시연 영상 녹화용 — 실제 이메일이 화면에 노출되지 않도록 표시 텍스트만 임시로
+// 바꿔치기한다. 실제 계정 식별자(user_id)는 그대로 유지하므로
+// API 호출/DB 매칭에는 전혀 영향 없음(화면 표시 전용). 필요 없어지면 이 오버라이드
+// 객체만 비우면 원래대로 돌아온다.
+const DISPLAY_EMAIL_OVERRIDES = {
+  "03yeah03@gmail.com": "03yeeun03@gmail.com",
+  "03yeeun03@naver.com": "yeeunkim82@icloud.com",
+  "324dfan@naver.com": "moonlight_haru@icloud.com",
+};
+
+/** 화면에 보여줄 계정 라벨을 반환 — 오버라이드가 있으면 그걸, 없으면 원래 id 그대로. */
 export function displayAccountLabel(userId) {
-  return userId;
+  return DISPLAY_EMAIL_OVERRIDES[userId] || userId;
 }
 
 export async function initAccountPicker(container, onChange, options = {}) {

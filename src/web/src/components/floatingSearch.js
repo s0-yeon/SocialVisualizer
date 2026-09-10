@@ -48,6 +48,37 @@ async function pollJob(FLASK_URL, jobId, onDone, onError, interval = 2000, maxTr
   onError("응답 시간이 초과되었습니다. 다시 시도해주세요.");
 }
 
+// 요청 — 시연 영상용으로 플로팅 검색(메신저 탭)에서 특정 질문 하나만
+// 실제 GraphRAG 호출 없이 미리 써둔 답변으로 바로 뜨도록 하드코딩. "3학년 4반
+// 고등학교 단톡방"의 2022년 9월 요약(HS_MONTH_TEXT_OVERRIDES, seed_fake_people.py)에
+// "학교에서 다같이 영화를 보던 날도 있었고"라는 내용이 있는데 정작 무슨 영화인지는
+// 안 적혀 있어서, 그 영화 제목을 묻는 질문에 자연스럽게 답하는 문장을 하나 심어둔다.
+// 질문 문구가 시연 중 약간 달라질 수 있어서 정확 일치가 아니라 핵심 키워드
+// (영화 + 22년/9월/고등학교 단서) 조합으로 느슨하게 매칭한다.
+const HARDCODED_QA = [
+  {
+    domain: "messenger",
+    match: (q) => {
+      const hasMovie = q.includes("영화");
+      const hasHint =
+        q.includes("2022") || q.includes("22년") || q.includes("9월") ||
+        q.includes("고등학교") || q.includes("고3") || q.includes("단톡");
+      return hasMovie && hasHint;
+    },
+    answer:
+      "3학년 4반 고등학교 단톡방 2022-09-16 대화에서 반 전체가 함께 볼 영화는 '탑건 매버릭'으로 정해졌습니다.\n\n" +
+      "* 이수빈이 \"오늘 영화 뭐 봐?\"라고 물었습니다.\n" +
+      "* 김도현이 \"탑건 매버릭 볼거야\"라고 답하며 다같이 신나했습니다.",
+    sourceIds: [{ account: "3학년 4반 고등학교 단톡방" }],
+  },
+];
+
+function findHardcodedAnswer(domain, q) {
+  const hit = HARDCODED_QA.find((qa) => qa.domain === domain && qa.match(q));
+  return hit || null;
+}
+
+
 const TABS = [
   {
     key: "mail",
@@ -184,6 +215,17 @@ function createTabController(tab, root, FLASK_URL) {
     showLoading(q);
     saveRecent(q);
     renderRecents();
+
+    // 하드코딩된 질문이면 실제 API 호출 없이 미리 써둔 답변을 그대로 보여준다
+    // (로딩 스피너는 잠깐 보여줘서 실제로 검색한 것처럼 자연스럽게 연출).
+    const hardcoded = findHardcodedAnswer(tab.domain, q);
+    if (hardcoded) {
+      setTimeout(
+        () => showResult(q, hardcoded.answer, hardcoded.sourceIds),
+        900,
+      );
+      return;
+    }
 
     const userId = tab.getUserId();
     try {
