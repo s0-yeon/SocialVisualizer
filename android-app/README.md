@@ -33,6 +33,7 @@
 |---|---|
 | `MainActivity.kt` | `app/src/main/java/com/mailgrapher/webview/MainActivity.kt` (덮어쓰기) |
 | `AndroidManifest.xml` | `app/src/main/AndroidManifest.xml` 에 표시된 (A)(B) 병합 (아래 3번) |
+| `build.gradle.kts` | `app/build.gradle.kts` (덮어쓰기) — 빌드마다 APK를 `releases/`에 버전별로 보관하는 태스크 포함 (아래 5번) |
 
 `reference/network_security_config.xml` 은 **LAN(HTTP) 폴백을 쓸 때만** 필요 —
 `app/src/main/res/xml/network_security_config.xml` 로 복사하고 매니페스트
@@ -59,10 +60,16 @@ private const val START_URL = "https://<본인-고정도메인>.ngrok-free.app/i
 
 ## 5. 빌드 & 설치
 
-1. `Build > Build App Bundle(s) / APK(s) > Build APK(s)`
-2. 완료 알림의 **locate** → `app/build/outputs/apk/debug/app-debug.apk`
-3. APK 를 폰으로 옮기고(USB/드라이브/링크), 폰 설정에서 "출처를 알 수 없는 앱 설치"
-   허용 후 설치
+1. `Build > Build App Bundle(s) / APK(s) > Build APK(s)` (또는 커맨드라인 `./gradlew.bat :app:assembleDebug`,
+   `JAVA_HOME` 은 사용 중인 JBR/JDK 경로로)
+2. 빌드가 끝나면 **`releases/`**(프로젝트 루트, `app/` 옆) 에 `MailGrapher-v<버전>-<타임스탬프>.apk`
+   형태로 사본이 자동으로 쌓인다 — `app/build/outputs/apk/debug/app-debug.apk`(항상 같은 경로,
+   매번 덮어써짐)와 달리 **여기 쌓이는 파일들은 지우지 않는 한 계속 남는다.**
+   - 다른 ngrok URL/앱 이름으로 만든 변형을 구분하려면 `-PappLabel=이름` 을 붙여 빌드:
+     `./gradlew.bat :app:assembleDebug -PappLabel=demo2` → `MailGrapher-v1.0-demo2-<타임스탬프>.apk`
+   - 버전을 명확히 구분하고 싶으면 `app/build.gradle.kts` 의 `defaultConfig.versionName` 도 같이 올려준다.
+3. `releases/` 안의 원하는 APK 를 폰으로 옮기고(USB/드라이브/링크), 폰 설정에서
+   "출처를 알 수 없는 앱 설치" 허용 후 설치
 4. 노트북에서 `python src/app.py` + `ngrok http 80 --url=<고정도메인>.ngrok-free.app`
    실행한 상태로 앱 실행
 
