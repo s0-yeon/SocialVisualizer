@@ -2161,6 +2161,13 @@ footer {
   }
 }
 
+@media (min-width: 1600px) {
+  .mp-panel-header-canvas {
+    width: 100% !important;
+    transform: none !important;
+  }
+}
+
 /* 메신저 상세보기 전용 글자 크기 통일 — 사진 옆 이름(#mp-detail-name)과 키워드 탭
    내용(#mp-detail-wc)만 빼고 전부 1rem. openMessengerDetail()이 #mp-detail에
    .mp-detail-messenger를 붙이고 openDetail()(메일)은 떼서, 메일 쪽엔 영향 없음. */
