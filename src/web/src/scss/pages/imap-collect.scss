@@ -447,6 +447,11 @@ html {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  // .gw-jobs-list(flex column)의 자식이라 기본 flex-shrink:1이 적용되는데, 카드 개수가
+  // 늘어나 총 높이가 .gw-jobs-list의 max-height를 넘으면 이 값 때문에 스크롤 대신
+  // 카드 전체가 찌그러져(overflow:hidden이라 잘린 채로) 눌린 것처럼 보였다. 카드는
+  // 원래 크기를 유지하고 넘치는 만큼만 부모가 스크롤하도록 고정.
+  flex-shrink: 0;
 }
 .gw-log-panel.visible {
   display: block;
@@ -613,6 +618,24 @@ html {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  // job 카드가 쌓여도 전체 화면이 아니라 이 박스 안에서만 스크롤되도록 함. max-height는
+  // useMatchHeight 훅(ImapCollectApp.jsx)이 왼쪽 폼 패널의 실제 렌더링 높이를 측정해
+  // 인라인 스타일로 채워준다 — grid/flex의 auto 높이 계산은 overflow:auto인 자식의
+  // 콘텐츠 높이를 여전히 최대 크기 기준으로 반영해버려서(오직 "최소" 기여만 0으로
+  // 취급됨) CSS만으로는 왼쪽 패널 높이에 맞춰 상한을 걸 수 없었다.
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: #e4e4e4 transparent;
+}
+.gw-jobs-list::-webkit-scrollbar {
+  width: 4px;
+}
+.gw-jobs-list::-webkit-scrollbar-thumb {
+  background: #e4e4e4;
+  border-radius: 4px;
 }
 .gw-jobs-list .gw-log-empty {
   height: auto;

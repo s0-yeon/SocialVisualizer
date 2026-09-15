@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import Header from "./Header.jsx";
 import { initImapCollectPage } from "../features/imapCollectEngine.js";
 import { useScaleToFit } from "../utils/useScaleToFit.js";
+import { useMatchHeight } from "../utils/useMatchHeight.js";
 
 /**
 "소셜 데이터 분석" 페이지(imap-collect.html) 전체를 감싸는 최상위 React 컴포넌트 — 헤더와 메일/메신저 탭 폼, job 로그 패널 마크업을 마운트한다.
@@ -19,6 +20,10 @@ Kept as-is.
  */
 function ImapCollectApp() {
   const contentRef = useRef(null);
+  const mailLeftRef = useRef(null);
+  const mailJobsRef = useRef(null);
+  const messageLeftRef = useRef(null);
+  const messageJobsRef = useRef(null);
 
   useEffect(() => {
     initImapCollectPage();
@@ -28,6 +33,14 @@ function ImapCollectApp() {
   // 전혀 건드리지 않고, 원래 크기 그대로 렌더링된 상태를 매번 다시 측정해서 그 비율만큼
   // transform:scale()로 통째로 줄이거나 키운다(home.scss의 히어로와 같은 방식).
   useScaleToFit(contentRef, "top center", 1180);
+
+  // job 카드가 아무리 쌓여도 오른쪽 "2 지식그래프 만들기 및 분석" 목록이 왼쪽 폼 패널보다
+  // 커지지 않도록, 왼쪽 패널의 실제 높이를 오른쪽 job 목록의 max-height로 동기화한다
+  // (넘치는 카드는 그 안에서만 스크롤됨 — useMatchHeight.js 참고).
+  useMatchHeight([
+    [mailLeftRef, mailJobsRef],
+    [messageLeftRef, messageJobsRef],
+  ]);
 
   return (
     <>
@@ -74,7 +87,7 @@ function ImapCollectApp() {
             {/* 메일 탭 콘텐츠 */}
             <div className="gw-tab-panel active" id="tab-panel-mail" role="tabpanel">
               {/* 메일 왼쪽: 폼 카드 */}
-              <div className="gw-split-left-content">
+              <div className="gw-split-left-content" ref={mailLeftRef}>
                 <div className="gw-collect-cards-column">
                   {/* 카드 1: IMAP 서버 설정 */}
                   <div className="gw-card">
@@ -285,7 +298,7 @@ function ImapCollectApp() {
 
               {/* 메일 오른쪽: 로그 */}
               <div className="gw-split-right-content">
-                <div className="gw-jobs-list" id="jobs-list">
+                <div className="gw-jobs-list" id="jobs-list" ref={mailJobsRef}>
                   <div className="gw-log-empty" id="jobs-list-empty">
                     <i className="bi bi-clock-history" style={{ fontSize: "1.2rem" }}></i>
                     수집을 시작하면 이곳에 로그가 표시됩니다.
@@ -297,7 +310,7 @@ function ImapCollectApp() {
             {/* 메시지 탭 콘텐츠 */}
             <div className="gw-tab-panel" id="tab-panel-message" role="tabpanel">
               {/* 메시지 왼쪽: 폼 카드 */}
-              <div className="gw-split-left-content">
+              <div className="gw-split-left-content" ref={messageLeftRef}>
                 <div className="gw-card">
                   <div className="gw-card-title">
                     <i className="bi bi-file-earmark-text"></i> 메신저 파일
@@ -369,7 +382,7 @@ function ImapCollectApp() {
 
               {/* 메시지 오른쪽: 로그 */}
               <div className="gw-split-right-content">
-                <div className="gw-jobs-list" id="message-jobs-list">
+                <div className="gw-jobs-list" id="message-jobs-list" ref={messageJobsRef}>
                   <div className="gw-log-empty" id="message-jobs-list-empty">
                     <i className="bi bi-clock-history" style={{ fontSize: "1.2rem" }}></i>
                     수집을 시작하면 이곳에 로그가 표시됩니다.
