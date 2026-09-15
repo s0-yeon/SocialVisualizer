@@ -20,16 +20,16 @@ function MyTimeApp() {
   // 제목 줄(My People의 .mp-panel-header와 같은 역할)도 고정 캔버스+scale로 —
   // 창이 좁아지면 이 줄과 나머지 페이지가 항상 같은 비율로 같이 줄어들게 함.
   const pageHeaderCanvasRef = useRef(null);
-  useScaleToFit(pageHeaderCanvasRef, "top left");
+  useScaleToFit(pageHeaderCanvasRef, "top left", 1200);
 
   // 연도 슬라이더(.mt-pointer-wrap)와 그 아래 두 창(.mt-two-col)을 따로따로 캔버스로
   // 나누면 각자 반올림이 달라져서 서로 위치가 어긋나는 문제가 있었음 — 그래서 뷰(메일/
   // 메신저) 하나당 슬라이더+두 창 전체를 하나의 고정 캔버스로 묶어서, My People의
   // 상세보기 패널처럼 항상 정확히 같은 비율로 같이 줄어들고 커지게 한다.
   const mailViewCanvasRef = useRef(null);
-  useScaleToFit(mailViewCanvasRef, "top center");
+  useScaleToFit(mailViewCanvasRef, "top center", 1200);
   const msgViewCanvasRef = useRef(null);
-  useScaleToFit(msgViewCanvasRef, "top center");
+  useScaleToFit(msgViewCanvasRef, "top center", 1200);
 
   return (
     <>
