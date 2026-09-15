@@ -808,3 +808,67 @@ html {
     transform: rotate(360deg);
   }
 }
+
+@media (max-width: 1180px) and (min-width: 769px) {
+  body,
+  html {
+    overflow: visible !important;
+    overflow-y: auto !important;
+  }
+
+  .page-imap-collect .right_col {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    padding: 80px 0 24px !important;
+  }
+  .ic-scale-wrap {
+    display: block !important;
+    transform: none !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .page-imap-collect .gw-collect-wrap {
+    transform: none !important;
+    width: auto !important;
+    max-width: 100% !important;
+    padding: 8px 12px 24px !important;
+  }
+  .gw-split-grid-wrapper {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+    margin-top: 16px !important;
+  }
+  .gw-split-grid-wrapper::after {
+    display: none !important;
+  }
+  .gw-split-header-left {
+    grid-column: 1 !important;
+    order: 1;
+    height: auto !important;
+    flex-wrap: wrap !important;
+    gap: 8px 10px !important;
+  }
+  .gw-split-left-content {
+    grid-column: 1 !important;
+    order: 2;
+    width: 100% !important;
+    margin-bottom: 24px;
+  }
+  .gw-split-header-right {
+    grid-column: 1 !important;
+    order: 3;
+    height: auto !important;
+    margin-top: 0 !important;
+  }
+  .gw-split-right-content {
+    grid-column: 1 !important;
+    order: 4;
+    width: 100% !important;
+  }
+  #tab-panel-message .gw-form-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

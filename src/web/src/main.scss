@@ -17,6 +17,7 @@
 @use "./scss/components/header.scss"; // 공통 헤더(Header.jsx) 스타일 + 사이드바 제거에 따른 레이아웃 보정
 @use "./scss/components/floating-search.scss"; // 모든 페이지 우측 상단 떠 있는 검색 버튼/팝업(floatingSearch.js)
 @use "./scss/components/footer.scss"; // 공통 푸터(Footer.jsx) 스타일
+@use "./scss/mobile.scss"; // 좁은 화면 전용 오버라이드(햄버거 네비 / 오프캔버스 사이드바) — 항상 맨 끝
 
 // CSS files using @import (legacy approach for .css files)
 @import "@fortawesome/fontawesome-free/css/all.min.css";

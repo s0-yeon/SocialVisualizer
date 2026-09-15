@@ -27,7 +27,7 @@ function ImapCollectApp() {
   // 창 크기가 바뀌어도 이 페이지 안의 요소·크기 값(카드 크기, 6:4 분할 비율, 구분선 위치 등)은
   // 전혀 건드리지 않고, 원래 크기 그대로 렌더링된 상태를 매번 다시 측정해서 그 비율만큼
   // transform:scale()로 통째로 줄이거나 키운다(home.scss의 히어로와 같은 방식).
-  useScaleToFit(contentRef);
+  useScaleToFit(contentRef, "top center", 1180);
 
   return (
     <>

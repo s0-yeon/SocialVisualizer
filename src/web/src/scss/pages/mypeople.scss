@@ -2131,6 +2131,9 @@ footer {
   .mp-content {
     flex-direction: column;
   }
+  .mp-left {
+    min-height: 0;
+  }
   .mp-grid {
     grid-template-columns: repeat(6, 1fr);
   }
@@ -2155,6 +2158,13 @@ footer {
   .mp-timeline {
     left: calc(28px + var(--gw-sidebar-w, 0px));
     right: 28px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .mp-panel-header-canvas {
+    width: 100% !important;
+    transform: none !important;
   }
 }
 

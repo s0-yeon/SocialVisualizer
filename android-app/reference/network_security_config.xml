@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  LAN(HTTP) 폴백 전용. ngrok(HTTPS)만 쓸 거면 이 파일은 필요 없다.
+
+  쓰는 경우:
+   1) 이 파일을 app/src/main/res/xml/network_security_config.xml 로 복사
+   2) AndroidManifest 의 <application> 에
+      android:networkSecurityConfig="@xml/network_security_config"
+      android:usesCleartextTraffic="true"
+   3) 아래 <domain> 을 노트북의 LAN IP 로 교체 (예: 192.168.0.12)
+   4) MainActivity 의 START_URL 을 http://192.168.0.12/init 로
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.0.12</domain>
+    </domain-config>
+</network-security-config>
