@@ -270,6 +270,20 @@ def _build_global_engine(output_dir: str, graphrag_root: str) -> tuple[GlobalSea
             "include_community_rank": True,
             "community_weight_name": "occurrence weight",  # build_community_context()의 실제 기본 가중치 속성명과 일치
         },
+        # 라이브러리 기본값("multiple paragraphs")을 쓰던 걸 local과 동일한 원칙으로 오버라이드.
+        # 5.1b 확정 포맷(번호 순서 리스트+"주제:"/"내용:" 라벨+존댓말 일관)을 명시적으로 요구
+        # (2026-09-10, SFT 학습 데이터 재구축 중 이 포맷이 실제로는 프로덕션에 반영 안 돼 있던
+        # 걸 발견 — gen_global_sft.py의 RESPONSE_TYPE도 이 문자열과 동일하게 맞춰야 함).
+        response_type=(
+            "번호가 매겨진 순서 리스트(1, 2, 3...)로 작성한다. 항목 사이는 실제 줄바꿈으로 구분하고, "
+            "한 줄에 여러 항목을 \" - \"로 이어붙이지 않는다. 각 항목은 반드시 아래 두 줄로만 구성한다:\n"
+            "주제: <그 주제를 한 줄로 요약한 제목>\n"
+            "내용: <그 주제에 대한 설명을 두세 문장으로 서술>\n"
+            "제목/날짜/계정/채팅방/ID 같은 다른 필드는 추가하지 않는다. "
+            "서두 문장부터 리스트 항목 전부까지 존댓말(-습니다/-입니다)로 일관되게 작성하고 반말은 쓰지 않는다. "
+            "마크다운 굵게(**)나 헤더(#) 기호는 쓰지 않는다. "
+            "항목은 중요도(importance score/rank)가 높은 순서로 배치한다."
+        ),
     )
     return engine, model
 

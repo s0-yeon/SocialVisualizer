@@ -39,3 +39,10 @@ user_data/*
 __pycache__/
 *.pyc
 .venv/
+# SFT 골드데이터 생성 작업 (임시/진단용 — 커밋 대상 아님, synthetic_data_indexing_note.md 참고)
+sft_work/
+_archive_indexing_fixes/
+_to_delete/
+
+# 실 개인정보 백업 (실 계정 메일/메신저 — 절대 커밋 금지)
+personal_backup/
