@@ -403,8 +403,14 @@ function createTimeline(ids) {
     render();
   });
 
-  // 새 계정/채팅방의 월별·연도별 데이터를 주입하고 타임라인을 초기 상태로 다시 그림
-  function setData(monthData, yearData, emptyMessage) {
+  // 새 계정/채팅방의 월별·연도별 데이터를 주입하고 타임라인을 초기 상태로 다시 그림.
+  // defaultKey(선택) — 원래는 항상 ALL_KEYS의 마지막 달을 기본으로 보여주는데, 03yeah03@gmail.com
+  // 전용으로 My Time 뱃지 범위를 My People과 맞추려고(2017.01~2026.09) 내용 없는 빈 월별
+  // 자리표시(2017~2019, 2026-09)를 mail_summarize에 추가하면서, 아무것도 안 주면 그 빈 달이
+  // 기본으로 뜨는 문제가 생겼다. 그래서 호출부(initMail)에서 이 계정일 때만 "실제 내용 있는
+  // 마지막 달"을 defaultKey로 넘겨주고, 그 키가 ALL_KEYS에 있으면 그걸 기본으로 쓴다 — 다른
+  // 모든 호출부(메신저 등)는 이 인자를 안 넘기므로 기존 동작(마지막 달 자동 선택) 그대로다.
+  function setData(monthData, yearData, emptyMessage, defaultKey) {
     MONTH_DATA = monthData || {};
     YEAR_DATA = yearData || {};
     ALL_KEYS = Object.keys(MONTH_DATA).sort();
@@ -419,7 +425,8 @@ function createTimeline(ids) {
     FIRST_NUM = monthToNum(ALL_KEYS[0]);
     const LAST_NUM = monthToNum(ALL_KEYS[ALL_KEYS.length - 1]);
     TOTAL = LAST_NUM - FIRST_NUM || 1;
-    centerIdx = ALL_KEYS.length - 1;
+    centerIdx =
+      defaultKey && ALL_KEYS.includes(defaultKey) ? ALL_KEYS.indexOf(defaultKey) : ALL_KEYS.length - 1;
 
     buildPointer();
     render();
@@ -776,12 +783,26 @@ async function initMail(gmailId) {
     fetchSummaries("monthly"),
     fetchSummaries("yearly"),
   ]);
+  // 요청 — My Time 뱃지 범위를 My People과 맞추려고(2017.01~2026.09) 03yeah03@gmail.com
+  // 계정에만 내용 없는 빈 월별 자리표시(2017~2019, 2026-09)를 추가했는데, 그대로 두면
+  // setData()가 항상 "마지막 달"을 기본으로 띄우는 로직 때문에 빈 2026-09가 기본으로 떠버린다.
+  // 다른 계정/실데이터는 전혀 안 건드리고 이 계정에서만, 실제 요약 내용(summary)이 있는
+  // 마지막 달을 찾아서 defaultKey로 넘긴다.
+  const MAIL_HARDCODED_DEMO_ACCOUNT = "03yeah03@gmail.com";
+  let mailDefaultKey;
+  if (gmailId === MAIL_HARDCODED_DEMO_ACCOUNT) {
+    const keysWithContent = Object.keys(MONTH_DATA)
+      .filter((k) => MONTH_DATA[k] && MONTH_DATA[k].summary)
+      .sort();
+    mailDefaultKey = keysWithContent[keysWithContent.length - 1];
+  }
   // mailTimeline.setData()가 끝나자마자 가장 최근 달을 오른쪽 키워드 창에 자동으로 띄우므로(notifyPeriod), 그보다 먼저 키워드 데이터를 받아둬야 한다.
   await mailKwPanel.init(gmailId);
   mailTimeline.setData(
     MONTH_DATA,
     YEAR_DATA,
-    "아직 생성된 요약이 없습니다. 데이터 분석하기를 먼저 실행해주세요."
+    "아직 생성된 요약이 없습니다. 데이터 분석하기를 먼저 실행해주세요.",
+    mailDefaultKey
   );
 }
 

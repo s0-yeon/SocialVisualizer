@@ -500,6 +500,21 @@ HS_KIM_TAIL_TOTAL = 132   # 2023-01 ~ 2026-08 총량(매달 지수 감쇠로 나
 HS_KIM_TAIL_DECAY = 0.75  # 1보다 작을수록 초반 surplus가 더 빨리 잦아듦
 HS_KIM_TOTAL = HS_KIM_2022_TOTAL + HS_KIM_TAIL_TOTAL  # 1382건
 
+# 요청 — 김도현 메신저 키워드(My Time 키워드 그래프)가 지금은 방 전체 15명이
+# 공유하는 연도별 8개짜리 테마 풀(HS_YEAR_THEMES[y]["keywords"])에서 순번만
+# 밀려서 뽑히다 보니, 그가 실제로 등장하는 블록 수가 적은 달엔 몇 안 되는 단어만
+# 반복돼서 "다양하다"는 느낌이 잘 안 남. 김도현만 따로, 연도별 개인 서사(대학
+# 새내기/알바·군입대/휴학·복학·인턴/취업준비/사회초년생)에 맞는 전용 키워드 풀을
+# 두고, 그가 실제로 등장한 횟수(연도별 누적)를 기준으로 순환시켜 풀 전체가 고르게
+# 다 뽑히게 한다. (다른 14명이 쓰는 room_keywords 로직은 그대로 안 건드림.)
+HS_KIM_KEYWORD_POOL_BY_YEAR = {
+    2022: ["새내기", "OT", "MT", "수강신청", "동아리박람회", "미팅", "과제", "종강", "축제", "방학"],
+    2023: ["전공수업", "알바", "군입대", "훈련소", "자취", "학점", "조모임", "면회", "휴가", "복무"],
+    2024: ["휴학", "복학", "인턴", "공모전", "자격증", "토익", "포트폴리오", "졸업유예", "동아리", "학회"],
+    2025: ["자소서", "면접", "취업준비", "채용공고", "스터디", "포트폴리오", "합격", "불합격", "최종면접", "인적성"],
+    2026: ["첫출근", "회사생활", "적응", "월급", "회식", "재테크", "동창회", "안부", "출장", "야근"],
+}
+
 # 요청 — 2026-05 한 달만 일반 서사 로직(HS_YEAR_THEMES[2026]="사회초년생" 테마) 대신
 # "대학 다니는 서로의 근황" 내용으로 손으로 고정. 키워드는 3-4개만, 각 키워드의 월
 # 합계는 전부 5 이하로("언급수 5-6개 아래" 요청) — 대학=5(3+2), 근황=4(3+1), 복학=2,
@@ -945,6 +960,235 @@ LSY_KEYWORD_TOTAL_LATE = {
 }
 
 
+# 요청 — "이서연 8/23 정산서류 말고 다른 날짜들은 다 밋밋한 템플릿"이라는 지적 —
+# leeseoyeon_mail_plan()이 만드는 71건(2024-01~2026-08) 중 정산서류 1건 말고는
+# 전부 mail_id_override=None이라 documents.parquet에 본문을 못 심었었다. 아래
+# LSY_MAIL_ID_OVERRIDES는 (연,월,일) -> 고정 mail_id 매핑으로, leeseoyeon_mail_plan()의
+# "remaining"(정산서류 자리를 뺀 나머지) 루프가 만드는 날짜/방향은 100% 그대로 두고
+# mail_id만 예측 가능하게 고정한다(is_settlement은 계속 False라 kg_tone/llm_tone/
+# is_reply/elapsed 같은 기존 톤·답장 패턴도 전혀 안 바뀐다 — mail_id만 새로 생김).
+# 값은 이 스크립트를 고치기 전 leeseoyeon_mail_plan()이 실제로 만들던 날짜와
+# 정확히 동일하게 맞춰서 뽑아뒀다(달력 자체는 바뀌지 않음).
+LSY_MAIL_ID_OVERRIDES = {
+    (2024, 2, 1): "DEMO-MAIL-LSY-001",
+    (2024, 2, 4): "DEMO-MAIL-LSY-002",
+    (2024, 2, 7): "DEMO-MAIL-LSY-003",
+    (2024, 4, 1): "DEMO-MAIL-LSY-004",
+    (2024, 4, 4): "DEMO-MAIL-LSY-005",
+    (2024, 4, 7): "DEMO-MAIL-LSY-006",
+    (2024, 4, 10): "DEMO-MAIL-LSY-007",
+    (2024, 4, 13): "DEMO-MAIL-LSY-008",
+    (2024, 6, 1): "DEMO-MAIL-LSY-009",
+    (2024, 6, 4): "DEMO-MAIL-LSY-010",
+    (2024, 8, 1): "DEMO-MAIL-LSY-011",
+    (2024, 8, 4): "DEMO-MAIL-LSY-012",
+    (2024, 8, 7): "DEMO-MAIL-LSY-013",
+    (2024, 8, 10): "DEMO-MAIL-LSY-014",
+    (2024, 10, 1): "DEMO-MAIL-LSY-015",
+    (2024, 10, 4): "DEMO-MAIL-LSY-016",
+    (2024, 10, 7): "DEMO-MAIL-LSY-017",
+    (2024, 10, 10): "DEMO-MAIL-LSY-018",
+    (2024, 10, 13): "DEMO-MAIL-LSY-019",
+    (2024, 10, 16): "DEMO-MAIL-LSY-020",
+    (2024, 12, 1): "DEMO-MAIL-LSY-021",
+    (2024, 12, 4): "DEMO-MAIL-LSY-022",
+    (2024, 12, 7): "DEMO-MAIL-LSY-023",
+    (2025, 2, 1): "DEMO-MAIL-LSY-024",
+    (2025, 2, 4): "DEMO-MAIL-LSY-025",
+    (2025, 2, 7): "DEMO-MAIL-LSY-026",
+    (2025, 2, 10): "DEMO-MAIL-LSY-027",
+    (2025, 2, 13): "DEMO-MAIL-LSY-028",
+    (2025, 3, 1): "DEMO-MAIL-LSY-029",
+    (2025, 3, 4): "DEMO-MAIL-LSY-030",
+    (2025, 5, 1): "DEMO-MAIL-LSY-031",
+    (2025, 5, 4): "DEMO-MAIL-LSY-032",
+    (2025, 5, 7): "DEMO-MAIL-LSY-033",
+    (2025, 5, 10): "DEMO-MAIL-LSY-034",
+    (2025, 5, 13): "DEMO-MAIL-LSY-035",
+    (2025, 5, 16): "DEMO-MAIL-LSY-036",
+    (2025, 5, 19): "DEMO-MAIL-LSY-037",
+    (2025, 7, 1): "DEMO-MAIL-LSY-038",
+    (2025, 7, 4): "DEMO-MAIL-LSY-039",
+    (2025, 7, 7): "DEMO-MAIL-LSY-040",
+    (2025, 9, 1): "DEMO-MAIL-LSY-041",
+    (2025, 9, 4): "DEMO-MAIL-LSY-042",
+    (2025, 9, 7): "DEMO-MAIL-LSY-043",
+    (2025, 9, 10): "DEMO-MAIL-LSY-044",
+    (2025, 11, 1): "DEMO-MAIL-LSY-045",
+    (2025, 11, 4): "DEMO-MAIL-LSY-046",
+    (2025, 11, 7): "DEMO-MAIL-LSY-047",
+    (2025, 11, 10): "DEMO-MAIL-LSY-048",
+    (2025, 11, 13): "DEMO-MAIL-LSY-049",
+    (2025, 11, 16): "DEMO-MAIL-LSY-050",
+    (2025, 11, 19): "DEMO-MAIL-LSY-051",
+    (2025, 11, 22): "DEMO-MAIL-LSY-052",
+    (2026, 1, 1): "DEMO-MAIL-LSY-053",
+    (2026, 1, 4): "DEMO-MAIL-LSY-054",
+    (2026, 3, 1): "DEMO-MAIL-LSY-055",
+    (2026, 3, 4): "DEMO-MAIL-LSY-056",
+    (2026, 3, 7): "DEMO-MAIL-LSY-057",
+    (2026, 3, 10): "DEMO-MAIL-LSY-058",
+    (2026, 3, 13): "DEMO-MAIL-LSY-059",
+    (2026, 5, 1): "DEMO-MAIL-LSY-060",
+    (2026, 5, 4): "DEMO-MAIL-LSY-061",
+    (2026, 5, 7): "DEMO-MAIL-LSY-062",
+    (2026, 7, 1): "DEMO-MAIL-LSY-063",
+    (2026, 7, 4): "DEMO-MAIL-LSY-064",
+    (2026, 7, 7): "DEMO-MAIL-LSY-065",
+    (2026, 7, 10): "DEMO-MAIL-LSY-066",
+    (2026, 7, 13): "DEMO-MAIL-LSY-067",
+    (2026, 7, 16): "DEMO-MAIL-LSY-068",
+    (2026, 8, 1): "DEMO-MAIL-LSY-069",
+    (2026, 8, 4): "DEMO-MAIL-LSY-070",
+}
+
+# 위 70건 각각의 제목/본문 — 2024년(과제/수업 위주)·2025~2026년(팀플/프로젝트
+# 위주) 테마에 맞춰 키워드 풀(LSY_KEYWORD_POOL_EARLY/LATE)을 순환시키고, 방향(수신/
+# 발신)에 맞는 말투 템플릿을 돌려썼다. 8/23 정산서류(LSY_SETTLE_SUBJECT/BODY)는
+# 별도이고 여기엔 안 들어있다.
+LSY_MAIL_BODIES = {
+    "DEMO-MAIL-LSY-001": ("수업 내용 정리 확인했어", "네가 보내준 수업 내용 정리 확인했어, 정리 진짜 꼼꼼하게 잘했더라. 고마워!"),
+    "DEMO-MAIL-LSY-002": ("과제 제출 다 됐어?", "저번에 얘기했던 과제 제출 어디까지 했어? 나는 거의 다 끝나가는데 너도 진행상황 좀 알려줘."),
+    "DEMO-MAIL-LSY-003": ("강의자료 pdf 나도 정리해서 보낼게", "나도 강의자료 pdf 정리 끝났어, 조금 이따 파일로 보낼게. 맞는지 한번 봐줘."),
+    "DEMO-MAIL-LSY-004": ("웹프로그래밍 실습 관련해서 물어볼 게 있어", "웹프로그래밍 실습 하다가 막히는 부분이 있는데 혹시 시간 될 때 좀 봐줄 수 있어?"),
+    "DEMO-MAIL-LSY-005": ("강의노트 공유 자료 보낼게", "오늘 수업 때 나온 강의노트 공유 정리해서 보내. 혹시 빠진 부분 있으면 얘기해줘!"),
+    "DEMO-MAIL-LSY-006": ("출석 확인 같이 하자", "이번 출석 확인 나눠서 하지 말고 그냥 같이 하는 게 나을 것 같은데 어때?"),
+    "DEMO-MAIL-LSY-007": ("이번주 시험 범위 언제 할까", "이번 주 시험 범위 시간 맞춰서 정하자. 나는 화요일 오후 아니면 목요일 오전 가능해."),
+    "DEMO-MAIL-LSY-008": ("과제 마감일 진행상황 공유", "과제 마감일 지금까지 한 거 정리해서 보내. 이 정도면 얼추 맞는 방향인 것 같아."),
+    "DEMO-MAIL-LSY-009": ("수업 필기 오늘까지 끝낼 수 있을까", "수업 필기 오늘까지 끝내야 하는데 시간 괜찮으면 잠깐 같이 볼래?"),
+    "DEMO-MAIL-LSY-010": ("실습 과제 pdf 놓친 부분 있어?", "오늘 수업 좀 정신없었는데 실습 과제 pdf 관련해서 놓친 부분 있으면 알려줘. 나도 다시 확인해볼게."),
+    "DEMO-MAIL-LSY-011": ("조모임 일정 덕분에 살았다", "조모임 일정 자료 보내준 덕분에 훨씬 수월하게 끝냈어, 진짜 고마워!"),
+    "DEMO-MAIL-LSY-012": ("코드 리뷰 마감 얼마 안 남았어", "코드 리뷰 마감이 이번 주까지라 슬슬 서둘러야 할 것 같아. 진행 상황 어때?"),
+    "DEMO-MAIL-LSY-013": ("팀플 회의 관련 질문", "혹시 팀플 회의 부분에서 이해 안 되는 거 있으면 나한테 물어봐도 돼, 아까 교수님한테 따로 여쭤봤거든."),
+    "DEMO-MAIL-LSY-014": ("혹시 수업 내용 정리 같이 볼래?", "이번 수업 내용 정리 나 혼자 하기 좀 벅찬데, 시간 되면 같이 봐줄 수 있어?"),
+    "DEMO-MAIL-LSY-015": ("과제 제출 확인했어", "네가 보내준 과제 제출 확인했어, 정리 진짜 꼼꼼하게 잘했더라. 고마워!"),
+    "DEMO-MAIL-LSY-016": ("강의자료 pdf 확인 부탁해", "내가 정리한 강의자료 pdf 확인해줄 수 있어? 이상한 부분 있으면 편하게 말해줘."),
+    "DEMO-MAIL-LSY-017": ("웹프로그래밍 실습 나도 정리해서 보낼게", "나도 웹프로그래밍 실습 정리 끝났어, 조금 이따 파일로 보낼게. 맞는지 한번 봐줘."),
+    "DEMO-MAIL-LSY-018": ("오늘 강의노트 공유 어땠어?", "오늘 강의노트 공유 너무 어렵지 않았어? 나는 반쯤 이해한 것 같은데 너는 어때?"),
+    "DEMO-MAIL-LSY-019": ("출석 확인 관련해서 물어볼 게 있어", "출석 확인 하다가 막히는 부분이 있는데 혹시 시간 될 때 좀 봐줄 수 있어?"),
+    "DEMO-MAIL-LSY-020": ("시험 범위 다 됐어?", "저번에 얘기했던 시험 범위 어디까지 했어? 나는 거의 다 끝나가는데 너도 진행상황 좀 알려줘."),
+    "DEMO-MAIL-LSY-021": ("과제 마감일 같이 하자", "이번 과제 마감일 나눠서 하지 말고 그냥 같이 하는 게 나을 것 같은데 어때?"),
+    "DEMO-MAIL-LSY-022": ("수업 필기 자료 보낼게", "오늘 수업 때 나온 수업 필기 정리해서 보내. 혹시 빠진 부분 있으면 얘기해줘!"),
+    "DEMO-MAIL-LSY-023": ("실습 과제 pdf 진행상황 공유", "실습 과제 pdf 지금까지 한 거 정리해서 보내. 이 정도면 얼추 맞는 방향인 것 같아."),
+    "DEMO-MAIL-LSY-024": ("팀플 회의 확인했어", "보내준 팀플 회의 확인했어, 잘 정리됐더라. 이대로 진행하면 될 것 같아."),
+    "DEMO-MAIL-LSY-025": ("발표자료 관련해서 얘기 좀 하자", "발표자료 이번 주까지는 마무리해야 할 것 같은데 언제 시간 괜찮아?"),
+    "DEMO-MAIL-LSY-026": ("프로젝트 기획서 내가 맡을게", "프로젝트 기획서 부분은 내가 맡아서 진행해볼게, 진행되는대로 공유할게."),
+    "DEMO-MAIL-LSY-027": ("회의록 정리 초안 보내", "회의록 정리 초안 만들어봤어, 한번 확인하고 의견 줘."),
+    "DEMO-MAIL-LSY-028": ("깃허브 저장소 관련해서 의견 있어", "깃허브 저장소 보다가 이 부분은 이렇게 바꾸는 게 나을 것 같은데 어떻게 생각해?"),
+    "DEMO-MAIL-LSY-029": ("API 연동 회의 시간 조율", "API 연동 관련 회의 시간 다시 맞춰야 할 것 같은데 이번 주 언제 괜찮아?"),
+    "DEMO-MAIL-LSY-030": ("버그 수정 다들 진행 어때?", "팀원들 버그 수정 진행상황 궁금해서 물어보는 건데, 너는 어디까지 했어?"),
+    "DEMO-MAIL-LSY-031": ("UI 디자인 마무리했어", "UI 디자인 마무리해서 정리했어, 최종본 확인해보고 이상 없으면 제출할게."),
+    "DEMO-MAIL-LSY-032": ("결과보고서 오늘 회의에서 정리하자", "오늘 회의 때 결과보고서 확실히 정리하고 넘어가자. 미리 생각해둔 거 있으면 준비해와."),
+    "DEMO-MAIL-LSY-033": ("발표 PPT 다시 확인 부탁", "발표 PPT 수정한 부분 다시 한번 확인해줄 수 있어? 놓친 게 있을까봐 걱정돼서."),
+    "DEMO-MAIL-LSY-034": ("코드 컨벤션 급하게 확인 부탁", "코드 컨벤션 관련해서 급하게 확인할 게 있는데 지금 시간 돼?"),
+    "DEMO-MAIL-LSY-035": ("팀플 회의 진짜 고생했다", "이번 팀플 회의 준비하느라 진짜 고생 많았어, 덕분에 잘 마무리된 것 같아."),
+    "DEMO-MAIL-LSY-036": ("발표자료 수정했어", "얘기했던 발표자료 부분 수정했어, 확인해보고 이상 없으면 그대로 진행할게."),
+    "DEMO-MAIL-LSY-037": ("프로젝트 기획서 다음 단계 얘기하자", "프로젝트 기획서 끝났으니까 다음 단계는 어떻게 진행할지 다음 회의 때 얘기하자."),
+    "DEMO-MAIL-LSY-038": ("회의록 정리 확인했어", "보내준 회의록 정리 확인했어, 잘 정리됐더라. 이대로 진행하면 될 것 같아."),
+    "DEMO-MAIL-LSY-039": ("깃허브 저장소 발표 전에 리허설 하자", "발표 전에 깃허브 저장소 한번 맞춰보는 게 좋을 것 같은데 이번 주 중에 시간 되는 날 있어?"),
+    "DEMO-MAIL-LSY-040": ("API 연동 내가 맡을게", "API 연동 부분은 내가 맡아서 진행해볼게, 진행되는대로 공유할게."),
+    "DEMO-MAIL-LSY-041": ("버그 수정 관련해서 의견 있어", "버그 수정 보다가 이 부분은 이렇게 바꾸는 게 나을 것 같은데 어떻게 생각해?"),
+    "DEMO-MAIL-LSY-042": ("UI 디자인 관련 자료 첨부", "UI 디자인 관련 자료 첨부해서 보내, 확인하고 필요하면 더 추가할게."),
+    "DEMO-MAIL-LSY-043": ("결과보고서 회의 시간 조율", "결과보고서 관련 회의 시간 다시 맞춰야 할 것 같은데 이번 주 언제 괜찮아?"),
+    "DEMO-MAIL-LSY-044": ("발표 PPT 관련해서 얘기 좀 하자", "발표 PPT 이번 주까지는 마무리해야 할 것 같은데 언제 시간 괜찮아?"),
+    "DEMO-MAIL-LSY-045": ("코드 컨벤션 마무리했어", "코드 컨벤션 마무리해서 정리했어, 최종본 확인해보고 이상 없으면 제출할게."),
+    "DEMO-MAIL-LSY-046": ("팀플 회의 초안 보내", "팀플 회의 초안 만들어봤어, 한번 확인하고 의견 줘."),
+    "DEMO-MAIL-LSY-047": ("발표자료 다시 확인 부탁", "발표자료 수정한 부분 다시 한번 확인해줄 수 있어? 놓친 게 있을까봐 걱정돼서."),
+    "DEMO-MAIL-LSY-048": ("프로젝트 기획서 다들 진행 어때?", "팀원들 프로젝트 기획서 진행상황 궁금해서 물어보는 건데, 너는 어디까지 했어?"),
+    "DEMO-MAIL-LSY-049": ("회의록 정리 진짜 고생했다", "이번 회의록 정리 준비하느라 진짜 고생 많았어, 덕분에 잘 마무리된 것 같아."),
+    "DEMO-MAIL-LSY-050": ("깃허브 저장소 오늘 회의에서 정리하자", "오늘 회의 때 깃허브 저장소 확실히 정리하고 넘어가자. 미리 생각해둔 거 있으면 준비해와."),
+    "DEMO-MAIL-LSY-051": ("API 연동 다음 단계 얘기하자", "API 연동 끝났으니까 다음 단계는 어떻게 진행할지 다음 회의 때 얘기하자."),
+    "DEMO-MAIL-LSY-052": ("버그 수정 급하게 확인 부탁", "버그 수정 관련해서 급하게 확인할 게 있는데 지금 시간 돼?"),
+    "DEMO-MAIL-LSY-053": ("UI 디자인 확인했어", "보내준 UI 디자인 확인했어, 잘 정리됐더라. 이대로 진행하면 될 것 같아."),
+    "DEMO-MAIL-LSY-054": ("결과보고서 수정했어", "얘기했던 결과보고서 부분 수정했어, 확인해보고 이상 없으면 그대로 진행할게."),
+    "DEMO-MAIL-LSY-055": ("발표 PPT 내가 맡을게", "발표 PPT 부분은 내가 맡아서 진행해볼게, 진행되는대로 공유할게."),
+    "DEMO-MAIL-LSY-056": ("코드 컨벤션 발표 전에 리허설 하자", "발표 전에 코드 컨벤션 한번 맞춰보는 게 좋을 것 같은데 이번 주 중에 시간 되는 날 있어?"),
+    "DEMO-MAIL-LSY-057": ("팀플 회의 관련해서 의견 있어", "팀플 회의 보다가 이 부분은 이렇게 바꾸는 게 나을 것 같은데 어떻게 생각해?"),
+    "DEMO-MAIL-LSY-058": ("발표자료 관련 자료 첨부", "발표자료 관련 자료 첨부해서 보내, 확인하고 필요하면 더 추가할게."),
+    "DEMO-MAIL-LSY-059": ("프로젝트 기획서 회의 시간 조율", "프로젝트 기획서 관련 회의 시간 다시 맞춰야 할 것 같은데 이번 주 언제 괜찮아?"),
+    "DEMO-MAIL-LSY-060": ("회의록 정리 마무리했어", "회의록 정리 마무리해서 정리했어, 최종본 확인해보고 이상 없으면 제출할게."),
+    "DEMO-MAIL-LSY-061": ("깃허브 저장소 관련해서 얘기 좀 하자", "깃허브 저장소 이번 주까지는 마무리해야 할 것 같은데 언제 시간 괜찮아?"),
+    "DEMO-MAIL-LSY-062": ("API 연동 다시 확인 부탁", "API 연동 수정한 부분 다시 한번 확인해줄 수 있어? 놓친 게 있을까봐 걱정돼서."),
+    "DEMO-MAIL-LSY-063": ("버그 수정 진짜 고생했다", "이번 버그 수정 준비하느라 진짜 고생 많았어, 덕분에 잘 마무리된 것 같아."),
+    "DEMO-MAIL-LSY-064": ("UI 디자인 초안 보내", "UI 디자인 초안 만들어봤어, 한번 확인하고 의견 줘."),
+    "DEMO-MAIL-LSY-065": ("결과보고서 다음 단계 얘기하자", "결과보고서 끝났으니까 다음 단계는 어떻게 진행할지 다음 회의 때 얘기하자."),
+    "DEMO-MAIL-LSY-066": ("발표 PPT 다들 진행 어때?", "팀원들 발표 PPT 진행상황 궁금해서 물어보는 건데, 너는 어디까지 했어?"),
+    "DEMO-MAIL-LSY-067": ("코드 컨벤션 확인했어", "보내준 코드 컨벤션 확인했어, 잘 정리됐더라. 이대로 진행하면 될 것 같아."),
+    "DEMO-MAIL-LSY-068": ("팀플 회의 오늘 회의에서 정리하자", "오늘 회의 때 팀플 회의 확실히 정리하고 넘어가자. 미리 생각해둔 거 있으면 준비해와."),
+    "DEMO-MAIL-LSY-069": ("발표자료 내가 맡을게", "발표자료 부분은 내가 맡아서 진행해볼게, 진행되는대로 공유할게."),
+    "DEMO-MAIL-LSY-070": ("프로젝트 기획서 관련해서 의견 있어", "프로젝트 기획서 보다가 이 부분은 이렇게 바꾸는 게 나을 것 같은데 어떻게 생각해?"),
+}
+
+
+# 이서연의 정산서류 말고 "나머지" 70건 본문도 documents.parquet에 심는다.
+# apply_leeseoyeon_settlement_document()와 완전히 같은 포맷/원리를 재사용하되,
+# 여러 건을 한꺼번에 처리한다는 점만 다르다. 정산서류 자체는 이 함수가 건드리지 않는다.
+def apply_leeseoyeon_other_mail_bodies(base_dir):
+    paths = UserPaths(base_dir, MAIL_USER_ID, "mail")
+    documents_path = os.path.join(paths.PARQUET_DIR, "documents.parquet")
+    if not os.path.exists(documents_path):
+        print(f"[WARN] documents.parquet이 없어 이서연 나머지 메일 본문을 못 심음: {documents_path}")
+        return
+
+    plan = leeseoyeon_mail_plan()
+    new_rows = []
+    for item in plan:
+        if item["is_settlement"]:
+            continue
+        mail_id = item["mail_id_override"]
+        if not mail_id or mail_id not in LSY_MAIL_BODIES:
+            continue
+        subject, body = LSY_MAIL_BODIES[mail_id]
+        dt = item["dt"]
+        date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        if item["direction"] == "received":
+            sender = f"이서연 <{LEE_SEOYEON_EMAIL}>"
+            receiver = f"나 <{MAIL_USER_ID}>"
+            gubun = "수신"
+        else:
+            sender = f"나 <{MAIL_USER_ID}>"
+            receiver = f"이서연 <{LEE_SEOYEON_EMAIL}>"
+            gubun = "발신"
+
+        text = (
+            f"[메일 1]\n\n"
+            f"[ID] {mail_id}\n"
+            f"[제목] {subject}\n"
+            f"[구분] {gubun}\n"
+            f"[날짜] {date_str}\n"
+            f"[발신인] {sender}\n"
+            f"[수신인] {receiver}\n"
+            f"[참조(CC)] 없음\n"
+            f"[폴더 정보] {DEMO_FOLDER}\n\n"
+            f"[메일 본문]\n{body}\n\n"
+            f"[첨부파일 정보]\n없음"
+        )
+        new_rows.append({
+            "id": mail_id,
+            "title": "이서연 이벤트 데모 메일",
+            "text": text,
+            "text_unit_ids": [],
+            "creation_date": date_str + " +0900",
+            "raw_data": {"id": mail_id, "text": text},
+        })
+
+    if not new_rows:
+        print("[WARN] 이서연 나머지 메일 본문으로 심을 항목이 없음")
+        return
+
+    df = pd.read_parquet(documents_path)
+    ids_to_add = {r["id"] for r in new_rows}
+    df = df[~df["id"].isin(ids_to_add)]  # 재실행 시 중복 방지 — 있으면 지우고 새로 심음
+    next_hrid = int(df["human_readable_id"].max()) + 1 if len(df) else 0
+    for r in new_rows:
+        r["human_readable_id"] = next_hrid
+        next_hrid += 1
+    df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+    df.to_parquet(documents_path, index=False)
+    print(f"[OK] documents.parquet에 이서연 나머지 메일 본문 {len(new_rows)}건 심음 → {documents_path}")
+
+
 def leeseoyeon_mail_plan():
     """이서연 전용 하드코딩 메일 일정. 각 항목: dt, direction, mail_id_override(있으면)."""
     plan = []
@@ -983,7 +1227,7 @@ def leeseoyeon_mail_plan():
             plan.append({
                 "dt": datetime.datetime(y, m, day_cursor, hour, minute),
                 "direction": direction,
-                "mail_id_override": None,
+                "mail_id_override": LSY_MAIL_ID_OVERRIDES.get((y, m, day_cursor)),
                 "is_settlement": False,
             })
             day_cursor += 3
@@ -1057,6 +1301,351 @@ def apply_leeseoyeon_settlement_document(base_dir):
     df.to_parquet(documents_path, index=False)
     print(f"[OK] documents.parquet에 이서연 정산서류 본문 심음(id={LSY_SETTLE_MAIL_ID}) → {documents_path}")
 
+
+
+# 요청 — "로스터 68명 전체가 친밀도 티어별 왕복 메일만 자동 생성되고, 이서연 한 명만
+# '8/23 정산서류' 같은 구체적 사건이 있다"는 지적 — 이서연을 제외한 나머지(가족 5·
+# 베프 17·가끔연락 6·소원함 9 = 37명, 광고 10명은 제외)에게도 상세보기에서 밋밋한
+# 템플릿이 아니라 "그 사람과 실제로 있었던 구체적인 일"이 하나씩 뜨도록, 사람마다
+# 특정 날짜에 특정 사건(메일 제목+본문)을 추가한다. 기존 seed_mail_domain()의 왕복
+# 메일 생성 루프는 전혀 안 건드리고, 그 위에 "이벤트성 메일 한 통씩"을 추가로 심는
+# 방식 — mail_id도 기존 카운터 방식(DEMO-MAIL-000123)과 안 겹치게 별도 네임스페이스
+# (DEMO-MAIL-EVT0001)를 쓴다. leeseoyeon_mail_plan()/apply_leeseoyeon_settlement_document()
+# 랑 같은 원리(실제 인덱싱 메일과 같은 포맷으로 documents.parquet에 본문을 심어야
+# 상세보기에서 읽힘)를 재사용하되, 37명 전원에 대해 일반화했다.
+ROSTER_MAIL_EVENTS = {
+    # ── 가족(5) ──
+    "sunny10@gmail.com": dict(  # 김민주
+        date=(2025, 9, 5), direction="received",
+        subject="추석에 내려올 때 뭐 필요한 거 없어?",
+        body="이번 추석에 내려올 때 기차표 미리 끊어놔, 명절 연휴라 금방 매진되더라. 내려오는 날 저녁은 다같이 전 부쳐 먹기로 했으니까 늦지 않게 와!",
+        keyword="명절",
+    ),
+    "blue24@daum.net": dict(  # 박지연
+        date=(2024, 11, 12), direction="received",
+        subject="엄마 건강검진 결과 나왔어",
+        body="어제 건강검진 결과 나왔는데 다행히 별 이상 없대, 너무 걱정하지 마. 그래도 정기적으로 검진은 계속 받으시라고 했어.",
+        keyword="건강검진",
+    ),
+    "haru31@kakao.com": dict(  # 박소정
+        date=(2025, 3, 20), direction="received",
+        subject="조카 돌잔치 날짜 잡혔어",
+        body="조카 돌잔치가 다음 달 셋째 주 토요일로 잡혔어. 선물은 다 같이 돈 모아서 하나 크게 하는 게 어떨까 싶은데 의견 줘!",
+        keyword="돌잔치",
+    ),
+    "yoon38@hanmail.net": dict(  # doheeya
+        date=(2023, 6, 15), direction="sent",
+        subject="이사 도와줘서 진짜 고마워",
+        body="지난 주말에 이삿짐 옮기는 거 도와줘서 진짜 고마웠어, 덕분에 훨씬 수월했다. 집 정리 다 끝나면 집들이 한번 부를게!",
+        keyword="이사",
+    ),
+    "cotton45@nate.com": dict(  # 강세준
+        date=(2025, 1, 10), direction="received",
+        subject="아빠 생신 언제 모일까?",
+        body="다음 달 아빠 생신인데 다들 시간 맞춰서 언제 모일지 정하자. 케이크는 내가 예약해둘 테니까 장소만 정해줘.",
+        keyword="생신",
+    ),
+
+    # ── 베프/절친(17) ──
+    "james.carter@outlook.com": dict(  # j.carter92
+        date=(2025, 7, 8), direction="received",
+        subject="이번 여름휴가 같이 갈래?",
+        body="이번 여름휴가에 바다 쪽으로 며칠 놀러갈까 생각 중인데 같이 갈래? 숙소랑 일정은 내가 대충 짜볼게.",
+        keyword="여행",
+    ),
+    "jelly59@naver.com": dict(  # 윤지민
+        date=(2024, 5, 22), direction="received",
+        subject="나 이직했어!!",
+        body="나 드디어 이직 확정됐어, 다음 달부터 새 회사 출근이야! 조만간 축하 겸 밥 한번 사줘.",
+        keyword="이직",
+    ),
+    "milkyway66@daum.net": dict(  # 장은우
+        date=(2025, 10, 2), direction="sent",
+        subject="생일 축하한다 진짜",
+        body="생일 진짜 축하해! 이번 주말에 시간 맞춰서 선물 주면서 저녁 같이 먹자.",
+        keyword="생일",
+    ),
+    "cloud973@kakao.com": dict(  # 임예은
+        date=(2023, 9, 14), direction="received",
+        subject="요즘 너무 힘들어서 그런데 시간 돼?",
+        body="요즘 회사일 때문에 너무 힘들어서 그런데 이번 주에 시간 좀 내줄 수 있어? 그냥 얘기라도 하고 싶어서.",
+        keyword="고민상담",
+    ),
+    "emily.chen@outlook.com": dict(  # emilychen_
+        date=(2024, 12, 1), direction="received",
+        subject="연말에 한번 보자!",
+        body="벌써 연말이네, 올해 가기 전에 한번 봐야지! 다음 주 중에 시간 되는 날 알려줘.",
+        keyword="연말모임",
+    ),
+    "greenlight80@hanmail.net": dict(  # 한희우
+        date=(2025, 2, 14), direction="received",
+        subject="결혼한다!!! 청첩장 줄게",
+        body="나 드디어 결혼해! 날짜는 5월 셋째 주 토요일이고, 청첩장은 다음 주에 만나서 직접 줄게.",
+        keyword="청첩장",
+    ),
+    "dallae87@nate.com": dict(  # dahun.o
+        date=(2023, 11, 3), direction="sent",
+        subject="합격 축하해!!",
+        body="취업 합격했다는 소식 들었어, 진짜 축하해! 언제 시간 되는지 알려주면 내가 저녁 살게.",
+        keyword="취업축하",
+    ),
+    "dodam94@gmail.com": dict(  # 서주희
+        date=(2024, 8, 19), direction="received",
+        subject="같이 운동할래? 요즘 헬스 다녀",
+        body="나 요즘 집 근처 헬스장 다니는데 같이 다닐래? 혼자 하는 것보다 같이 하면 꾸준히 할 수 있을 것 같아서.",
+        keyword="헬스",
+    ),
+    "hodu12@naver.com": dict(  # 신서윤
+        date=(2022, 4, 11), direction="received",
+        subject="새 집 구했어, 집들이 올래?",
+        body="드디어 새 집으로 이사했어! 다음 주말에 집들이 할 건데 놀러 와.",
+        keyword="집들이",
+    ),
+    "byulbit77@gmail.com": dict(  # 윤하람
+        date=(2025, 5, 30), direction="sent",
+        subject="그때 빌려준 돈 고마웠어",
+        body="지난달에 급하게 빌려준 돈 정말 고마웠어, 덕분에 잘 해결했다. 이번 주에 갚으면서 저녁도 같이 먹자.",
+        keyword="약속",
+    ),
+    "onda21@naver.com": dict(  # 조은채
+        date=(2024, 3, 8), direction="received",
+        subject="우리 여행 사진 좀 보내줘",
+        body="지난번 여행 때 찍은 사진들 나한테도 좀 보내줄래? 앨범으로 만들어두고 싶어서.",
+        keyword="여행사진",
+    ),
+    "dodam58@daum.net": dict(  # 최지유
+        date=(2025, 8, 16), direction="received",
+        subject="생일 파티 장소 정했어!",
+        body="내 생일 파티 장소 예약 끝났어, 이번 주 금요일 저녁 7시야. 시간 꼭 비워둬!",
+        keyword="생일파티",
+    ),
+    "haemi34@kakao.com": dict(  # 임서율
+        date=(2023, 7, 25), direction="received",
+        subject="너 요즘 바빠? 오랜만에 보자",
+        body="요즘 통 연락이 없길래, 많이 바쁜가 해서 연락해봤어. 오랜만에 얼굴 좀 보자!",
+        keyword="약속",
+    ),
+    "jjang14@daum.net": dict(  # 조태윤
+        date=(2026, 2, 9), direction="received",
+        subject="이번 주말 등산 콜?",
+        body="날씨도 풀렸는데 이번 주말에 등산 갈래? 오랜만에 산 공기 좀 쐬자.",
+        keyword="등산",
+    ),
+    "nabi21@kakao.com": dict(  # 문인선
+        date=(2025, 11, 21), direction="received",
+        subject="너한테 할 말 있어, 통화 가능해?",
+        body="너한테 할 얘기가 좀 있는데 오늘 저녁에 통화 가능해? 별일은 아니고 그냥 상의하고 싶은 게 있어서.",
+        keyword="통화",
+    ),
+    "grace.lee@outlook.com": dict(  # gracelee92
+        date=(2024, 6, 4), direction="received",
+        subject="이번에 유학 가게 됐어",
+        body="나 이번 학기부터 유학 가게 됐어! 출국 전에 다같이 모여서 송별회 한번 하자.",
+        keyword="유학",
+    ),
+    "haemi28@hanmail.net": dict(  # 장진우
+        date=(2023, 12, 25), direction="received",
+        subject="메리크리스마스! 새해에 보자",
+        body="메리크리스마스! 올해도 얼마 안 남았네, 새해 되면 다같이 한번 모이자.",
+        keyword="크리스마스",
+    ),
+
+    # ── 가끔 연락(6) ──
+    "dowon96@naver.com": dict(  # 강혁
+        date=(2023, 4, 18), direction="received",
+        subject="너 그 동네로 이사갔다며?",
+        body="얼마 전에 얘기 들었는데 이사갔다며? 어느 동네로 갔는지 궁금해서 연락해봤어.",
+        keyword="이사소식",
+    ),
+    "yeondu35@nate.com": dict(  # 임아린
+        date=(2024, 2, 27), direction="received",
+        subject="오랜만에 동창들 모임 있대",
+        body="다음 달에 동창들끼리 오랜만에 모이는 자리가 있다고 하더라. 너도 시간 되면 같이 가자.",
+        keyword="동창모임",
+    ),
+    "bomnal42@gmail.com": dict(  # 한경아
+        date=(2023, 8, 11), direction="received",
+        subject="너 결혼식에 못 가서 미안해",
+        body="그때 결혼식에 일정이 겹쳐서 못 가서 정말 미안했어. 늦었지만 청첩장 사진 보고 축하 인사 전한다!",
+        keyword="결혼식",
+    ),
+    "gaeul49@naver.com": dict(  # 오미소
+        date=(2024, 9, 23), direction="received",
+        subject="우리 회사 근처인데 밥 한번 먹자",
+        body="나 요즘 너희 회사 근처로 출퇴근하는데 언제 한번 점심이라도 같이 먹자.",
+        keyword="점심약속",
+    ),
+    "sup56@daum.net": dict(  # 서승현
+        date=(2022, 7, 7), direction="received",
+        subject="그때 부탁했던 거 고마웠어",
+        body="지난번에 부탁했던 자료 챙겨줘서 정말 고마웠어. 덕분에 잘 마무리했다.",
+        keyword="감사인사",
+    ),
+    "daniel.cho@outlook.com": dict(  # Daniel Cho
+        date=(2024, 4, 30), direction="received",
+        subject="한국 여행 계획 중인데 시간 돼?",
+        body="이번 여름에 한국 여행 계획 중인데 그때 시간 맞으면 얼굴 한번 보자.",
+        keyword="여행계획",
+    ),
+
+    # ── 소원함(9) ──
+    "yeondu09@gmail.com": dict(  # 오태경
+        date=(2021, 5, 14), direction="received",
+        subject="오랜만이다, 잘 지내지?",
+        body="진짜 오랜만이다. 연락 못 한 사이에 잘 지냈어? 문득 생각나서 연락해봤어.",
+        keyword="안부",
+    ),
+    "poby19@daum.net": dict(  # 권도은
+        date=(2020, 8, 9), direction="received",
+        subject="너 얘기 듣고 연락해봤어",
+        body="얼마 전에 지나가다 네 얘기 듣고 오랜만에 연락해봤어. 잘 지내고 있는지 궁금해서.",
+        keyword="안부",
+    ),
+    "onda33@hanmail.net": dict(  # 안유진
+        date=(2022, 1, 17), direction="received",
+        subject="새해 복 많이 받아",
+        body="새해 복 많이 받아! 올해는 좀 더 자주 연락하고 지내자.",
+        keyword="새해인사",
+    ),
+    "riverside47@gmail.com": dict(  # 전세은
+        date=(2021, 9, 30), direction="received",
+        subject="동창회 온다고 들었는데 진짜야?",
+        body="이번 동창회에 너도 온다는 얘기 들었는데 진짜야? 진짜면 진짜 오랜만에 보겠다.",
+        keyword="동창회",
+    ),
+    "coco61@daum.net": dict(  # 김지원
+        date=(2020, 11, 11), direction="received",
+        subject="잘 지내? 문득 생각나서 연락했어",
+        body="요즘 어떻게 지내는지 문득 궁금해서 연락해봤어. 별일 없으면 다행이고.",
+        keyword="안부",
+    ),
+    "michael.park@outlook.com": dict(  # mpark0304
+        date=(2021, 3, 3), direction="received",
+        subject="한국 들어왔다는 소식 들었어",
+        body="너 한국 들어왔다는 소식 들었어. 시간 되면 오랜만에 한번 보자.",
+        keyword="귀국소식",
+    ),
+    "byul82@nate.com": dict(  # 최재현
+        date=(2020, 6, 20), direction="received",
+        subject="그때 얘기했던 책 다 읽었어?",
+        body="예전에 추천해줬던 책 나 다 읽었어, 진짜 재밌더라. 그때 얘기 좀 더 들려줘.",
+        keyword="독서",
+    ),
+    "sarang89@gmail.com": dict(  # 정성희
+        date=(2022, 10, 5), direction="received",
+        subject="오랜만이야, 잘 지내?",
+        body="정말 오랜만이다. 요즘 바쁘게 지내고 있는지, 한번 안부 물어보고 싶어서 연락했어.",
+        keyword="안부",
+    ),
+    "haeul77@nate.com": dict(  # 김민아
+        date=(2021, 12, 19), direction="received",
+        subject="연말인데 얼굴 한번 보자",
+        body="벌써 연말이네, 올해 가기 전에 얼굴 한번 보자. 시간 괜찮은 날 알려줘.",
+        keyword="연말",
+    ),
+}
+
+
+# 위 ROSTER_MAIL_EVENTS를 실제 mail/mail_keyword 행 + documents.parquet 본문으로 심는다.
+# 기존 seed_mail_domain()의 왕복 메일 생성 루프는 전혀 건드리지 않고, 그 결과 위에
+# "사람마다 이벤트성 메일 한 통씩"을 추가하는 완전히 별도의 단계다.
+def apply_roster_mail_events(base_dir, conn, index_date, roster):
+    roster_by_email = {p["email"]: p for p in roster}
+    paths = UserPaths(base_dir, MAIL_USER_ID, "mail")
+    documents_path = os.path.join(paths.PARQUET_DIR, "documents.parquet")
+
+    mail_sql = """
+        INSERT INTO mail (
+            mail_id, user_mail_account_id, index_date, mail_folder_name, mail_date,
+            sender, receiver, direction, kg_tone, llm_tone,
+            is_reply, reply_to_mail_id, reply_elapsed_hours
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE mail_date=VALUES(mail_date)
+    """
+    kw_sql = """
+        INSERT INTO mail_keyword (
+            keyword_name, user_mail_account_id, index_date, person_mail_account_id,
+            mail_date, daily_count
+        ) VALUES (%s,%s,%s,%s,%s,%s)
+        ON DUPLICATE KEY UPDATE daily_count=VALUES(daily_count)
+    """
+
+    df = pd.read_parquet(documents_path) if os.path.exists(documents_path) else None
+    if df is None:
+        print(f"[WARN] documents.parquet이 없어 로스터 이벤트 메일 본문을 못 심음: {documents_path}")
+
+    cur = conn.cursor()
+    applied = 0
+    new_rows = []
+    try:
+        for i, (email, ev) in enumerate(ROSTER_MAIL_EVENTS.items(), start=1):
+            p = roster_by_email.get(email)
+            if not p:
+                print(f"[WARN] 로스터에 없는 이메일이라 건너뜀: {email}")
+                continue
+
+            mail_id = f"{DEMO_MAIL_PREFIX}EVT{i:04d}"
+            y, m, d = ev["date"]
+            hour = 10 + (d % 8)
+            minute = (d * 13) % 60
+            dt = datetime.datetime(y, m, d, hour, minute)
+
+            if ev["direction"] == "received":
+                sender = f"{p['name']} <{email}>"
+                receiver = f"나 <{MAIL_USER_ID}>"
+                gubun = "수신"
+            else:
+                sender = f"나 <{MAIL_USER_ID}>"
+                receiver = f"{p['name']} <{email}>"
+                gubun = "발신"
+
+            cur.execute(mail_sql, (
+                mail_id, MAIL_USER_ID, index_date, DEMO_FOLDER, dt,
+                sender, receiver, ev["direction"], "casual", "friendly",
+                0, None, None,
+            ))
+            cur.execute(kw_sql, (ev["keyword"], MAIL_USER_ID, index_date, email, dt, 4))
+            applied += 1
+
+            if df is not None:
+                date_str = dt.strftime("%Y-%m-%d %H:%M:%S")
+                text = (
+                    f"[메일 1]\n\n"
+                    f"[ID] {mail_id}\n"
+                    f"[제목] {ev['subject']}\n"
+                    f"[구분] {gubun}\n"
+                    f"[날짜] {date_str}\n"
+                    f"[발신인] {sender}\n"
+                    f"[수신인] {receiver}\n"
+                    f"[참조(CC)] 없음\n"
+                    f"[폴더 정보] {DEMO_FOLDER}\n\n"
+                    f"[메일 본문]\n{ev['body']}\n\n"
+                    f"[첨부파일 정보]\n없음"
+                )
+                new_rows.append({
+                    "id": mail_id,
+                    "title": f"{p['name']} 이벤트 데모 메일",
+                    "text": text,
+                    "text_unit_ids": [],
+                    "creation_date": date_str + " +0900",
+                    "raw_data": {"id": mail_id, "text": text},
+                })
+
+        conn.commit()
+    finally:
+        cur.close()
+
+    if df is not None and new_rows:
+        ids_to_add = {r["id"] for r in new_rows}
+        df = df[~df["id"].isin(ids_to_add)]  # 재실행 시 중복 방지 — 있으면 지우고 새로 심음
+        next_hrid = int(df["human_readable_id"].max()) + 1 if len(df) else 0
+        for r in new_rows:
+            r["human_readable_id"] = next_hrid
+            next_hrid += 1
+        df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+        df.to_parquet(documents_path, index=False)
+
+    print(f"[OK] 로스터 이벤트 메일 {applied}건 추가(mail/mail_keyword/documents.parquet)")
 
 
 def cleanup_mail_domain(conn, roster):
@@ -1295,6 +1884,25 @@ def seed_mail_domain(conn, roster, index_date):
                 conn.commit()
         conn.commit()
 
+        # 요청 — My Time 뱃지 범위를 2017년까지 넓혔는데(MAIL_MONTH_PLACEHOLDER_PERIODS)
+        # 정작 2017~2019년은 mail_keyword 자체가 없어서 그 구간 슬라이더에선 키워드
+        # 일별 그래프가 텅 비어 보인다. 위 2020~2026 루프는 절대 건들지 않고(이미 보여준
+        # 적 있는 달들의 키워드 배정이 흔들리면 안 되므로), 2017-01~2019-12 전용으로
+        # 완전히 독립된 인덱스(mi2)를 쓰는 별도 루프를 추가한다.
+        for mi2, (y, m) in enumerate(month_range(2017, 2019)):
+            days_in_month = 27
+            for j in range(14):
+                day = 1 + (j * 2 + mi2) % days_in_month
+                kw = MAIL_KEYWORD_POOL[(mi2 * 3 + j) % len(MAIL_KEYWORD_POOL)]
+                person = active_pool[(mi2 * 5 + j) % len(active_pool)]
+                count = 1 + (mi2 + j) % 6
+                mail_date = datetime.datetime(y, m, day, 10 + j % 10, 0)
+                cur.execute(kw_sql, (kw, MAIL_USER_ID, index_date, person["email"], mail_date, count))
+                kw_counter += 1
+            if kw_counter % 300 == 0:
+                conn.commit()
+        conn.commit()
+
         # 요청 — 이서연은 실제로 메일을 주고받은 날짜에만, 과제/수업/프로젝트/코드/서류
         # 등 "정말 다양한" 전용 키워드가 붙도록 위 공용 루프와 별도로 심는다. 2025년
         # 이전(2024년)엔 과제/수업 위주, 2025년부터는 팀플/프로젝트 위주로 풀을 바꿔서
@@ -1410,6 +2018,88 @@ def apply_mail_summary_overrides(base_dir, conn, index_date):
 # 2026년은 이미 실제 인덱싱으로 값이 있으니 건드리지 않는다(ON DUPLICATE KEY UPDATE로
 # 기존 값 보존).
 MAIL_YEAR_BUTTON_RANGE = range(2017, 2026)  # 2017~2025 (2026은 이미 실제 데이터 있음)
+
+# 요청 — My Time 상단 "YYYY.MM ~ YYYY.MM 데이터" 뱃지(My People과 범위를 맞춰달라는
+# 요청)도 연도 버튼과 같은 원리다 — mytimeEngine.js의 이 뱃지는 ALL_KEYS(=DB
+# mail_summarize의 월별 행이 실제로 존재하는 달들)의 첫/마지막 값으로 계산되는데,
+# 이 계정은 실인덱싱된 달(대략 2026년 상반기 몇 달)+우리가 덮어쓴 2026-08 말고는
+# 월별 행 자체가 없어서 범위가 좁게 잡혔다. My People 쪽 범위(2017~2026)에 맞추려고
+# "버튼(뱃지 범위)만 넓히고 실제 요약 내용은 안 채운다"는 연도 자리표시와 완전히
+# 같은 방식으로, 2017-01~2019-12 + 2026-09 구간에 빈 월별 mail_summarize 행만
+# 추가한다 — 2020-01~2026-08 사이 기존 실제/하드코딩된 월별 요약은 ON DUPLICATE
+# KEY UPDATE 자기참조(no-op)로 절대 건드리지 않는다.
+#
+# 요청(후속) — "My Time 요약/키워드 그래프 등 전체적으로 안 되어있는 거 다 넣어줘":
+# 위 방식(뱃지 양 끝만 자리표시)만으로는 타임 슬라이더를 2017~2025년 쪽으로 옮기면
+# "요약이 없습니다"만 뜨는 빈 달이 훨씬 많이 남아있었다(2020-01~2025-12도 실제로는
+# 월별 mail_summarize 행 자체가 없었음 — 위 주석의 "실인덱싱된 2026년 상반기 몇 달
+# +2026-08" 말고는 전부 비어 있었다). 그래서 이제 2017-01~2025-12 전체(2026년은
+# 실인덱싱/2026-08 오버라이드로 이미 채워져 있으니 제외)에도 HS 단톡방의
+# hs_month_text()와 같은 방식(연도 무관 공용 키워드 풀을 달마다 순환)으로 만든
+# 짧은 자동 요약 텍스트 + 그 달의 로스터 연락처 3명을 채운다. 2026-09는 여전히
+# "아직 실인덱싱이 도달하지 않은 다음 달"을 보여주는 자리이므로(MAIL_DEMO_CUTOFF_
+# PERIOD 참고 — 재실행마다 그 이후 데이터가 트림됨) 일부러 비워둔다.
+MAIL_MONTH_PLACEHOLDER_PERIODS = (
+    [f"{y}-{m:02d}" for y in range(2017, 2026) for m in range(1, 13)]
+    + ["2026-09"]
+)
+
+# 2026-09는 항상 빈 채로 두는 유일한 기간(위 주석 참고).
+MAIL_MONTH_PLACEHOLDER_KEEP_EMPTY = {"2026-09"}
+
+
+def mail_month_text(y, m, mi):
+    """2017-01~2025-12처럼 월별 mail_summarize 행 자체가 없던 달을 채우는 짧은
+    자동 요약 텍스트. HS 단톡방 hs_month_text()와 같은 원리(연도 무관 공용 키워드
+    풀 MAIL_KEYWORD_POOL을 달마다 순환)로, 손으로 쓴 이서연/2026-08 오버라이드와
+    겹치지 않게 완전히 별도 함수로 둔다."""
+    kw1 = MAIL_KEYWORD_POOL[(mi * 3) % len(MAIL_KEYWORD_POOL)]
+    kw2 = MAIL_KEYWORD_POOL[(mi * 3 + 5) % len(MAIL_KEYWORD_POOL)]
+    return (
+        f"{y}년 {m}월에는 '{kw1}', '{kw2}' 관련 메일이 많이 오갔습니다. "
+        "그 밖에도 다양한 연락처와 크고 작은 메일을 주고받았습니다."
+    )
+
+
+def apply_mail_month_placeholders(conn, index_date, roster):
+    contact_pool = [p["name"] for p in roster if p["tier"] not in ("brand", "distant")]
+    cur = conn.cursor()
+    applied = 0
+    try:
+        # 요청(후속) — 이 스크립트를 예전에 이미 한 번 돌려서 2017-2019/2026-09에
+        # 빈 문자열("") placeholder 행이 이미 들어가 있는 경우까지 감안한다. 예전
+        # "자기참조 no-op"(summarized_context = summarized_context) 그대로 두면
+        # "이미 있던 행"으로 취급돼 우리가 새로 만든 자동 요약 텍스트로 절대 안
+        # 바뀐다 — 그런데 그 값이 진짜 실인덱싱 데이터가 아니라 우리가 예전에 넣은
+        # 빈 자리표시일 뿐이라 채워도 안전하다. 그래서 "기존 값이 빈 문자열일 때만
+        # 새 값으로 덮어쓰고, 뭔가 실제 내용이 있으면(=실인덱싱/기존 하드코딩)
+        # 절대 안 건드린다"로 바꾼다(IF(...)의 summarized_context는 MySQL에서 항상
+        # UPDATE 시작 시점의 '기존' 값을 가리키므로 두 컬럼 다 안전하게 같은 조건을
+        # 쓸 수 있다).
+        sql = """
+            INSERT INTO mail_summarize (
+                user_mail_account_id, index_date, summarize_unit, summary_period,
+                summarized_context, contacts
+            ) VALUES (%s, %s, 'monthly', %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                contacts = IF(summarized_context = '', VALUES(contacts), contacts),
+                summarized_context = IF(summarized_context = '', VALUES(summarized_context), summarized_context)
+        """
+        for mi, period in enumerate(MAIL_MONTH_PLACEHOLDER_PERIODS):
+            if period in MAIL_MONTH_PLACEHOLDER_KEEP_EMPTY:
+                summary, contacts = "", []
+            else:
+                y, m = (int(x) for x in period.split("-"))
+                summary = mail_month_text(y, m, mi)
+                contacts = [contact_pool[(mi * 5 + k) % len(contact_pool)] for k in range(3)]
+            cur.execute(sql, (MAIL_USER_ID, index_date, period, summary, json.dumps(contacts, ensure_ascii=False)))
+            applied += 1
+        conn.commit()
+    finally:
+        cur.close()
+    print(f"[OK] mail_summarize에 My Time 뱃지 범위용 월별 자리표시/자동 요약 {applied}개 추가"
+          f"(2017-01~2025-12 자동 요약, 2026-09만 계속 빈 채로)")
+
 
 
 def apply_mail_year_button_placeholders(conn, index_date):
@@ -1809,6 +2499,9 @@ def seed_messenger_domain(conn, room, block_counter_start):
                 for ym, month_total in zip(tail_months, tail_month_totals):
                     kim_block_plan[ym] = spread_int_total(month_total, 3)
         kim_block_cursor = {ym: 0 for ym in kim_block_plan}
+        # 요청 — 김도현 전용 키워드 풀(HS_KIM_KEYWORD_POOL_BY_YEAR)을 연도별로 몇 번째까지
+        # 뽑았는지 추적(연도가 바뀌면 그 해 풀 처음부터 다시 순환).
+        kim_kw_idx = {}
 
         # (y, m) -> [(block_id, active_members), ...] — 월별 오버라이드(HS_MAY2026_*)가
         # "이 블록엔 실제로 누가 있었는지"를 나중에 다시 조회하지 않고도 알 수 있도록
@@ -1887,7 +2580,13 @@ def seed_messenger_domain(conn, room, block_counter_start):
                     # 3개뿐이면 키워드 풀 크기와 무관하게 매달 최대 3종류만 뽑히는 버그가
                     # 있었다(예: 2022-09 커스텀 11개 풀 중 3개만 등장). 멤버 이름 대신 블록
                     # 안에서의 순번(member_idx)으로 인덱스를 흔들어 풀 전체가 고르게 뽑히게 함.
-                    kw = room_keywords[(mi + b + member_idx) % len(room_keywords)]
+                    if is_narrative and member == HS_TARGET_MEMBER:
+                        kim_pool = HS_KIM_KEYWORD_POOL_BY_YEAR.get(y, room_keywords)
+                        kim_idx = kim_kw_idx.get(y, 0)
+                        kw = kim_pool[kim_idx % len(kim_pool)]
+                        kim_kw_idx[y] = kim_idx + 1
+                    else:
+                        kw = room_keywords[(mi + b + member_idx) % len(room_keywords)]
                     mention = 1 + (mi + b) % 4
                     cur.execute(kw_sql, (kw, member, block_id, chatroom_id, index_date, user_id, mention))
 
@@ -2036,6 +2735,12 @@ def main():
         print("[STEP] 이서연 정산서류 메일 본문(documents.parquet) 심는 중...")
         apply_leeseoyeon_settlement_document(BASE_DIR)
 
+        print("[STEP] 이서연 나머지 70건 메일 본문(documents.parquet) 심는 중...")
+        apply_leeseoyeon_other_mail_bodies(BASE_DIR)
+
+        print("[STEP] 로스터 37명 이벤트성 메일(mail/mail_keyword/documents.parquet) 추가 중...")
+        apply_roster_mail_events(BASE_DIR, conn, index_date, roster)
+
         print("[STEP] My Time 메일 요약(mail_summaries.json) 오버라이드 적용 중...")
         apply_mail_summary_overrides(BASE_DIR, conn, index_date)
 
@@ -2044,6 +2749,9 @@ def main():
 
         print(f"[STEP] {MAIL_DEMO_CUTOFF_PERIOD} 이후 실제 데이터 정리 중...")
         trim_mail_data_after_cutoff(BASE_DIR, conn, index_date)
+
+        print("[STEP] My Time 뱃지 범위(2017~2026.09)용 월별 자리표시/자동 요약 추가 중...")
+        apply_mail_month_placeholders(conn, index_date, roster)
 
         print("[STEP] Recap 연락처 통계(mail_contact_stats.json) 오버라이드 적용 중...")
         apply_mail_contact_stats_overrides(BASE_DIR, roster_stats)

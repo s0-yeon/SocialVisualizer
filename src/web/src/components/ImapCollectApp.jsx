@@ -1,7 +1,8 @@
 import { createRoot } from "react-dom/client";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Header from "./Header.jsx";
 import { initImapCollectPage } from "../features/imapCollectEngine.js";
+import { useScaleToFit } from "../utils/useScaleToFit.js";
 
 /**
 "소셜 데이터 분석" 페이지(imap-collect.html) 전체를 감싸는 최상위 React 컴포넌트 — 헤더와 메일/메신저 탭 폼, job 로그 패널 마크업을 마운트한다.
@@ -21,11 +22,21 @@ function ImapCollectApp() {
     initImapCollectPage();
   }, []);
 
+  // 요청(원인 분석 후속 수정) — imap-collect.scss는 .gw-collect-wrap을 고정 1900px
+  // 캔버스로 두고 그 바깥 .ic-scale-wrap이 transform:scale()로 통째로 줄이는
+  // 방식(My People/My Time과 동일한 useScaleToFit 패턴)을 전제로 작성돼 있는데,
+  // 정작 이 컴포넌트엔 그 wrap div와 useScaleToFit 호출이 빠져 있었다 — 그래서
+  // 1900px 고정폭이 스케일 없이 그대로 렌더링돼(overflow:hidden으로 잘림) 화면
+  // 비율이 이상하게 보였다. MyTimeApp.jsx/MyPeopleApp.jsx와 같은 방식으로 채운다.
+  const collectCanvasRef = useRef(null);
+  useScaleToFit(collectCanvasRef, "top center");
+
   return (
     <>
       <Header activePage="imap-collect" />
       <main className="right_col" role="main" aria-label="Main content">
-        <div className="gw-collect-wrap">
+        <div className="ic-scale-wrap">
+        <div className="gw-collect-wrap" ref={collectCanvasRef}>
           {/* 반반 분할 레이아웃 컨테이너 */}
           <div className="gw-split-grid-wrapper">
             {/* 왼쪽 헤더: 데이터 수집 + 메일/메신저 탭 */}
@@ -372,6 +383,8 @@ function ImapCollectApp() {
           {/* /.gw-split-grid-wrapper */}
         </div>
         {/* /.gw-collect-wrap */}
+        </div>
+        {/* /.ic-scale-wrap */}
       </main>
     </>
   );
