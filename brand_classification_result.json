@@ -1,0 +1,1339 @@
+{
+  "logo_ok": [],
+  "logo_fail": [
+    {
+      "email": "admin@kcue.or.kr",
+      "name": "한국대학교육협의회",
+      "domain": "kcue.or.kr"
+    },
+    {
+      "email": "admin@shinhan.com",
+      "name": "신한은행",
+      "domain": "shinhan.com"
+    },
+    {
+      "email": "cupost@bgf.co.kr",
+      "name": "BGF네트웍스",
+      "domain": "bgf.co.kr"
+    },
+    {
+      "email": "department@lotte.net",
+      "name": "롯데백화점",
+      "domain": "lotte.net"
+    },
+    {
+      "email": "help@nhnlink.co.kr",
+      "name": "티켓링크",
+      "domain": "nhnlink.co.kr"
+    },
+    {
+      "email": "inimail@inicis.com",
+      "name": "KG이니시스",
+      "domain": "inicis.com"
+    },
+    {
+      "email": "lpoint@lotte.net",
+      "name": "L.POINT",
+      "domain": "lotte.net"
+    },
+    {
+      "email": "newsletter@info.mytrip.com",
+      "name": "Mytrip Info",
+      "domain": "mytrip.com"
+    },
+    {
+      "email": "no-reply@dalcomsoft.com",
+      "name": "DALCOMSOFT",
+      "domain": "dalcomsoft.com"
+    },
+    {
+      "email": "no-reply@nhnlink.co.kr",
+      "name": "티켓링크",
+      "domain": "nhnlink.co.kr"
+    },
+    {
+      "email": "noreply@account.sephora.kr",
+      "name": "세포라",
+      "domain": "sephora.kr"
+    },
+    {
+      "email": "noreply@acmicpc.net",
+      "name": "Baekjoon Online Judge",
+      "domain": "acmicpc.net"
+    },
+    {
+      "email": "noreply@email.mihoyo.com",
+      "name": "noreply",
+      "domain": "mihoyo.com"
+    },
+    {
+      "email": "rolarola@byyj.co.kr",
+      "name": "㈜바이와이제이",
+      "domain": "byyj.co.kr"
+    },
+    {
+      "email": "webmaster@gsretail.com",
+      "name": "GS리테일",
+      "domain": "gsretail.com"
+    },
+    {
+      "email": "wis@kait.or.kr",
+      "name": "World IT Show 2024",
+      "domain": "kait.or.kr"
+    }
+  ],
+  "persons_skipped": [
+    {
+      "email": "㈜ ubase",
+      "name": ""
+    },
+    {
+      "email": "㈜ 아데코코리아",
+      "name": ""
+    },
+    {
+      "email": "㈜ 트랜스코스모스코리아",
+      "name": ""
+    },
+    {
+      "email": "㈜gs네트웍스",
+      "name": ""
+    },
+    {
+      "email": "㈜kg모빌리언스",
+      "name": ""
+    },
+    {
+      "email": "㈜kg이니시스",
+      "name": ""
+    },
+    {
+      "email": "㈜꽃피는아침마을",
+      "name": ""
+    },
+    {
+      "email": "㈜다날",
+      "name": ""
+    },
+    {
+      "email": "㈜딥핑소스",
+      "name": ""
+    },
+    {
+      "email": "㈜로지올",
+      "name": ""
+    },
+    {
+      "email": "㈜부릉",
+      "name": ""
+    },
+    {
+      "email": "㈜손오공ib",
+      "name": ""
+    },
+    {
+      "email": "㈜스마트로",
+      "name": ""
+    },
+    {
+      "email": "㈜스마트콘",
+      "name": ""
+    },
+    {
+      "email": "㈜엠트웰브",
+      "name": ""
+    },
+    {
+      "email": "㈜윌앤비전",
+      "name": ""
+    },
+    {
+      "email": "㈜유베이스",
+      "name": ""
+    },
+    {
+      "email": "㈜인컴즈",
+      "name": ""
+    },
+    {
+      "email": "㈜줌마",
+      "name": ""
+    },
+    {
+      "email": "㈜체인로지스",
+      "name": ""
+    },
+    {
+      "email": "㈜커넥트웨이브",
+      "name": ""
+    },
+    {
+      "email": "㈜케이에스넷",
+      "name": ""
+    },
+    {
+      "email": "㈜케이티",
+      "name": ""
+    },
+    {
+      "email": "㈜코밴",
+      "name": ""
+    },
+    {
+      "email": "㈜쿠콘",
+      "name": ""
+    },
+    {
+      "email": "㈜티머니",
+      "name": ""
+    },
+    {
+      "email": "㈜티비허브",
+      "name": ""
+    },
+    {
+      "email": "㈜포엠아이",
+      "name": ""
+    },
+    {
+      "email": "㈜하이픈코퍼레이션",
+      "name": ""
+    },
+    {
+      "email": "㈜한진",
+      "name": ""
+    },
+    {
+      "email": "(주) 케이지이니시스",
+      "name": ""
+    },
+    {
+      "email": "(주)이벤터스",
+      "name": ""
+    },
+    {
+      "email": "03yeeun03@gmail.com",
+      "name": "견우야"
+    },
+    {
+      "email": "03yeun03@naver.com",
+      "name": "03yeeun03"
+    },
+    {
+      "email": "2022 다이어리 작성 가이드",
+      "name": ""
+    },
+    {
+      "email": "2026-08-03",
+      "name": ""
+    },
+    {
+      "email": "20260331_토스뱅크 통장 특약_신구조문대비표.pdf",
+      "name": ""
+    },
+    {
+      "email": "3. 회원이 부정한 방법으로 프로모션 혜택 또는 제휴 포인트를 취득하거나 사용한 경우 회사는 해당 혜택의 회수, 적립 취소, 이용 제한 등 필요한 조치를 취할 수 있습니다. 회사는 가능한 경우 사전에 통지하고 소명 기회를 부여하되, 부정사용 방지, 보안상 위험 또는 긴급한 피해 차단이 필요한 경우 사후에 통지할 수 있습니다.  |",
+      "name": ""
+    },
+    {
+      "email": "ab180",
+      "name": ""
+    },
+    {
+      "email": "aia생명",
+      "name": ""
+    },
+    {
+      "email": "amazon aws",
+      "name": ""
+    },
+    {
+      "email": "amazon.com, inc.",
+      "name": ""
+    },
+    {
+      "email": "apple",
+      "name": ""
+    },
+    {
+      "email": "apply@jinhakapply.com",
+      "name": "apply"
+    },
+    {
+      "email": "blizzard entertainment, inc.",
+      "name": ""
+    },
+    {
+      "email": "business partner",
+      "name": ""
+    },
+    {
+      "email": "cj one",
+      "name": ""
+    },
+    {
+      "email": "cj one 통합회원",
+      "name": ""
+    },
+    {
+      "email": "cj대한통운",
+      "name": ""
+    },
+    {
+      "email": "cj올리브네트웍스",
+      "name": ""
+    },
+    {
+      "email": "cj텔레닉스",
+      "name": ""
+    },
+    {
+      "email": "claude 활용 안내",
+      "name": ""
+    },
+    {
+      "email": "cm.operation@vinuteam.com",
+      "name": "everyuneez 학생복지스토어"
+    },
+    {
+      "email": "everyuneez 학생복지스토어",
+      "name": ""
+    },
+    {
+      "email": "file_7",
+      "name": ""
+    },
+    {
+      "email": "file_8",
+      "name": ""
+    },
+    {
+      "email": "file_9",
+      "name": ""
+    },
+    {
+      "email": "google inc.",
+      "name": ""
+    },
+    {
+      "email": "goto technologies usa, inc.",
+      "name": ""
+    },
+    {
+      "email": "gs itm",
+      "name": ""
+    },
+    {
+      "email": "gs pay",
+      "name": ""
+    },
+    {
+      "email": "gs칼텍스",
+      "name": ""
+    },
+    {
+      "email": "gs칼텍스㈜",
+      "name": ""
+    },
+    {
+      "email": "gs텔레서비스",
+      "name": ""
+    },
+    {
+      "email": "infobip",
+      "name": ""
+    },
+    {
+      "email": "inhee.kim@hansung.ac.kr",
+      "name": "(컴퓨터공학부)김인희"
+    },
+    {
+      "email": "isp/페이북",
+      "name": ""
+    },
+    {
+      "email": "kb금융그룹",
+      "name": ""
+    },
+    {
+      "email": "kr파트너스",
+      "name": ""
+    },
+    {
+      "email": "kt",
+      "name": ""
+    },
+    {
+      "email": "lannue.official@gmail.com",
+      "name": "랑느코스메틱"
+    },
+    {
+      "email": "lenssis123@gmail.com",
+      "name": "렌시스홈페이지"
+    },
+    {
+      "email": "lg cns",
+      "name": ""
+    },
+    {
+      "email": "lg u+",
+      "name": ""
+    },
+    {
+      "email": "lgu+",
+      "name": ""
+    },
+    {
+      "email": "line works",
+      "name": ""
+    },
+    {
+      "email": "md 사업 운영 지원",
+      "name": ""
+    },
+    {
+      "email": "n tech services㈜",
+      "name": ""
+    },
+    {
+      "email": "na",
+      "name": ""
+    },
+    {
+      "email": "naver corp.",
+      "name": ""
+    },
+    {
+      "email": "naver u.hub inc.",
+      "name": ""
+    },
+    {
+      "email": "nhn",
+      "name": ""
+    },
+    {
+      "email": "nhn payco corp.",
+      "name": ""
+    },
+    {
+      "email": "nhncloud",
+      "name": ""
+    },
+    {
+      "email": "nice아이핀",
+      "name": ""
+    },
+    {
+      "email": "nit service㈜",
+      "name": ""
+    },
+    {
+      "email": "no-reply@cafe24shop.com",
+      "name": "fingersuit"
+    },
+    {
+      "email": "no-reply@signup.aws",
+      "name": "no-reply"
+    },
+    {
+      "email": "no-reply@univstore.com",
+      "name": "에브리유니즈"
+    },
+    {
+      "email": "no-reply@vjw.digital.go.jp",
+      "name": "no-reply"
+    },
+    {
+      "email": "noreply@mate-914f3.firebaseapp.com",
+      "name": "noreply"
+    },
+    {
+      "email": "noreply@nol-universe.com",
+      "name": "NOL"
+    },
+    {
+      "email": "office@spacecloud.kr",
+      "name": "office"
+    },
+    {
+      "email": "privacy@gsretail.com",
+      "name": ""
+    },
+    {
+      "email": "privacy@ridebeam.com",
+      "name": "Dorea Ho"
+    },
+    {
+      "email": "sci평가정보",
+      "name": ""
+    },
+    {
+      "email": "sci평가정보㈜",
+      "name": ""
+    },
+    {
+      "email": "sg&g",
+      "name": ""
+    },
+    {
+      "email": "shalom@chowon.in",
+      "name": "조엘"
+    },
+    {
+      "email": "sk 브로드밴드",
+      "name": ""
+    },
+    {
+      "email": "skt",
+      "name": ""
+    },
+    {
+      "email": "sk브로드밴드",
+      "name": ""
+    },
+    {
+      "email": "sk텔레콤",
+      "name": ""
+    },
+    {
+      "email": "support-kr@ridebeam.com",
+      "name": ""
+    },
+    {
+      "email": "taptap",
+      "name": ""
+    },
+    {
+      "email": "tbd",
+      "name": ""
+    },
+    {
+      "email": "team@lenssis.mail.channel.io",
+      "name": "렌시스"
+    },
+    {
+      "email": "tving@cj.net",
+      "name": "tving"
+    },
+    {
+      "email": "vonage business inc.",
+      "name": ""
+    },
+    {
+      "email": "world it show 2024",
+      "name": ""
+    },
+    {
+      "email": "yp영풍문고",
+      "name": ""
+    },
+    {
+      "email": "개인의 신원 확인 서비스 제공",
+      "name": ""
+    },
+    {
+      "email": "개인정보 국외 이전 안내",
+      "name": ""
+    },
+    {
+      "email": "개인정보 보호 및 국외이전 안내",
+      "name": ""
+    },
+    {
+      "email": "개인정보 보호법",
+      "name": ""
+    },
+    {
+      "email": "개인정보 이용ㆍ제공 안내",
+      "name": ""
+    },
+    {
+      "email": "개인정보 자동수집 및 맞춤형 광고",
+      "name": ""
+    },
+    {
+      "email": "개인정보 처리 및 광고·인사이트 데이터 안내",
+      "name": ""
+    },
+    {
+      "email": "개인정보 처리 및 이용 방침",
+      "name": ""
+    },
+    {
+      "email": "개인정보보호협회",
+      "name": ""
+    },
+    {
+      "email": "갤럭시아머니트리(주)",
+      "name": ""
+    },
+    {
+      "email": "게임 서비스 운영 및 관련 부가서비스의 지원",
+      "name": ""
+    },
+    {
+      "email": "계정 생성 안내",
+      "name": ""
+    },
+    {
+      "email": "고객확인의무제도 이행",
+      "name": ""
+    },
+    {
+      "email": "곱분이곱창 장항웨돔점",
+      "name": ""
+    },
+    {
+      "email": "교보다솜케어",
+      "name": ""
+    },
+    {
+      "email": "교보라이프플래닛 생명보험㈜",
+      "name": ""
+    },
+    {
+      "email": "교보문고",
+      "name": ""
+    },
+    {
+      "email": "교보생명보험 주식회사",
+      "name": ""
+    },
+    {
+      "email": "교보증권㈜",
+      "name": ""
+    },
+    {
+      "email": "교보핫트랙스",
+      "name": ""
+    },
+    {
+      "email": "구십구도씨",
+      "name": ""
+    },
+    {
+      "email": "굿스플로",
+      "name": ""
+    },
+    {
+      "email": "그로윈",
+      "name": ""
+    },
+    {
+      "email": "그린웹서비스㈜",
+      "name": ""
+    },
+    {
+      "email": "네이버 d2sf 소개",
+      "name": ""
+    },
+    {
+      "email": "네이버 d2sf@분당",
+      "name": ""
+    },
+    {
+      "email": "네이버 지식in",
+      "name": ""
+    },
+    {
+      "email": "네이버 클라우드㈜",
+      "name": ""
+    },
+    {
+      "email": "네이버 클라우드(주)",
+      "name": ""
+    },
+    {
+      "email": "네이버파이낸셜",
+      "name": ""
+    },
+    {
+      "email": "네이버파이낸셜 주식회사",
+      "name": ""
+    },
+    {
+      "email": "네이버페이",
+      "name": ""
+    },
+    {
+      "email": "다이슨 코리아",
+      "name": ""
+    },
+    {
+      "email": "대입정보포털 어디가",
+      "name": ""
+    },
+    {
+      "email": "대학내일",
+      "name": ""
+    },
+    {
+      "email": "대한통운",
+      "name": ""
+    },
+    {
+      "email": "대홍기획",
+      "name": ""
+    },
+    {
+      "email": "더아이씨에스",
+      "name": ""
+    },
+    {
+      "email": "동양생명금융서비스",
+      "name": ""
+    },
+    {
+      "email": "둡",
+      "name": ""
+    },
+    {
+      "email": "디비엠앤에스",
+      "name": ""
+    },
+    {
+      "email": "디지인",
+      "name": ""
+    },
+    {
+      "email": "라이나원",
+      "name": ""
+    },
+    {
+      "email": "라이엇게임즈",
+      "name": ""
+    },
+    {
+      "email": "라인플러스 주식회사",
+      "name": ""
+    },
+    {
+      "email": "롯데글로벌로지스",
+      "name": ""
+    },
+    {
+      "email": "롯데글로벌로지스(주)",
+      "name": ""
+    },
+    {
+      "email": "롯데손해보험",
+      "name": ""
+    },
+    {
+      "email": "롯데이노베이트",
+      "name": ""
+    },
+    {
+      "email": "롯데이노베이트㈜",
+      "name": ""
+    },
+    {
+      "email": "롯데카드 주식회사",
+      "name": ""
+    },
+    {
+      "email": "마케팅 알림",
+      "name": ""
+    },
+    {
+      "email": "맨토스파워",
+      "name": ""
+    },
+    {
+      "email": "메가존클라우드주식회사",
+      "name": ""
+    },
+    {
+      "email": "메일 주소 확인",
+      "name": ""
+    },
+    {
+      "email": "메타넷mcc",
+      "name": ""
+    },
+    {
+      "email": "메타넷엠플랫폼",
+      "name": ""
+    },
+    {
+      "email": "메타엠",
+      "name": ""
+    },
+    {
+      "email": "미래아이엔텍",
+      "name": ""
+    },
+    {
+      "email": "미래와행복",
+      "name": ""
+    },
+    {
+      "email": "민법",
+      "name": ""
+    },
+    {
+      "email": "배송지 관리",
+      "name": ""
+    },
+    {
+      "email": "베스트컴즈",
+      "name": ""
+    },
+    {
+      "email": "부가서비스 유지 및 변경 안내",
+      "name": ""
+    },
+    {
+      "email": "브이투브이",
+      "name": ""
+    },
+    {
+      "email": "블레이즈",
+      "name": ""
+    },
+    {
+      "email": "블룸에이아이",
+      "name": ""
+    },
+    {
+      "email": "블리자드 엔터테인먼트 유한회사",
+      "name": ""
+    },
+    {
+      "email": "비누커리어 주식회사",
+      "name": ""
+    },
+    {
+      "email": "비바리퍼블리카",
+      "name": ""
+    },
+    {
+      "email": "비지에프포스트",
+      "name": ""
+    },
+    {
+      "email": "빔모빌리티코리아",
+      "name": ""
+    },
+    {
+      "email": "상상력교양대학 교양영어과정",
+      "name": ""
+    },
+    {
+      "email": "상품 구매 주문 서비스",
+      "name": ""
+    },
+    {
+      "email": "생명보험사",
+      "name": ""
+    },
+    {
+      "email": "서머스플랫폼",
+      "name": ""
+    },
+    {
+      "email": "서울신용평가정보 (주)",
+      "name": ""
+    },
+    {
+      "email": "서울평가정보㈜",
+      "name": ""
+    },
+    {
+      "email": "선물 받기 서비스",
+      "name": ""
+    },
+    {
+      "email": "성우텔레콤",
+      "name": ""
+    },
+    {
+      "email": "성인 인증",
+      "name": ""
+    },
+    {
+      "email": "성진",
+      "name": ""
+    },
+    {
+      "email": "세무 업무 지원",
+      "name": ""
+    },
+    {
+      "email": "세무법인 한울",
+      "name": ""
+    },
+    {
+      "email": "세종텔레콤",
+      "name": ""
+    },
+    {
+      "email": "세틀뱅크㈜",
+      "name": ""
+    },
+    {
+      "email": "세포라",
+      "name": ""
+    },
+    {
+      "email": "손해보험사",
+      "name": ""
+    },
+    {
+      "email": "수신확인통지",
+      "name": ""
+    },
+    {
+      "email": "순이엔티",
+      "name": ""
+    },
+    {
+      "email": "스윗트래커",
+      "name": ""
+    },
+    {
+      "email": "신한금융플러스",
+      "name": ""
+    },
+    {
+      "email": "실물 상품 배송",
+      "name": ""
+    },
+    {
+      "email": "씨제이올리브네트웍스",
+      "name": ""
+    },
+    {
+      "email": "아마존웹서비시즈코리아",
+      "name": ""
+    },
+    {
+      "email": "아몬드",
+      "name": ""
+    },
+    {
+      "email": "아소산",
+      "name": ""
+    },
+    {
+      "email": "아이알링크",
+      "name": ""
+    },
+    {
+      "email": "아이핀 인증 서비스 제공 및 개인정보 처리",
+      "name": ""
+    },
+    {
+      "email": "앰플리튜드",
+      "name": ""
+    },
+    {
+      "email": "야놀자플랫폼",
+      "name": ""
+    },
+    {
+      "email": "약관의 규제에 관한 법률",
+      "name": ""
+    },
+    {
+      "email": "언플러",
+      "name": ""
+    },
+    {
+      "email": "에스앤피인슈",
+      "name": ""
+    },
+    {
+      "email": "에스엘엑스택배",
+      "name": ""
+    },
+    {
+      "email": "엔에이치엔케이씨피",
+      "name": ""
+    },
+    {
+      "email": "엔에이치엔페이코㈜",
+      "name": ""
+    },
+    {
+      "email": "엘엑스판토스",
+      "name": ""
+    },
+    {
+      "email": "온스테이지 플레이리스트",
+      "name": ""
+    },
+    {
+      "email": "옵티무브",
+      "name": ""
+    },
+    {
+      "email": "와이즈스톤티",
+      "name": ""
+    },
+    {
+      "email": "운전면허 인증 안내",
+      "name": ""
+    },
+    {
+      "email": "웰엑티브",
+      "name": ""
+    },
+    {
+      "email": "유니에스",
+      "name": ""
+    },
+    {
+      "email": "유니큐브",
+      "name": ""
+    },
+    {
+      "email": "유료서비스 이용계약",
+      "name": ""
+    },
+    {
+      "email": "유료서비스 이용약관 개정 및 결제 조건 안내",
+      "name": ""
+    },
+    {
+      "email": "유베이스",
+      "name": ""
+    },
+    {
+      "email": "은행",
+      "name": ""
+    },
+    {
+      "email": "이가",
+      "name": ""
+    },
+    {
+      "email": "이너컴",
+      "name": ""
+    },
+    {
+      "email": "이모션글로벌",
+      "name": ""
+    },
+    {
+      "email": "이벤트 운영 지원",
+      "name": ""
+    },
+    {
+      "email": "이용약관",
+      "name": ""
+    },
+    {
+      "email": "인터파크 고객센터",
+      "name": ""
+    },
+    {
+      "email": "인포밸",
+      "name": ""
+    },
+    {
+      "email": "인포뱅크",
+      "name": ""
+    },
+    {
+      "email": "인포존",
+      "name": ""
+    },
+    {
+      "email": "자연별곡 일산no점",
+      "name": ""
+    },
+    {
+      "email": "잡코리아",
+      "name": ""
+    },
+    {
+      "email": "재입고알림 서비스",
+      "name": ""
+    },
+    {
+      "email": "저축은행",
+      "name": ""
+    },
+    {
+      "email": "전기통신사업법",
+      "name": ""
+    },
+    {
+      "email": "전자상거래 등에서의 소비자보호에 관한 법률",
+      "name": ""
+    },
+    {
+      "email": "제10조 (유료서비스의 변경·중단·종료)",
+      "name": ""
+    },
+    {
+      "email": "제11조 (티빙포인트를 통한 유료서비스 구매)",
+      "name": ""
+    },
+    {
+      "email": "제12조 (청약철회 및 구매취소)",
+      "name": ""
+    },
+    {
+      "email": "제13조 (회원의 해지)",
+      "name": ""
+    },
+    {
+      "email": "제주항공",
+      "name": ""
+    },
+    {
+      "email": "젤라블루코리아",
+      "name": ""
+    },
+    {
+      "email": "주식회사 비바리퍼블리카",
+      "name": ""
+    },
+    {
+      "email": "주식회사 웰비아닷컴",
+      "name": ""
+    },
+    {
+      "email": "주식회사 유니티브",
+      "name": ""
+    },
+    {
+      "email": "주식회사 이든앤앨리스마케팅",
+      "name": ""
+    },
+    {
+      "email": "주식회사 인터파크",
+      "name": ""
+    },
+    {
+      "email": "주식회사 일그램",
+      "name": ""
+    },
+    {
+      "email": "주식회사 일도",
+      "name": ""
+    },
+    {
+      "email": "주식회사 카카오페이",
+      "name": ""
+    },
+    {
+      "email": "주식회사 토스페이먼츠",
+      "name": ""
+    },
+    {
+      "email": "증권사",
+      "name": ""
+    },
+    {
+      "email": "지넥슨",
+      "name": ""
+    },
+    {
+      "email": "지에스네트웍스",
+      "name": ""
+    },
+    {
+      "email": "지에스텔레서비스",
+      "name": ""
+    },
+    {
+      "email": "청소년 보호법",
+      "name": ""
+    },
+    {
+      "email": "카드사",
+      "name": ""
+    },
+    {
+      "email": "카카오 간편회원 가입",
+      "name": ""
+    },
+    {
+      "email": "카카오페이",
+      "name": ""
+    },
+    {
+      "email": "케이아이비넷㈜",
+      "name": ""
+    },
+    {
+      "email": "케이지모빌리언스",
+      "name": ""
+    },
+    {
+      "email": "코리아크레딧뷰로㈜",
+      "name": ""
+    },
+    {
+      "email": "콘텐츠 이용계약",
+      "name": ""
+    },
+    {
+      "email": "콘텐츠산업 진흥법",
+      "name": ""
+    },
+    {
+      "email": "콘텐츠이용자 보호지침",
+      "name": ""
+    },
+    {
+      "email": "키스톤 마케팅 컴퍼니",
+      "name": ""
+    },
+    {
+      "email": "킨다크로스",
+      "name": ""
+    },
+    {
+      "email": "토스뱅크 고객센터",
+      "name": ""
+    },
+    {
+      "email": "토스뱅크 나눠모으기 통장 특약_260821.pdf",
+      "name": ""
+    },
+    {
+      "email": "토스뱅크 통장 특약_260821.pdf",
+      "name": ""
+    },
+    {
+      "email": "토스뱅크 통장 특약_신구조문대비표_20260821.pdf",
+      "name": ""
+    },
+    {
+      "email": "트랜스코스모코리아",
+      "name": ""
+    },
+    {
+      "email": "티디씨엑스코리아 유한회사",
+      "name": ""
+    },
+    {
+      "email": "티빙 개인정보 처리 안내",
+      "name": ""
+    },
+    {
+      "email": "티빙캐시 및 결제방식 안내",
+      "name": ""
+    },
+    {
+      "email": "파기절차 및 개인정보 권리행사",
+      "name": ""
+    },
+    {
+      "email": "판토스",
+      "name": ""
+    },
+    {
+      "email": "페이레터㈜케이지이니시스",
+      "name": ""
+    },
+    {
+      "email": "페이북",
+      "name": ""
+    },
+    {
+      "email": "페이스북 아일랜드",
+      "name": ""
+    },
+    {
+      "email": "프로필 관리",
+      "name": ""
+    },
+    {
+      "email": "프리미엄 부페파크 일산점",
+      "name": ""
+    },
+    {
+      "email": "핏콜라보",
+      "name": ""
+    },
+    {
+      "email": "한국맥도날드유한회사",
+      "name": ""
+    },
+    {
+      "email": "한국모바일인증㈜",
+      "name": ""
+    },
+    {
+      "email": "한국인터넷진흥원",
+      "name": ""
+    },
+    {
+      "email": "한국정보통신㈜",
+      "name": ""
+    },
+    {
+      "email": "한국정보통신진흥협회",
+      "name": ""
+    },
+    {
+      "email": "한일네트웍스",
+      "name": ""
+    },
+    {
+      "email": "한진",
+      "name": ""
+    },
+    {
+      "email": "한진정보통신",
+      "name": ""
+    },
+    {
+      "email": "한컴닷컴",
+      "name": ""
+    },
+    {
+      "email": "핫트랙스",
+      "name": ""
+    },
+    {
+      "email": "해외 atm 수수료 면제 혜택 변경",
+      "name": ""
+    },
+    {
+      "email": "행정안전부",
+      "name": ""
+    },
+    {
+      "email": "행태정보 및 광고식별자 처리 안내",
+      "name": ""
+    },
+    {
+      "email": "환불계좌 관리",
+      "name": ""
+    },
+    {
+      "email": "회사",
+      "name": ""
+    },
+    {
+      "email": "회원",
+      "name": ""
+    },
+    {
+      "email": "회원 정보 업데이트 안내",
+      "name": ""
+    },
+    {
+      "email": "회원 정보 제공 및 제휴사 동의 관리",
+      "name": ""
+    },
+    {
+      "email": "회원가입",
+      "name": ""
+    },
+    {
+      "email": "효성itx",
+      "name": ""
+    },
+    {
+      "email": "흥국생명보험",
+      "name": ""
+    }
+  ]
+}
