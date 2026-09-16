@@ -65,12 +65,16 @@ def _load_account_sender_map(paths) -> dict:
 def _strip_id_punct(mail_id: str) -> str:
     return mail_id.strip(']),.;:》」』')
 
-# ID 값에 허용되는 문자만 (영문/숫자/@ . _ -) — 메일 ID(예: "5b25c2b94f60e201")와
+# ID 값에 허용되는 문자만 (영문/숫자/@ . _ - = +) — 메일 ID(예: "5b25c2b94f60e201")와
 # 메신저 ID(예: "2022-05-07_01") 둘 다 이 문자만으로 이뤄져 있다. LLM이 "ID: 2022-08-21_01이며"처럼
 # 공백 없이 한글 조사를 ID 뒤에 바로 붙여 쓰는 경우가 있어, 예전엔 \S+로 통째로 잡고
 # 문장부호만 벗겨내던 _strip_id_punct()로는 한글이 안 지워져 원본 ID와 매칭에 실패했다
 # (예: "2022-08-21_01이며" != "2022-08-21_01") — 아예 ID 문자 집합만 추출해서 근본적으로 막는다.
-_ID_TOKEN_RE = r'ID:\s*([A-Za-z0-9@._-]+)'
+# '=', '+'도 포함: 일부 계정은 메일 ID로 GraphRAG가 만든 해시가 아니라 Gmail Message-ID
+# 원본을 그대로 쓰는데("=BfH5tS5Tw5KU=hSj-MfoW0O7e4+zXJrL=...@mail.gmail.com"), 이 문자들이
+# 빠져있으면 ID가 중간에서 잘려 sender_map과 매칭에 실패하고 근거 메일의 계정(account)이
+# None으로 넘어가 "근거메일 보기"가 400 에러로 깨졌다.
+_ID_TOKEN_RE = r'ID:\s*([A-Za-z0-9@._=+-]+)'
 
 # 메일 ID가 올바른지 판단한다 (LLM이 순번 "2" 등을 ID로 잘못 쓴 짧은 숫자는 걸러냄)
 def _is_plausible_mail_id(mail_id: str) -> bool:
@@ -92,7 +96,7 @@ _STRUCTURED_ITEM_RE = re.compile(
     r'[ \t]*날짜:.*?\n'
     r'[ \t]*[^\n:]+:.*?\n'
     r'[ \t]*내용:.*?\n'
-    r'(?P<idline>[ \t]*ID:\s*(?P<id>[A-Za-z0-9@._-]+)[ \t]*\n?)',
+    r'(?P<idline>[ \t]*ID:\s*(?P<id>[A-Za-z0-9@._=+-]+)[ \t]*\n?)',
     re.MULTILINE,
 )
 
@@ -461,7 +465,7 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
                     # 메신저 블록에 '발신인:' 필드 자체가 없어 _fix_paragraph_sender가 자연히
                     # no-op이라 문제 없음) _find_real_id가 정상적으로 역추적하게 한다.
                     if paths.DOMAIN == "messenger":
-                        found_ids = re.findall(r'^ID:\s*([A-Za-z0-9@._-]+)', chunk_text, re.MULTILINE)
+                        found_ids = re.findall(r'^ID:\s*([A-Za-z0-9@._=+-]+)', chunk_text, re.MULTILINE)
                         sender_map = {i.lower(): i for i in found_ids}
                     else:
                         sender_map = _load_account_sender_map(paths)

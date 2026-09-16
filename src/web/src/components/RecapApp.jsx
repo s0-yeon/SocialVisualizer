@@ -1,5 +1,5 @@
 import { createRoot } from "react-dom/client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "./Header.jsx";
 import Footer from "./Footer.jsx";
 import MailStatsCard from "./recap/MailStatsCard.jsx";
@@ -13,6 +13,7 @@ import { store } from "../store/globalStore.js";
 import { refreshSidebarList } from "./appSidebar.js";
 import { initGlobalFilter } from "../utils/filterSync.js";
 import { postStat, postRoomStat, rankMailStats, rankChatPeople } from "../features/recapStats.js";
+import { getCached, setCached } from "../utils/dataCache.js";
 
 /**
 "Recap" 페이지(recap.html) 전체를 감싸는 최상위 React 컴포넌트 — 히어로, 통계 카드, 사이드바(공용 vanilla 모듈)까지 한 번에 마운트한다.
@@ -21,8 +22,6 @@ import { postStat, postRoomStat, rankMailStats, rankChatPeople } from "../featur
 
 Top-level React component wrapping the entire Recap page. Selecting a mail account loads the 5 mail stats; selecting a messenger chatroom loads the 5 chatroom stats, each with its own card set. Stale responses are ignored via the standard effect ignore-flag pattern.
  */
-
-const CACHE_TTL_MS = 5 * 60 * 1000; // 캐시 유효시간(5분)
 
 const LOADING_STATE = { status: "loading" };
 const NO_ACCOUNT_ERROR = "인덱싱된 계정이 없습니다. 먼저 메일을 수집해주세요.";
@@ -111,12 +110,22 @@ function resolveRoomLabel(roomId) {
   return found ? found.label : "";
 }
 
+// Promise.allSettled 결과를 localStorage에 담을 수 있게 정리 — 거부(rejected)된 항목의
+// reason은 Error 인스턴스라 JSON으로 직렬화하면 메시지가 날아가므로, 표시에 쓰는
+// message만 뽑아 순수 객체로 바꿔둔다(성공 항목은 이미 순수 데이터라 그대로 둔다).
+function toSerializable(results) {
+  return results.map((r) =>
+    r.status === "rejected"
+      ? { status: "rejected", reason: { message: (r.reason && r.reason.message) || String(r.reason) } }
+      : r
+  );
+}
+
 function RecapApp() {
   const [name] = useState(resolveName);
   const [filterState, setFilterState] = useState(null);
   const [mode, setMode] = useState("mail"); // "mail" | "messenger"
   const [cardStates, setCardStates] = useState(() => loadingStates(MAIL_SLOTS));
-  const cacheRef = useRef(new Map()); // "mail:<id>" / "room:<id>" -> { timestamp, results }
 
   // 사이드바 + 계정 선택 상태 동기화는 공용 vanilla 모듈(filterSync.js/appSidebar.js)이 전담.
   useEffect(() => {
@@ -139,10 +148,10 @@ function RecapApp() {
       setMode("messenger");
       setCardStates(loadingStates(MSG_SLOTS));
 
-      const cacheKey = "room:" + roomId;
-      const cached = cacheRef.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-        setCardStates(buildMessengerCardStates(cached.results));
+      const cacheKey = "recap:room:" + roomId;
+      const cached = getCached(cacheKey);
+      if (cached) {
+        setCardStates(buildMessengerCardStates(cached));
         return;
       }
 
@@ -154,7 +163,7 @@ function RecapApp() {
         postRoomStat("/chatroom-monthly-message-stats", roomId),
         postRoomStat("/chatroom-sync-stats", roomId),
       ]).then((results) => {
-        cacheRef.current.set(cacheKey, { timestamp: Date.now(), results });
+        setCached(cacheKey, toSerializable(results));
         if (ignore) return;
         setCardStates(buildMessengerCardStates(results));
       });
@@ -175,10 +184,10 @@ function RecapApp() {
 
     setCardStates(loadingStates(MAIL_SLOTS));
 
-    const cacheKey = "mail:" + gmailId;
-    const cached = cacheRef.current.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      setCardStates(buildCardStates(cached.results));
+    const cacheKey = "recap:mail:" + gmailId;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      setCardStates(buildCardStates(cached));
       return;
     }
 
@@ -192,7 +201,7 @@ function RecapApp() {
     ]).then((results) => {
       // 다섯 API를 기다리는 동안 다른 선택이 됐으면(=ignore) 낡은 데이터다.
       // 캐시에는 넣어 두되 화면에는 반영하지 않는다.
-      cacheRef.current.set(cacheKey, { timestamp: Date.now(), results });
+      setCached(cacheKey, toSerializable(results));
       if (ignore) return;
       setCardStates(buildCardStates(results));
     });

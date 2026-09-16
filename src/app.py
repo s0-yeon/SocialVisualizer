@@ -1789,8 +1789,8 @@ def send_mail_day_emails():
 @app.route("/mail-body-by-ids", methods=["POST"])
 def send_mail_body_by_ids():
     data = request.json or {}
-    account = data.get("account", "").strip()
-    mail_id = data.get("mail_id", "").strip()
+    account = (data.get("account") or "").strip()
+    mail_id = (data.get("mail_id") or "").strip()
 
     if not account:
         return jsonify({"error": "account is required"}), 400

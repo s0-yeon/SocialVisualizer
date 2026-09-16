@@ -10,6 +10,7 @@ import * as d3 from "d3";
 import { refreshSidebarList } from "../components/appSidebar.js";
 import { initGlobalFilter } from "../utils/filterSync.js";
 import { store } from "../store/globalStore.js";
+import { getCached, setCached } from "../utils/dataCache.js";
 
 
 // DOM 접근이 필요한 초기화(계정 picker, 뷰/버튼 참조 등)는 전부 initMyPeoplePage() 안에서 하므로, 여기서는 다른 함수들이 클로저로 참조할 수 있도록 선언만 해둔다.
@@ -685,6 +686,18 @@ async function fetchPeriodStats() {
     start_date: msToDateStr(selMin),
     end_date: msToDateStr(selMax),
   };
+  // 계정 + 선택 기간 조합으로 캐시 — 같은 계정에서 같은 기간을 다시 보면(사이드바
+  // 왕복 등) 재요청 없이 바로 반영한다.
+  const periodCacheKey = `mp:period:${gmailId}:${body.start_date}_${body.end_date}`;
+  const cachedPeriod = getCached(periodCacheKey);
+  if (cachedPeriod) {
+    if (gmailId === currentMailId) {
+      periodStats = cachedPeriod;
+      periodStatsLoaded = true;
+      renderCards();
+    }
+    return;
+  }
   try {
     const [sRes, rRes] = await Promise.all([
       fetch("/mail-person-sent-stats", post(body)),
@@ -717,6 +730,7 @@ async function fetchPeriodStats() {
     }
     periodStats = newStats;
     periodStatsLoaded = true;
+    setCached(periodCacheKey, newStats);
   } catch (e) {
     console.error("fetchPeriodStats 오류:", e);
   } finally {
@@ -1079,22 +1093,34 @@ async function loadPeople() {
   let fetchedPhotos = contactPhotos;
   let fetchedAvatars = generatedAvatars;
 
+  // 사람 목록/기간 범위(고친밀도 계산이 들어가 느린 두 요청)는 하루 동안 캐시해서
+  // 사이드바에서 계정을 왔다갔다 전환해도 다시 계산하지 않고 바로 띄운다. 사진/아바타는
+  // 아바타 자동 생성 등으로 세션 중에 바뀔 수 있어 캐시하지 않고 매번 새로 받는다.
+  const peopleCacheKey = `mp:people:${gmailId}`;
+  const cachedPeople = getCached(peopleCacheKey);
+
   try {
     const [pRes, dRes, phRes, avRes] = await Promise.all([
-      fetch("/high_affinity_person_stats", post()),
-      fetch("/mail-date-range", post()),
+      cachedPeople ? null : fetch("/high_affinity_person_stats", post()),
+      cachedPeople ? null : fetch("/mail-date-range", post()),
       fetch("/contact-photos", post()),
       fetch("/person-avatars", post()),
     ]);
 
-    if (pRes.ok) {
-      const j = await pRes.json();
-      fetchedPeople = j.data || j || [];
-    }
-    if (dRes.ok) {
-      const j = await dRes.json();
-      const d = j.data || j;
-      if (d.first_date && d.last_date) dateRange = d;
+    if (cachedPeople) {
+      fetchedPeople = cachedPeople.fetchedPeople;
+      dateRange = cachedPeople.dateRange;
+    } else {
+      if (pRes.ok) {
+        const j = await pRes.json();
+        fetchedPeople = j.data || j || [];
+      }
+      if (dRes.ok) {
+        const j = await dRes.json();
+        const d = j.data || j;
+        if (d.first_date && d.last_date) dateRange = d;
+      }
+      setCached(peopleCacheKey, { fetchedPeople, dateRange });
     }
     if (phRes.ok) fetchedPhotos = await phRes.json();
     if (avRes.ok) fetchedAvatars = await avRes.json();
@@ -1540,24 +1566,35 @@ const MESSENGER_STATS_SCROLL_LEFT_PEOPLE = new Set(["김도현"]);
 async function fetchAndRenderChatroomPeople(moodPromise) {
   // 아래 fetch/await가 진행되는 사이 사용자가 다른 방을 누르거나 메일로 돌아가면, 뒤늦게 도착한 이 응답이 최신 화면을 덮어쓰지 않도록 시작 시점의 방 id를 기억해뒀다가 반영 직전에 지금도 같은 방/채널인지 다시 확인한다.
   const requestedChatroomId = currentChatroomId;
+  // 방 + 선택 기간 조합으로 캐시 — 사이드바에서 다른 방을 봤다가 다시 이 방으로
+  // 돌아와도 재요청 없이 바로 띄운다.
+  const roomCacheKey = `mp:room:${requestedChatroomId}:${msToDateStr(selMin)}_${msToDateStr(selMax)}`;
+  const cachedRoom = getCached(roomCacheKey);
   let people = [];
-  try {
-    const res = await fetch("/chatroom-person-detail", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chatroom_id: currentChatroomId,
-        start_date: msToDateStr(selMin),
-        end_date: msToDateStr(selMax),
-      }),
-    });
-    const all = res.ok ? (await res.json()).data.people || [] : [];
-    all.forEach((p) => {
-      p.name = applyRoomNameOverride(currentChatroomName, p.name);
-    });
-    people = all.filter((p) => (p.message_count || 0) > 0);
-  } catch (e) {
-    console.error("chatroom-person-detail 오류:", e);
+  if (cachedRoom) {
+    people = cachedRoom;
+  } else {
+    try {
+      const res = await fetch("/chatroom-person-detail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatroom_id: currentChatroomId,
+          start_date: msToDateStr(selMin),
+          end_date: msToDateStr(selMax),
+        }),
+      });
+      const all = res.ok ? (await res.json()).data.people || [] : [];
+      all.forEach((p) => {
+        p.name = applyRoomNameOverride(currentChatroomName, p.name);
+      });
+      people = all.filter((p) => (p.message_count || 0) > 0);
+      if (currentChatroomId === requestedChatroomId) {
+        setCached(roomCacheKey, people);
+      }
+    } catch (e) {
+      console.error("chatroom-person-detail 오류:", e);
+    }
   }
   const moodScore = moodPromise ? await moodPromise : null;
   if (currentChannel !== "messenger" || currentChatroomId !== requestedChatroomId) return;

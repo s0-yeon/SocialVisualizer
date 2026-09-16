@@ -1,5 +1,11 @@
 {
-  "logo_ok": [],
+  "logo_ok": [
+    {
+      "email": "newsletter@info.mytrip.com",
+      "name": "Mytrip Info",
+      "domain": "mytrip.com"
+    }
+  ],
   "logo_fail": [
     {
       "email": "admin@kcue.or.kr",
@@ -35,11 +41,6 @@
       "email": "lpoint@lotte.net",
       "name": "L.POINT",
       "domain": "lotte.net"
-    },
-    {
-      "email": "newsletter@info.mytrip.com",
-      "name": "Mytrip Info",
-      "domain": "mytrip.com"
     },
     {
       "email": "no-reply@dalcomsoft.com",

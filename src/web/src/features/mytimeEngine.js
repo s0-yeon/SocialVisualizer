@@ -9,6 +9,7 @@ import { initAccountPicker } from "../features/accountPicker.js";
 import { store } from "../store/globalStore.js";
 import { refreshSidebarList } from "../components/appSidebar.js";
 import { initGlobalFilter } from "../utils/filterSync.js";
+import { getCached, setCached } from "../utils/dataCache.js";
 
 /* 공통 fetch 헬퍼 */
 // JSON POST 요청 공통 헬퍼
@@ -498,9 +499,17 @@ function createKeywordPanel(ids, api) {
       renderEmpty("연결된 계정이 없습니다.");
       return;
     }
+    // 계정/방 전환 시마다 같은 월별 키워드 통계를 다시 받지 않도록 하루 동안 캐시한다.
+    const kwCacheKey = `mt:kw:${api.monthlyUrl}:${idValue}`;
+    const cachedKw = getCached(kwCacheKey);
+    if (cachedKw) {
+      monthlyMap = cachedKw;
+      return;
+    }
     try {
       const j = await postJSON(api.monthlyUrl, { [api.idField]: idValue });
       monthlyMap = j.data || {};
+      setCached(kwCacheKey, monthlyMap);
     } catch (e) {
       console.error("keyword-monthly-stats 오류:", e);
       monthlyMap = {};
@@ -779,10 +788,20 @@ async function initMail(gmailId) {
     }
   }
 
-  const [MONTH_DATA, YEAR_DATA] = await Promise.all([
-    fetchSummaries("monthly"),
-    fetchSummaries("yearly"),
-  ]);
+  // 계정 전환 시마다 월별/연도별 요약을 다시 받지 않도록 하루 동안 캐시한다.
+  const mailSummaryCacheKey = `mt:mail:${gmailId}`;
+  const cachedMailSummary = getCached(mailSummaryCacheKey);
+  let MONTH_DATA, YEAR_DATA;
+  if (cachedMailSummary) {
+    MONTH_DATA = cachedMailSummary.MONTH_DATA;
+    YEAR_DATA = cachedMailSummary.YEAR_DATA;
+  } else {
+    [MONTH_DATA, YEAR_DATA] = await Promise.all([
+      fetchSummaries("monthly"),
+      fetchSummaries("yearly"),
+    ]);
+    setCached(mailSummaryCacheKey, { MONTH_DATA, YEAR_DATA });
+  }
   // 요청 — My Time 뱃지 범위를 My People과 맞추려고(2017.01~2026.09) 03yeah03@gmail.com
   // 계정에만 내용 없는 빈 월별 자리표시(2017~2019, 2026-09)를 추가했는데, 그대로 두면
   // setData()가 항상 "마지막 달"을 기본으로 띄우는 로직 때문에 빈 2026-09가 기본으로 떠버린다.
@@ -862,10 +881,20 @@ async function loadMtMessengerData() {
     return msgTimeline.setData({}, {}, "연결된 채팅방이 없습니다. 채팅방을 먼저 선택해주세요.");
   }
   try {
-    const [monthData, yearData] = await Promise.all([
-      fetchChatroomSummaries(chatroomId, "monthly"),
-      fetchChatroomSummaries(chatroomId, "yearly"),
-    ]);
+    // 방 전환 시마다 월별/연도별 요약을 다시 받지 않도록 하루 동안 캐시한다.
+    const roomSummaryCacheKey = `mt:room:${chatroomId}`;
+    const cachedRoomSummary = getCached(roomSummaryCacheKey);
+    let monthData, yearData;
+    if (cachedRoomSummary) {
+      monthData = cachedRoomSummary.monthData;
+      yearData = cachedRoomSummary.yearData;
+    } else {
+      [monthData, yearData] = await Promise.all([
+        fetchChatroomSummaries(chatroomId, "monthly"),
+        fetchChatroomSummaries(chatroomId, "yearly"),
+      ]);
+      setCached(roomSummaryCacheKey, { monthData, yearData });
+    }
     await msgKwPanel.init(chatroomId);
     return msgTimeline.setData(monthData, yearData, "아직 생성된 메신저 요약이 없습니다.");
   } catch (e) {

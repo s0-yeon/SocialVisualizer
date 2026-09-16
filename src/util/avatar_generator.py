@@ -356,6 +356,7 @@ def _fetch_company_logo(domain: str) -> bytes | None:
     for url in (
         f"https://logo.clearbit.com/{domain}?size=256",
         f"https://www.google.com/s2/favicons?sz=256&domain={domain}",
+        f"https://icons.duckduckgo.com/ip3/{domain}.ico",
     ):
         try:
             res = requests.get(url, timeout=8)
