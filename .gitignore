@@ -45,6 +45,10 @@ sft_work/
 _archive_indexing_fixes/
 _to_delete/
 
+# 쿼리 파인튜닝 진단용으로 graphrag_query.py가 쓰던 원본답변 로그 — 그 로깅 코드는
+# 정리하며 제거했지만 로컬에 이미 쌓인 로그 파일 자체는 남아있어 커밋 대상에서 제외
+raw_query_answers_debug.log
+
 # 실 개인정보 백업 (실 계정 메일/메신저 — 절대 커밋 금지)
 personal_backup/
 

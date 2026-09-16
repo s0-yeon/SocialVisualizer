@@ -295,16 +295,26 @@ def get_engines(user_id: str, output_dir: str, graphrag_root: str) -> tuple[Loca
     if mtime == 0.0:
         raise RuntimeError(f"인덱스가 아직 생성되지 않았습니다: {output_dir}")
 
-    with _cache_lock:  # 동시 접근 방지
+    with _cache_lock:  # 동시 접근 방지 (캐시 딕셔너리 읽기만 — 아래 참고)
         cached = _engine_cache.get(user_id)
 
         if cached and cached["mtime"] == mtime:
             return cached["local"], cached["global"]
 
-        # 캐시 miss 또는 인덱스 갱신 감지 (index/update 실행 후 mtime 변경): 새로 빌드
-        print(f"[ENGINE] 빌드 시작: {user_id}")
-        local_engine,  local_model  = _build_local_engine(output_dir, graphrag_root)
-        global_engine, global_model = _build_global_engine(output_dir, graphrag_root)
+    # 캐시 miss 또는 인덱스 갱신 감지 (index/update 실행 후 mtime 변경): 새로 빌드.
+    # 빌드 자체(parquet 읽기, 임베딩/모델 초기화 등 — 계정 하나당 0.5~1초대)는 락 밖에서
+    # 수행한다. 예전엔 이 무거운 작업까지 _cache_lock 블록 안에서 했는데, 연합 검색이
+    # 계정별로 get_engines를 스레드풀에서 동시에 호출해도(asyncio.to_thread + gather)
+    # 전역 락 하나에 전부 걸려 사실상 순차 실행되던 게 진짜 원인이었다 — federated
+    # local/global search가 "병렬화"해도 계정 14개 기준 엔진 빌드 단계만 9~11초씩
+    # 그대로 누적됐던 이유. 같은 user_id를 두 요청이 동시에 처음 빌드하는 드문 경합은
+    # 중복 빌드(결과 자체는 둘 다 정답이라 문제 없음, 캐시엔 마지막에 쓴 것만 남음)로
+    # 끝나는데, 매 요청마다 전체를 직렬화하는 비용보다는 훨씬 싸다.
+    print(f"[ENGINE] 빌드 시작: {user_id}")
+    local_engine,  local_model  = _build_local_engine(output_dir, graphrag_root)
+    global_engine, global_model = _build_global_engine(output_dir, graphrag_root)
+
+    with _cache_lock:
         _engine_cache[user_id] = {
             "local":         local_engine,
             "global":        global_engine,
@@ -312,8 +322,8 @@ def get_engines(user_id: str, output_dir: str, graphrag_root: str) -> tuple[Loca
             "global_model":  global_model,
             "mtime":         mtime,
         }
-        print(f"[ENGINE] 빌드 완료: {user_id}")
-        return local_engine, global_engine
+    print(f"[ENGINE] 빌드 완료: {user_id}")
+    return local_engine, global_engine
 
 
 # 지정한 method(local/global) 엔진의 누적 토큰 사용량을 반환하고 초기화한다

@@ -10,15 +10,23 @@ the search page's React components.
 
 export const MAX_RECENTS = 8;
 
+// 목표 구조화 답변 형식(번호 매김 5필드)인지 판단한다. 1번째/3번째 필드 라벨은 도메인마다
+// 다르므로(메신저: 메시지/채팅방, 메일: 제목/계정) 라벨 이름 대신 "N. ...' 다음 줄에 들여쓴
+// '날짜:' 필드가 오는" 구조 자체로 판별한다. 이 형식일 때는 백엔드가 이미 줄바꿈/들여쓰기를
+// 정확히 맞춰서 보내주므로 아래 문장부호 기반 강제 줄바꿈 안전망을 적용하면 오히려 "내용:"
+// 필드 안의 문장 두 개가 멋대로 갈라지는 등 형식이 깨진다 — 그래서 이 형식일 땐 안전망을
+// 건너뛴다.
+const STRUCTURED_ANSWER_RE = /^\d+\.[^\n]*\n[ \t]*날짜:/m;
+
 // 라마 응답이 " - " 불릿 외의 형식으로 줄바꿈 없이 나오는 경우를 대비해 문장이 끝나는
-// 지점마다 줄바꿈을 넣는 안전망(백엔드의 strip_ids_for_display는 " - " 불릿만 처리함).
+// 지점마다 줄바꿈을 넣는 안전망(구조화 형식이 아닌 예전 방식의 자유 서술형 답변에만 적용).
 // "다./요." 뒤가 이미 줄바꿈(단락 구분용 빈 줄 포함)이면 손대지 않고, 공백으로만 이어붙은
 // 경우에만 줄바꿈을 넣음 — \s+는 뒤따르는 개행까지 다 먹어치워서, 답변 문단 사이의 빈 줄
 // (단락 구분)까지 한 줄로 뭉개 가독성을 해치는 문제가 있었음.
 export function formatAnswer(text) {
-  return String(text || '')
-    .replace(/([다요])\.[ \t]+(?=\S)/g, '$1.\n')
-    .trim();
+  const s = String(text || '').trim();
+  if (STRUCTURED_ANSWER_RE.test(s)) return s;
+  return s.replace(/([다요])\.[ \t]+(?=\S)/g, '$1.\n');
 }
 
 // jobId 처리 상태를 폴링하다 완료/실패 시 콜백 호출
@@ -132,19 +140,54 @@ export function findLineIdxBySubject(lines, subject, excludeIdx) {
   return findPreferBullet((line) => _longestCommonSubstringLen(base, line.replace(/\s+/g, ' ')) >= minLen);
 }
 
-// source_ids({id, account} 배열)에서 메일 도메인 근거만, 중복 id 제거해서 뽑기
-export function extractUniqueMailRefs(domain, sourceIds) {
+// source_ids({id, account} 배열)에서 중복을 제거해서 뽑는다. 메일/메신저 도메인 공통 —
+// 예전엔 domain !== 'mail'이면 항상 빈 배열을 반환해서 메신저 탭엔 "근거메신저 보기"
+// 버튼 자체가 뜬 적이 없었음(도메인 분기가 아예 미구현 상태로 남아 있었음).
+// 중복 판정 키는 "계정:블록ID" 조합 — 메신저 블록 ID는 "날짜_순번" 형태라 서로 다른
+// 계정(채팅방)에서 같은 날짜에 같은 순번의 블록이 우연히 겹칠 수 있는데, id만으로
+// 중복 판정하면 그중 한 계정의 근거가 통째로 사라져 버튼이 엉뚱한 계정을 가리키게 된다.
+export function extractUniqueRefs(sourceIds) {
   const refs = [];
-  if (domain !== 'mail' || !sourceIds || !sourceIds.length) return refs;
+  if (!sourceIds || !sourceIds.length) return refs;
   const seen = new Set();
   sourceIds.forEach((src) => {
     const id = typeof src === 'string' ? src : src && src.id;
     const account = typeof src === 'string' ? null : src && src.account;
-    if (!id || seen.has(id)) return;
-    seen.add(id);
+    if (!id) return;
+    const key = `${account || ''}:${id}`;
+    if (seen.has(key)) return;
+    seen.add(key);
     refs.push({ id, account });
   });
   return refs;
+}
+
+// 목표 구조화 답변(번호 매김 5필드)의 각 항목이 몇 번째 줄에서 시작하는지 찾아, 그 항목의
+// '내용:' 줄(들여쓴 4번째 줄) 인덱스를 항목이 나온 순서대로 배열로 반환한다.
+// 'ID:' 줄은 사용자 설명대로 "근거메일/근거메신저 보기" 버튼으로 들어가는 값일 뿐 화면에
+// 노출할 텍스트가 아니라서 — 백엔드가 이미 그 줄을 지우고 보내준다(graphrag_query.py의
+// _format_structured_answer 참고). 그래서 텍스트로 ID를 찾아 매칭하는 대신, 답변에 남은 항목
+// 순서와 백엔드가 같은 순서로 보내주는 source_ids 배열을 그대로 짝지어 버튼을 붙인다 —
+// 이쪽이 제목/날짜 문자열로 어림짐작하는 것보다 훨씬 정확하고 안전하다.
+export function assignStructuredItemLines(lines) {
+  const indices = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\d+\.\s*[^\n:]+:/.test(lines[i])) continue;
+    const contentIdx = i + 3; // N.제목줄, 날짜, 채팅방|계정, 내용 순 — 내용은 4번째(0-index +3)
+    if (contentIdx < lines.length && /^[ \t]*내용:/.test(lines[contentIdx])) {
+      indices.push(contentIdx);
+    }
+  }
+  return indices;
+}
+
+// 메신저 블록 ID("2022-08-21_01" 형태, 날짜_순번)에서 날짜만 뽑아 답변 줄 매칭용
+// 검색어로 쓴다 — 메일의 "제목"에 해당하는 역할. 실제 federated_local 답변에는
+// system_prompt 지시에 따라 LLM이 "날짜: 2022-08-21에 ..."처럼 날짜를 그대로
+// 문장에 적는 경우가 많아 findLineIdxBySubject의 부분일치 로직을 그대로 재사용할 수 있다.
+export function messengerRefSearchKey(ref) {
+  const m = String((ref && ref.id) || '').match(/^(\d{4}-\d{2}-\d{2})/);
+  return m ? m[1] : '';
 }
 
 export function loadRecents(key) {
