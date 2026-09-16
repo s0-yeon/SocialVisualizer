@@ -69,7 +69,7 @@ def _extract_field(block: str, label: str, multiline: bool = False) -> str:
         )
     else:
         m = re.search(
-            rf"^{re.escape(label)}:\s*(.+)$",
+            rf"^{re.escape(label)}:[ \t]*(.+)$",
             block,
             re.MULTILINE
         )
@@ -272,13 +272,13 @@ def _save_mail_keyword_stats(paths, mode: str = "rewrite"):
     for _, row in text_units_df.iterrows():
         text = str(row.get('text', ''))
 
-        id_match = re.search(r'^\[ID\]\s*(.+)$', text, re.MULTILINE)
+        id_match = re.search(r'^\[ID\][ \t]*(.+)$', text, re.MULTILINE)
         mail_id = id_match.group(1).strip() if id_match else None
 
         if mode == "append" and mail_id in processed_ids:
             continue
 
-        date_match = re.search(r'^\[날짜\]\s*(.+)$', text, re.MULTILINE)
+        date_match = re.search(r'^\[날짜\][ \t]*(.+)$', text, re.MULTILINE)
         mail_date = date_match.group(1).strip()[:10] if date_match else None  # YYYY-MM-DD
 
         # "Name <email>" 형태에서 이메일만 뽑는다
@@ -286,10 +286,10 @@ def _save_mail_keyword_stats(paths, mode: str = "rewrite"):
             m = re.search(r'<(.+?)>', value)
             return m.group(1).strip() if m else value.strip()
 
-        sender_match = re.search(r'^\[발신인\]\s*(.+)$', text, re.MULTILINE)
+        sender_match = re.search(r'^\[발신인\][ \t]*(.+)$', text, re.MULTILINE)
         sender = parse_email(sender_match.group(1)) if sender_match else None
 
-        receiver_match = re.search(r'^\[수신인\]\s*(.+)$', text, re.MULTILINE)
+        receiver_match = re.search(r'^\[수신인\][ \t]*(.+)$', text, re.MULTILINE)
         receiver = parse_email(receiver_match.group(1)) if receiver_match else None
 
         person = receiver if sender == paths.USER_ID else sender

@@ -508,12 +508,177 @@ HS_KIM_TOTAL = HS_KIM_2022_TOTAL + HS_KIM_TAIL_TOTAL  # 1382건
 # 두고, 그가 실제로 등장한 횟수(연도별 누적)를 기준으로 순환시켜 풀 전체가 고르게
 # 다 뽑히게 한다. (다른 14명이 쓰는 room_keywords 로직은 그대로 안 건드림.)
 HS_KIM_KEYWORD_POOL_BY_YEAR = {
-    2022: ["새내기", "OT", "MT", "수강신청", "동아리박람회", "미팅", "과제", "종강", "축제", "방학"],
+    2022: ["기말고사", "모의고사", "야자", "수능", "졸업식", "반친구들", "담임쌤", "급식", "체육대회", "방과후"],
     2023: ["전공수업", "알바", "군입대", "훈련소", "자취", "학점", "조모임", "면회", "휴가", "복무"],
     2024: ["휴학", "복학", "인턴", "공모전", "자격증", "토익", "포트폴리오", "졸업유예", "동아리", "학회"],
     2025: ["자소서", "면접", "취업준비", "채용공고", "스터디", "포트폴리오", "합격", "불합격", "최종면접", "인적성"],
     2026: ["첫출근", "회사생활", "적응", "월급", "회식", "재테크", "동창회", "안부", "출장", "야근"],
 }
+
+# 요청 — "김도현 메신저 통계에서 대화 본문도 조작해줘 전부 다 채워줘": 지금까지는
+# message_block/message_keyword까지만 채웠지, 상세보기에서 그 날짜를 눌렀을 때 실제로
+# 뜨는 대화 내용(documents.parquet, get_chatroom_day_messages가 여기서 파싱해서 보여줌)은
+# 이 방 전체(HS 단톡방)에 애초에 한 줄도 없었다 — 그래서 그동안 김도현이 등장하는
+# 날짜를 눌러도 "그날 대화를 찾지 못했어요" 상태였을 것이다. 김도현이 실제로 참여한
+# 블록(위 kim_block_plan으로 등장하는 91개 안팎)에만, 그 블록에 배정된 키워드
+# (HS_KIM_KEYWORD_POOL_BY_YEAR, 같은 인덱스)와 짝이 맞는 짧은 대화문을 심는다 —
+# 년도별 서사(새내기→알바/군입대→휴학복학/인턴→취업준비→사회초년생) 톤에 맞춘
+# 3줄짜리 템플릿을 키워드/상대방 이름만 바꿔 채운다. 다른 14명 몫의 대화 본문은
+# 전혀 만들지 않는다(요청 범위가 "김도현"으로 명확히 한정됨 — 다른 사람 몫까지
+# 새로 지어내면 안 하기로 한 하드코딩 범위를 넘어서게 된다).
+#
+# 주의 — chatroom_people.description/short_bio(김도현 실제 인덱싱 데이터, 절대 불가침)는
+# 원래 이 documents.parquet 대화 이력을 LLM에 넣어 생성한 것이지만(message_statics.py의
+# generate_chatroom_people_descriptions), 그 생성 파이프라인은 현재 app.py 어디에서도
+# 자동으로 호출되지 않는다(메일 쪽만 업로드 시 자동 파이프라인이 돎) — 그래도 나중에
+# 누군가 그 파이프라인을 이 방에 대해 수동으로 다시 돌리면, 지금 심는 가짜 대화문을
+# 근거로 김도현의 description/short_bio가 재생성되며 실제 값을 덮어쓸 수 있으니
+# 주의가 필요하다.
+#
+# 요청 — "하루날짜마다 대화본문내용이 다 똑같아 다다르게 김도현 구성": 연도별로 템플릿이
+# 딱 1개뿐이라 키워드/상대방 이름만 바뀌고 문장 골격 자체는 매일 동일했음(똑같은 대사가
+# 계속 반복되는 것처럼 보임). 연도마다 여러 개의 "변형(variant)" 템플릿을 두고, 그 블록에
+# 배정된 키워드 순번(kim_idx, HS_KIM_KEYWORD_POOL_BY_YEAR와 같은 인덱스)으로 변형을
+# 순환시켜 날짜마다 다른 골격의 대화가 나오게 한다.
+HS_KIM_CONVO_LINE_TEMPLATES = {
+    2022: [
+        [
+            "{other1}: {kw} 때문에 죽겠다 진짜ㅠㅠ",
+            "김도현: 나도ㅋㅋ 근데 그래도 다 같이 하니까 좀 낫다",
+            "{other2}: 그러게, 이따 끝나고 매점이나 가자",
+        ],
+        [
+            "김도현: 오늘 {kw} 어땠어? 나는 진짜 정신없었어",
+            "{other1}: 나도 똑같아ㅋㅋ 근데 끝나니까 후련하긴 하다",
+            "{other2}: 그니까, 우리 이따 반 애들이랑 다 같이 놀자",
+        ],
+        [
+            "{other1}: 야 담임쌤이 {kw} 얘기하시던데 들었어?",
+            "김도현: 어 들었어ㅋㅋㅋ 또 잔소리하시겠지 뭐",
+            "{other2}: 그래도 우리 반은 무사히 넘어가자ㅠㅠ",
+        ],
+        [
+            "김도현: 아 오늘 {kw} 완전 빡셌다...",
+            "{other1}: 헐 진짜? 고생했다ㅠㅠ",
+            "{other2}: 끝나고 매점에서 보자, 내가 쏠게",
+        ],
+        [
+            "{other1}: {kw} 끝나고 다들 뭐해?",
+            "김도현: 나는 그냥 집 가서 좀 쉬려고",
+            "{other2}: 좋다, 나도 오늘은 일찍 자야지",
+        ],
+    ],
+    2023: [
+        [
+            "{other1}: 요즘 {kw} 때문에 정신없지?",
+            "김도현: 어 진짜 하루하루가 빠듯하다ㅠ",
+            "{other2}: 그래도 몸 상하지 말고 잘 챙겨 먹어",
+        ],
+        [
+            "김도현: 나 요즘 {kw} 때문에 정신이 하나도 없다ㅋㅋ",
+            "{other1}: 헐 고생 많다... 밥은 챙겨 먹고 다니는 거지?",
+            "{other2}: 그니까, 너무 무리하지는 마",
+        ],
+        [
+            "{other1}: {kw} 어떻게 돼가? 잘 하고 있어?",
+            "김도현: 그럭저럭 버티는 중이야, 적응하는 데 시간 좀 걸리네",
+            "{other2}: 화이팅이다, 조만간 얼굴 보자",
+        ],
+        [
+            "김도현: 오늘 {kw} 얘기 나왔는데 다들 비슷한가봐",
+            "{other1}: 맞아, 다들 사는 게 다 거기서 거기지 뭐",
+            "{other2}: 그래도 서로 있으니까 든든하다",
+        ],
+    ],
+    2024: [
+        [
+            "{other1}: {kw} 준비는 잘 되고 있어?",
+            "김도현: 이제 슬슬 시작하려고, 막막하긴 하다",
+            "{other2}: 화이팅! 필요하면 언제든 얘기해",
+        ],
+        [
+            "김도현: 나 요즘 {kw} 때문에 계획 다시 짜는 중이야",
+            "{other1}: 오 잘 생각했다, 나도 좀 도와줄까?",
+            "{other2}: 좋다, 다 같이 한번 얘기해보자",
+        ],
+        [
+            "{other1}: {kw} 쪽으로 알아봤어?",
+            "김도현: 어 몇 군데 찾아보고 있어, 아직 결정은 못했어",
+            "{other2}: 천천히 알아봐, 급할 거 없어",
+        ],
+        [
+            "김도현: {kw} 때문에 요즘 좀 바빠졌어",
+            "{other1}: 오 진짜? 어떻게 돼가는지 궁금하다",
+            "{other2}: 다음에 만나면 자세히 얘기해줘",
+        ],
+    ],
+    2025: [
+        [
+            "{other1}: {kw} 쪽은 어떻게 돼가?",
+            "김도현: 아직 결과 기다리는 중이야ㅠㅠ",
+            "{other2}: 좋은 소식 있을 거야, 조금만 기다려보자",
+        ],
+        [
+            "김도현: 오늘 {kw} 때문에 하루 종일 긴장했다",
+            "{other1}: 헐 고생했어, 잘 마무리됐어?",
+            "{other2}: 결과 나오면 바로 알려줘!",
+        ],
+        [
+            "{other1}: {kw} 준비하느라 힘들지...",
+            "김도현: 그니까, 근데 다들 열심히 하니까 나도 힘낸다",
+            "{other2}: 우리 다 같이 잘 됐으면 좋겠다",
+        ],
+        [
+            "김도현: {kw} 관련해서 오늘 스터디원들이랑 얘기했어",
+            "{other1}: 오 어땠어? 도움 됐어?",
+            "{other2}: 다행이다, 우리도 같이 준비하자",
+        ],
+    ],
+    2026: [
+        [
+            "{other1}: {kw} 얘기 좀 해줘, 궁금하다",
+            "김도현: 요즘 적응하느라 바쁘다, 그래도 할 만해",
+            "{other2}: 다행이다, 조만간 얼굴 한번 보자",
+        ],
+        [
+            "김도현: 오늘 {kw} 때문에 좀 정신없었어",
+            "{other1}: 회사 생활 힘들지... 밥은 챙겨 먹고 다녀",
+            "{other2}: 그니까, 우리도 조만간 다 같이 보자",
+        ],
+        [
+            "{other1}: {kw}는 어때, 적응 좀 됐어?",
+            "김도현: 조금씩 익숙해지고 있어, 아직 배울 게 많다",
+            "{other2}: 화이팅! 힘들면 언제든 얘기해",
+        ],
+        [
+            "김도현: 요즘 {kw} 때문에 정신이 하나도 없다ㅋㅋ",
+            "{other1}: 사회생활이 원래 그렇지 뭐, 고생 많다",
+            "{other2}: 그래도 잘 하고 있는 거 같아 보기 좋다",
+        ],
+    ],
+}
+
+# 김도현이 실제로 등장한 블록 정보를 모아뒀다가(seed_messenger_domain 루프 안에서
+# 채움), 그 방 처리가 끝난 뒤 apply_kim_dohyun_conversation_bodies()가 한 번에
+# documents.parquet에 심는다.
+KIM_CONVO_ENTRIES = []
+
+
+def kim_convo_lines(y, keyword, other_members, variant_idx=0):
+    """HS_KIM_CONVO_LINE_TEMPLATES[y](변형 템플릿 여러 개의 리스트)에서 variant_idx로
+    하나를 골라, 그 블록의 키워드/상대방 이름으로 채워 "HH:MM 발신자: 텍스트" 형식
+    (실제 인덱싱 대화와 같은 포맷, message_statics.py의 _MSG_LINE_RE가 파싱하는 형식)의
+    줄 목록으로 만든다. variant_idx를 블록마다 다르게 넘기면(kim_idx 등) 매일 같은
+    골격의 대사가 반복되지 않고 날짜마다 다른 대화로 보인다."""
+    variants = HS_KIM_CONVO_LINE_TEMPLATES.get(y, HS_KIM_CONVO_LINE_TEMPLATES[2026])
+    tmpl = variants[variant_idx % len(variants)]
+    o1 = other_members[0] if other_members else "이수빈"
+    o2 = other_members[1] if len(other_members) > 1 else o1
+    lines = []
+    for i, raw in enumerate(tmpl):
+        sender, _, text = raw.format(kw=keyword, other1=o1, other2=o2).partition(": ")
+        lines.append(f"21:{10 + i * 3:02d} {sender.strip()}: {text.strip()}")
+    return lines
 
 # 요청 — 2026-05 한 달만 일반 서사 로직(HS_YEAR_THEMES[2026]="사회초년생" 테마) 대신
 # "대학 다니는 서로의 근황" 내용으로 손으로 고정. 키워드는 3-4개만, 각 키워드의 월
@@ -1301,6 +1466,17 @@ def apply_leeseoyeon_settlement_document(base_dir):
     df.to_parquet(documents_path, index=False)
     print(f"[OK] documents.parquet에 이서연 정산서류 본문 심음(id={LSY_SETTLE_MAIL_ID}) → {documents_path}")
 
+
+# 요청 — 처음엔 "비용 지불 관련 메일 있어?" 검색 답변의 근거메일 3건(전기요금 청구서
+# 도착/신용카드 발급 완료/Apple App Store Gift Card)을 이 스크립트로 별도 가짜 계정
+# (billsearch.demo@mailgrapher.local) 폴더의 documents.parquet에 심었었다.
+#
+# 요청(후속) — "계정을 따로 만들지 말고 그냥 바로 뜨게 해달라"는 요청으로, 이제 그
+# 근거메일 3건의 본문은 app.py의 BILL_SEARCH_HARDCODED_MAILS 딕셔너리에 파이썬 값으로
+# 직접 들어있고, /mail-body-by-ids·/mail-subjects-by-ids 라우트가 디스크를 전혀
+# 건드리지 않고 바로 반환한다. 그래서 이 스크립트가 만들던 별도 계정 폴더는 더 이상
+# 필요 없어 관련 상수/함수를 제거했다 — 근거메일 내용을 바꾸려면 이제 app.py 쪽만
+# 고치면 된다.
 
 
 # 요청 — "로스터 68명 전체가 친밀도 티어별 왕복 메일만 자동 생성되고, 이서연 한 명만
@@ -2303,6 +2479,71 @@ def trim_mail_data_after_cutoff(base_dir, conn, index_date):
     finally:
         cur.close()
 
+
+# seed_messenger_domain()이 KIM_CONVO_ENTRIES에 모아둔 "김도현이 등장한 블록" 정보를
+# 실제 documents.parquet 행(get_chatroom_day_messages가 파싱하는 포맷)으로 심는다.
+# 재실행 시 같은 block_id 행은 지우고 새로 심어 중복을 방지한다.
+def apply_kim_dohyun_conversation_bodies(base_dir, chatroom_id, entries):
+    paths = UserPaths(base_dir, chatroom_id, "messenger")
+    documents_path = os.path.join(paths.PARQUET_DIR, "documents.parquet")
+    if not entries:
+        print("[WARN] 김도현이 등장한 블록이 없어 대화 본문을 심지 않았습니다.")
+        return
+
+    # 요청(후속) — "김도현 대화 본문이 하나도 안 채워졌다" 확인해보니, 이 방
+    # (3학년 4반 고등학교 단톡방)은 message_block/participant/message_keyword/
+    # message_summarize 같은 DB 테이블만 하드코딩으로 채워져 있을 뿐, 실제로 GraphRAG
+    # 인덱싱을 한 번도 거친 적이 없어서 documents.parquet 파일 자체가 애초에 없었다
+    # (다른 진짜로 인덱싱된 방들은 communities.parquet 등과 함께 documents.parquet도
+    # 있는데, 이 방 폴더엔 stats.json/아바타만 있고 parquet 산출물이 하나도 없었음).
+    # 그래서 예전 코드처럼 "없으면 WARN만 찍고 조용히 건너뛰기"로는 절대 안 채워진다
+    # — 파일이 없으면 실제 인덱싱 결과물과 같은 스키마(다른 방의 documents.parquet에서
+    # 확인한 7개 컬럼: id/human_readable_id/title/text/text_unit_ids/creation_date/
+    # raw_data)로 새로 만든다.
+    if os.path.exists(documents_path):
+        df = pd.read_parquet(documents_path)
+    else:
+        os.makedirs(os.path.dirname(documents_path), exist_ok=True)
+        df = pd.DataFrame(columns=[
+            "id", "human_readable_id", "title", "text", "text_unit_ids",
+            "creation_date", "raw_data",
+        ])
+        print(f"[INFO] documents.parquet이 없어 새로 만듭니다: {documents_path}")
+
+    ids = {e["block_id"] for e in entries}
+    df = df[~df["id"].isin(ids)]  # 재실행 시 중복 방지 — 있으면 지우고 새로 심음
+    next_hrid = int(df["human_readable_id"].max()) + 1 if len(df) else 0
+
+    new_rows = []
+    for i, e in enumerate(entries):
+        lines = kim_convo_lines(e["year"], e["keyword"], e["others"], e.get("variant_idx", 0))
+        body = "\n".join(lines)
+        participants_str = ", ".join(e["participants"])
+        text = (
+            f"[대화 {i + 1}]\n\n"
+            f"ID: {e['block_id']}\n"
+            f"채팅방: {e['chatroom_name']}\n"
+            f"날짜: {e['block_date']}\n"
+            f"참여자: {participants_str}\n\n"
+            f"[대화 내용]\n{body}\n"
+            f"====="
+        )
+        new_rows.append({
+            "id": e["block_id"],
+            "human_readable_id": next_hrid,
+            "title": f"{e['block_date']} {e['chatroom_name']} 대화",
+            "text": text,
+            "text_unit_ids": [],
+            "creation_date": f"{e['block_date']} 00:00:00 +0900",
+            "raw_data": {"id": e["block_id"], "text": text},
+        })
+        next_hrid += 1
+
+    df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+    df.to_parquet(documents_path, index=False)
+    print(f"[OK] documents.parquet에 김도현 대화 본문 {len(new_rows)}건 심음 → {documents_path}")
+
+
 def cleanup_messenger_domain(conn, room):
     cur = conn.cursor()
     try:
@@ -2585,6 +2826,21 @@ def seed_messenger_domain(conn, room, block_counter_start):
                         kim_idx = kim_kw_idx.get(y, 0)
                         kw = kim_pool[kim_idx % len(kim_pool)]
                         kim_kw_idx[y] = kim_idx + 1
+                        # 요청 — 김도현이 등장한 이 블록에, 방금 뽑은 키워드와 짝이 맞는
+                        # 대화 본문도 같이 심을 수 있도록 정보를 모아둔다(실제 parquet
+                        # 쓰기는 이 방 처리가 다 끝난 뒤 apply_kim_dohyun_conversation_
+                        # bodies()에서 한 번에 처리 — DB 커밋 루프 안에서 매번 parquet
+                        # 파일을 열고 쓰면 너무 느려짐).
+                        KIM_CONVO_ENTRIES.append({
+                            "block_id": block_id,
+                            "chatroom_name": room["new_name"],
+                            "block_date": block_date.strftime("%Y-%m-%d"),
+                            "participants": list(active_members),
+                            "year": y,
+                            "keyword": kw,
+                            "variant_idx": kim_idx,
+                            "others": [mm for mm in active_members if mm != HS_TARGET_MEMBER],
+                        })
                     else:
                         kw = room_keywords[(mi + b + member_idx) % len(room_keywords)]
                     mention = 1 + (mi + b) % 4
@@ -2691,6 +2947,38 @@ def seed_messenger_domain(conn, room, block_counter_start):
                 ))
             conn.commit()
 
+        # 요청 — Recap "가장 많이 말한 사람" 카드가 이 방(등 하드코딩 채팅방)에서
+        # 전부 "데이터가 없습니다"로 뜨는 버그 — 위 chatroom_people UPSERT(2단계
+        # 앞부분)가 message_count를 항상 리터럴 0으로 써넣고 있어서(각 블록의 실제
+        # 발화량 합계를 반영한 적이 없음), rankChatPeople()이 count>0 조건으로 전원을
+        # 걸러내 빈 배열이 됐다. participant 테이블(각 블록별 sent_message, 위 블록
+        # 루프에서 실제로 채워짐)을 참여자별로 합산해 chatroom_people.message_count를
+        # 실제 값으로 채운다. 김도현은 이 방(HS_CHATROOM_ID)에 한해 실인덱싱 당시의
+        # 진짜 message_count를 보존해야 하므로(위 UPSERT 루프와 동일한 보호 규칙) 이
+        # 갱신에서 제외한다.
+        cur.execute(
+            """
+            SELECT participant_name, SUM(sent_message) AS total
+            FROM participant
+            WHERE chatroom_id=%s AND index_date=%s AND user_id=%s
+            GROUP BY participant_name
+            """,
+            (chatroom_id, index_date, user_id),
+        )
+        sent_totals = {row[0]: int(row[1] or 0) for row in cur.fetchall()}
+        updated_count = 0
+        for member, total in sent_totals.items():
+            if member == "김도현" and chatroom_id == HS_CHATROOM_ID:
+                continue
+            cur.execute(
+                "UPDATE chatroom_people SET message_count=%s "
+                "WHERE participant_id=%s AND chatroom_id=%s AND index_date=%s AND user_id=%s",
+                (total, member, chatroom_id, index_date, user_id),
+            )
+            updated_count += 1
+        conn.commit()
+        print(f"[OK] chatroom_people.message_count {updated_count}명 실제 발화량으로 갱신 → {room['new_name']}")
+
         print(f"[OK] 메신저 '{room['new_name']}' ({chatroom_id[:8]}...): "
               f"block {block_counter - block_counter_start}건 생성")
         return block_counter
@@ -2732,6 +3020,24 @@ def main():
         print("[STEP] 메일 도메인(연락처/친밀도/키워드) 채우는 중...")
         roster_stats = seed_mail_domain(conn, roster, index_date)
 
+        # 요청(후속) — "김도현 메신저 대화 본문이 계속 안 채워진다"는 게 최우선
+        # 순위라서, 메신저 관련 스텝(방 채우기 + 아바타 + 김도현 대화 본문)을
+        # 스크립트 맨 뒤(메일 쪽 나머지 스텝들 다음)에서 여기 메일 도메인 직후로
+        # 끌어올렸다 — 메일 쪽 뒷부분 스텝(요약 오버라이드/연도·월별 자리표시 등)
+        # 중 하나가 실패해서 스크립트가 중간에 죽더라도, 메신저/김도현 데이터는
+        # 이미 커밋된 뒤라 영향을 안 받는다.
+        print("[STEP] 메신저 채팅방 이름/요약/키워드 채우는 중...")
+        block_counter = 0
+        for room in CHATROOMS:
+            cleanup_messenger_domain(conn, room)
+            block_counter = seed_messenger_domain(conn, room, block_counter)
+
+        print("[STEP] '3학년 4반 고등학교 단톡방' 참여자 아바타(chatroom_people_avatars.json) 반영 중...")
+        apply_chatroom_people_avatars(BASE_DIR, HS_CHATROOM_ID, HS_MEMBER_AVATARS)
+
+        print("[STEP] 김도현 메신저 대화 본문(documents.parquet) 심는 중...")
+        apply_kim_dohyun_conversation_bodies(BASE_DIR, HS_CHATROOM_ID, KIM_CONVO_ENTRIES)
+
         print("[STEP] 이서연 정산서류 메일 본문(documents.parquet) 심는 중...")
         apply_leeseoyeon_settlement_document(BASE_DIR)
 
@@ -2758,15 +3064,6 @@ def main():
 
         print("[STEP] My People 로스터 아바타(person_avatars.json) 반영 중...")
         apply_person_avatars(BASE_DIR, roster)
-
-        print("[STEP] 메신저 채팅방 이름/요약/키워드 채우는 중...")
-        block_counter = 0
-        for room in CHATROOMS:
-            cleanup_messenger_domain(conn, room)
-            block_counter = seed_messenger_domain(conn, room, block_counter)
-
-        print("[STEP] '3학년 4반 고등학교 단톡방' 참여자 아바타(chatroom_people_avatars.json) 반영 중...")
-        apply_chatroom_people_avatars(BASE_DIR, HS_CHATROOM_ID, HS_MEMBER_AVATARS)
 
     finally:
         conn.close()

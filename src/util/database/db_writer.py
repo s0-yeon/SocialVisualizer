@@ -481,6 +481,11 @@ def save_keyword_stats_to_db(paths,update_date=None):
                 if person_id not in valid_persons:
                     continue
                 for mail_date, count in date_map.items():
+                    # 파싱이 깨져 날짜가 아닌 값(다른 필드 라벨 등)이 섞여 들어오면 이 행만 건너뛴다.
+                    # 하나라도 형식이 틀리면 executemany 전체가 롤백돼 통계가 통째로 날아가는 걸 방지.
+                    if not mail_date or not re.match(r'^\d{4}-\d{2}-\d{2}$', mail_date):
+                        print(f"[WARN] 잘못된 mail_date 스킵: keyword={keyword_name!r} person={person_id!r} mail_date={mail_date!r}")
+                        continue
                     km_rows.append((keyword_name, user_mail_account_id, update_date, person_id, mail_date, count))
 
         if km_rows:
@@ -537,9 +542,9 @@ def rebuild_keyword_mail(paths, update_date=None):
     for _, row in df.iterrows():
         text = str(row.get('text', ''))
 
-        date_match   = re.search(r'^\[날짜\]\s*(.+)$', text, re.MULTILINE)
-        sender_match = re.search(r'^\[발신인\]\s*(.+)$', text, re.MULTILINE)
-        receiver_match = re.search(r'^\[수신인\]\s*(.+)$', text, re.MULTILINE)
+        date_match   = re.search(r'^\[날짜\][ \t]*(.+)$', text, re.MULTILINE)
+        sender_match = re.search(r'^\[발신인\][ \t]*(.+)$', text, re.MULTILINE)
+        receiver_match = re.search(r'^\[수신인\][ \t]*(.+)$', text, re.MULTILINE)
         body_match   = re.search(r'\[메일 본문\]\s*\n(.*?)(?:\n\[|\n=+|\Z)', text, re.DOTALL)
 
         mail_date = date_match.group(1).strip()[:10] if date_match else None
@@ -835,31 +840,31 @@ def save_mail_to_db(paths, update_date=None):
     for _, row in df.iterrows():
         text = str(row.get('text', ''))
 
-        id_match = re.search(r'^\[ID\]\s*(.+)$', text, re.MULTILINE)
+        id_match = re.search(r'^\[ID\][ \t]*(.+)$', text, re.MULTILINE)
         mail_id = id_match.group(1).strip() if id_match else None
         if not mail_id or mail_id in seen_ids:
             continue
         seen_ids.add(mail_id)
 
-        date_match = re.search(r'^\[날짜\]\s*(.+)$', text, re.MULTILINE)
+        date_match = re.search(r'^\[날짜\][ \t]*(.+)$', text, re.MULTILINE)
         mail_date = date_match.group(1).strip() if date_match else None
 
         # mail.mail_folder_name은 NOT NULL이며 mail_folder에 대한 FK이므로, 파싱 실패 시에도 'UNKNOWN'으로 대체
-        folder_match = re.search(r'\[폴더 정보\]\s*(.+)', text)
+        folder_match = re.search(r'\[폴더 정보\][ \t]*(.+)', text)
         folder_raw = folder_match.group(1).strip() if folder_match else None
         mail_folder_name = folder_raw if (folder_raw and folder_raw != '없음') else 'UNKNOWN'
 
-        sender_match = re.search(r'^\[발신인\]\s*(.+)$', text, re.MULTILINE)
+        sender_match = re.search(r'^\[발신인\][ \t]*(.+)$', text, re.MULTILINE)
         sender = sender_match.group(1).strip() if sender_match else None
 
-        receiver_match = re.search(r'^\[수신인\]\s*(.+)$', text, re.MULTILINE)
+        receiver_match = re.search(r'^\[수신인\][ \t]*(.+)$', text, re.MULTILINE)
         receiver = receiver_match.group(1).strip() if receiver_match else None
 
-        direction_match = re.search(r'^\[구분\]\s*(.+)$', text, re.MULTILINE)
+        direction_match = re.search(r'^\[구분\][ \t]*(.+)$', text, re.MULTILINE)
         direction_raw = direction_match.group(1).strip() if direction_match else None
         direction = 'sent' if direction_raw == '발신' else ('received' if direction_raw == '수신' else None)
 
-        subject_match = re.search(r'^\[제목\]\s*(.+)$', text, re.MULTILINE)
+        subject_match = re.search(r'^\[제목\][ \t]*(.+)$', text, re.MULTILINE)
         subject = subject_match.group(1).strip() if subject_match else ''
 
         body_match = re.search(r'\[메일 본문\]\s*\n(.*?)(?:\n\[|\n=+|\Z)', text, re.DOTALL)

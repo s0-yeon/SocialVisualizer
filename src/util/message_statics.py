@@ -42,19 +42,19 @@ def _parse_message_blocks_from_parquet(paths) -> list[dict]:
     for _, row in df.iterrows():
         text = str(row.get('text', ''))
 
-        id_match = re.search(r'^ID:\s*(.+)$', text, re.MULTILINE)
+        id_match = re.search(r'^ID:[ \t]*(.+)$', text, re.MULTILINE)
         block_id = id_match.group(1).strip() if id_match else None
         if not block_id or block_id in seen_ids:
             continue
         seen_ids.add(block_id)
 
-        room_match = re.search(r'^채팅방:\s*(.+)$', text, re.MULTILINE)
+        room_match = re.search(r'^채팅방:[ \t]*(.+)$', text, re.MULTILINE)
         chatroom_name = room_match.group(1).strip() if room_match else ""
 
-        date_match = re.search(r'^날짜:\s*(.+)$', text, re.MULTILINE)
+        date_match = re.search(r'^날짜:[ \t]*(.+)$', text, re.MULTILINE)
         block_date = date_match.group(1).strip() if date_match else None
 
-        participants_match = re.search(r'^참여자:\s*(.+)$', text, re.MULTILINE)
+        participants_match = re.search(r'^참여자:[ \t]*(.+)$', text, re.MULTILINE)
         participants_raw = participants_match.group(1).strip() if participants_match else ""
         participants = [
             p.strip() for p in participants_raw.split(",")

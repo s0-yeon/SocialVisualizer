@@ -205,6 +205,72 @@ if hasattr(sys.stdout, "reconfigure"):
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
+# 요청 — 자연어 검색("비용 지불 관련 메일 있어?")은 발표/데모 때마다 LLM이 매번 새로
+# 답변을 생성하면 문구가 흔들릴 수 있어, 이 질문 하나만은 답변 텍스트와 근거메일 3건을
+# 고정값으로 반환하고 실제 RAG 호출은 건너뛴다.
+#
+# 후속 요청 — 처음엔 근거메일 3건을 별도 가짜 계정(billsearch.demo@mailgrapher.local)
+# 폴더의 documents.parquet에 실제로 심어뒀었는데, "계정을 따로 만들지 말고 그냥 바로
+# 뜨게 해달라"는 요청으로 방식을 바꿨다. 이제 근거메일 본문 자체를 아래
+# BILL_SEARCH_HARDCODED_MAILS 딕셔너리에 파이썬 값으로 직접 박아두고, /mail-body-by-ids
+# 와 /mail-subjects-by-ids 라우트에서 mail_id가 이 딕셔너리에 있으면 디스크(parquet)를
+# 전혀 건드리지 않고 바로 반환한다. 그래서 이제 seed_fake_people.py를 실행하거나 별도
+# 계정 폴더가 디스크에 있을 필요가 없다 — 이 상수들만으로 완결된다.
+BILL_SEARCH_HARDCODED_QUESTION = "비용 지불 관련 메일 있어?"
+BILL_SEARCH_HARDCODED_ANSWER = (
+    "네, 비용 지불 관련 메일이 있습니다.\n\n"
+    "- 전기요금 청구서 도착 메일은 이번 달 전기요금 청구서 도착 사실을 알리는 내용입니다.\n"
+    "- 신용카드 발급 완료 메일은 신청한 신용카드 발급 완료를 안내하며, 결제/청구 관련 내용 한 건입니다.\n"
+    "- '김예은 sent you a Apple App Store Gift Card!' 메일은 결제가 성공적으로 완료되어 "
+    "기프트카드를 받았다는 내용입니다."
+)
+# "근거메일 보기"를 눌렀을 때 실제로 표시될 메일 본문 — get_mail_bodies_by_ids()가
+# 반환하는 것과 동일한 스키마(subject/date/sender/receiver/body)로 직접 채워둔다.
+BILL_SEARCH_HARDCODED_MAILS = {
+    "DEMO-MAIL-BILL-001": {
+        "subject": "전기요금 청구서 도착",
+        "date": "2026-07-03 08:35:00",
+        "sender": "나 <03yeah03@gmail.com>",
+        "receiver": "beauty777033@gmail.com",
+        "body": "이번 달 전기요금 청구서가 도착했습니다.",
+    },
+    "DEMO-MAIL-BILL-002": {
+        "subject": "신용카드 발급 완료",
+        "date": "2026-07-03 08:37:00",
+        "sender": "나 <03yeah03@gmail.com>",
+        "receiver": "beauty777033@gmail.com",
+        "body": "신청하신 신용카드가 발급되었습니다.",
+    },
+    "DEMO-MAIL-BILL-003": {
+        "subject": "김예은 sent you a Apple App Store Gift Card!",
+        "date": "2026-03-03 15:06:00",
+        "sender": "Amazon Pay India <no-reply@amazonpay.in>",
+        "receiver": "나 <03yeah03@gmail.com>",
+        "body": (
+            "Hi,\n"
+            "You have received a ₹600.00 Apple App Store Gift Card from 김예은.\n\n"
+            "Hope you enjoy this gift card!\n"
+            "Apple App Store Gift Card ₹ 600.00\n"
+            "Expires on 01 Jan 2200\n\n"
+            "Code\n"
+            "XWNC8RKJMWJGKRLN\n\n"
+            "How do I redeem this gift card?\n"
+            "1. Open the App Store App on your iPhone or iPad.\n"
+            "2. At the top of the screen, tap the “Sign in” button or your photo.\n"
+            "3. Tap on “Redeem Gift Card or Code” and sign in with your Apple ID\n"
+            "4. You can also enter your code manually, then follow the instructions on the screen\n\n"
+            "Facing any issues? If you encounter any issues while using your Gift Card, please "
+            "provide the Order ID 405-1681723-0265150 and Gift Card ID 1009250028901010 to "
+            "Amazon Customer Service for assistance."
+        ),
+    },
+}
+# account는 이제 실제 조회에 안 쓰이지만(mail_id만으로 위 딕셔너리를 바로 찾음),
+# 화면 표시용 라벨로 실제 계정 이름을 그대로 둔다.
+BILL_SEARCH_HARDCODED_SOURCE_IDS = [
+    {"id": mail_id, "account": "03yeah03@gmail.com"} for mail_id in BILL_SEARCH_HARDCODED_MAILS
+]
+
 # 질의를 백그라운드 잡으로 등록하고 jobId를 즉시 반환한다 (날짜 범위 → 연합 RAG 검색 순으로 시도)
 @app.route('/run-query-async', methods=['POST'])
 def run_query_async():
@@ -239,6 +305,16 @@ def run_query_async():
     # 백그라운드 스레드에서 실제 질의를 수행하고 job 상태를 갱신한다
     def _worker():
         try:
+            # 요청 — "비용 지불 관련 메일 있어?" 질문은 답변/근거메일을 고정값으로
+            # 반환한다(위 BILL_SEARCH_HARDCODED_* 참고). RAG 호출 자체를 생략한다.
+            if domain == "mail" and str(message).strip() == BILL_SEARCH_HARDCODED_QUESTION:
+                update_job(
+                    job_id, status="done",
+                    result=BILL_SEARCH_HARDCODED_ANSWER,
+                    source_ids=BILL_SEARCH_HARDCODED_SOURCE_IDS,
+                )
+                return
+
             env = os.environ.copy()
             env["USER_ID"] = user_id
 
@@ -324,7 +400,7 @@ def job_status(job_id):
     if not job:
         return jsonify({"status": "not_found"}), 404
 
-    if job["status"] == "done" and job["resType"].lower() == "calendar":
+    if job["status"] == "done" and (job.get("resType") or "").lower() == "calendar":
         try:
             return jsonify({"status": "done", "data": json.loads(job["result"])})
         except Exception:
@@ -470,6 +546,11 @@ def upload():
     sort_newest_first = domain != "messenger"
 
     paths = UserPaths(BASE_DIR, user_id, domain)
+
+    # content가 문자열이 아니면(호출 쪽이 JSON 객체 등을 잘못 넣은 경우) 여기서 바로 걸러낸다.
+    # 예전엔 dict가 그대로 넘어가 뒤에서 text.split()이 AttributeError로 죽었었다.
+    if not isinstance(content, str):
+        return jsonify({"ok": False, "error": f"content는 문자열이어야 합니다 (받은 타입: {type(content).__name__})"}), 400
 
     if not str(content).strip():
         return jsonify({"ok": False, "error": "content가 비어있습니다."}), 400
@@ -1362,6 +1443,29 @@ def send_chatroom_keywords_by_person():
         },
     })
 
+# 요청 — Recap "채팅방 주요 키워드"는 message_keyword 전체 기간(2022~2026)을 그냥
+# SUM해서 보여주는데, "3학년 4반 고등학교 단톡방"의 실제 대화 데이터는 방 설계상
+# 2022-03부터 시작해서(다른 14명은 이미 그 시점에 대학생) 처음부터 "대학 생활" 위주로
+# 짜여 있다 — 그래서 Top10이 포트폴리오/휴학/전공수업처럼 고등학교 느낌이 전혀 없는
+# 단어들로만 채워진다. 이 방 전체(15명)의 실제 message_keyword 데이터를 갈아엎는 대신,
+# Recap 이 카드 하나만 "동창회 모여서 그때 얘기하는" 고등학교 노스탤지어 컨셉으로
+# 하드코딩한다(이 방의 실제 bio에도 이미 "동창회 약속" 얘기가 나온다는 점과 어울림).
+# My Time/My People 등 다른 화면이 쓰는 키워드 엔드포인트(get_chatroom_keywords_by_person
+# 등)는 전혀 건드리지 않음 — /chatroom-keyword-stats는 이 Recap 카드에서만 쓰인다.
+HS_CHATROOM_ID = "64c6eaa5a654c2e3c7948bec2be03b3dbe63fb43"
+HS_CHATROOM_HARDCODED_KEYWORDS = [
+    {"word": "동창회", "count": 182},
+    {"word": "담임쌤", "count": 168},
+    {"word": "수능", "count": 152},
+    {"word": "졸업앨범", "count": 141},
+    {"word": "반모임", "count": 133},
+    {"word": "그때 그시절", "count": 121},
+    {"word": "체육대회", "count": 115},
+    {"word": "수학여행", "count": 108},
+    {"word": "야자", "count": 103},
+    {"word": "첫사랑", "count": 96},
+]
+
 # 채팅방 전체(모든 참여자·전체 기간 합산)의 키워드별 총 언급 수를 순위(내림차순)로 반환한다
 @app.route("/chatroom-keyword-stats", methods=["POST"])
 def send_chatroom_keyword_stats():
@@ -1370,6 +1474,12 @@ def send_chatroom_keyword_stats():
 
     if not chatroom_id:
         return jsonify({"error": "chatroom_id is required"}), 400
+
+    if chatroom_id == HS_CHATROOM_ID:
+        return jsonify({
+            "chatroom_id": chatroom_id,
+            "data": {"keywords": HS_CHATROOM_HARDCODED_KEYWORDS},
+        })
 
     stats = get_chatroom_keyword_stats(chatroom_id)
     if stats is None:
@@ -1687,6 +1797,10 @@ def send_mail_body_by_ids():
     if not mail_id:
         return jsonify({"error": "mail_id is required"}), 400
 
+    # 비용 지불 하드코딩 근거메일은 디스크(parquet) 대신 BILL_SEARCH_HARDCODED_MAILS에서 바로 반환
+    if mail_id in BILL_SEARCH_HARDCODED_MAILS:
+        return jsonify({"id": mail_id, "account": account, **BILL_SEARCH_HARDCODED_MAILS[mail_id]})
+
     paths = UserPaths(BASE_DIR, account, "mail")
     bodies = get_mail_bodies_by_ids(paths, {mail_id})
     body = bodies.get(mail_id)
@@ -1713,8 +1827,17 @@ def send_mail_subjects_by_ids():
 
     subjects = {}
     for account, mail_ids in ids_by_account.items():
+        # 비용 지불 하드코딩 근거메일은 디스크 조회 없이 바로 채우고, 나머지만 parquet에서 읽는다
+        remaining_ids = set()
+        for mail_id in mail_ids:
+            if mail_id in BILL_SEARCH_HARDCODED_MAILS:
+                subjects[mail_id] = BILL_SEARCH_HARDCODED_MAILS[mail_id]["subject"]
+            else:
+                remaining_ids.add(mail_id)
+        if not remaining_ids:
+            continue
         paths = UserPaths(BASE_DIR, account, "mail")
-        bodies = get_mail_bodies_by_ids(paths, mail_ids)
+        bodies = get_mail_bodies_by_ids(paths, remaining_ids)
         for mail_id, body in bodies.items():
             subjects[mail_id] = body.get("subject", "")
 

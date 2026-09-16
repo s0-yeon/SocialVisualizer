@@ -53,6 +53,36 @@ def _run_and_join(jobs):
     if errors:
         raise errors[0]
 
+
+# 서브프로세스를 실행하면서 stdout/stderr를 콘솔에 실시간으로 그대로 찍는 동시에 마지막 N줄을
+# 모아둔다. 실패(exit code != 0) 시 CalledProcessError에 그 tail을 붙여서 올려보내므로, 콘솔을
+# 직접 볼 수 없는 상황(job-status, SSE)에서도 실제 에러 메시지를 알 수 있다.
+def _run_subprocess_captured(cmd, env, tail_lines=40):
+    import collections
+
+    tail = collections.deque(maxlen=tail_lines)
+    process = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
+    )
+    for line in process.stdout:
+        line = line.rstrip("\n")
+        print(line)
+        tail.append(line)
+    returncode = process.wait()
+
+    if returncode != 0:
+        tail_text = "\n".join(tail)
+        err = subprocess.CalledProcessError(returncode, cmd)
+        err.tail_output = tail_text
+        raise err
+
 # output 폴더를 3초마다 감시해 인덱싱 단계 변화를 job 진행도/SSE로 반영한다 (stop_event 세트 시 종료)
 def _watch_graphrag_output(job_id, output_dir, start_time, stop_event, base_progress=5):
     current = base_progress
@@ -180,14 +210,8 @@ def build_graph_json(job_id, paths, env):
     append_job_log(job_id, f"[CMD] {cmd}")
 
     try:
-        # 파이썬 스크립트 실행
-        subprocess.run(
-            cmd,
-            check=True,         # 실패 시 exception 발생
-            stdout=sys.stdout,  # 출력 → 서버 콘솔로 바로 전달
-            stderr=sys.stderr,  # 에러 → 서버 콘솔로 바로 전달
-            env=env,            # 환경변수 전달
-        )
+        # 파이썬 스크립트 실행 (출력은 콘솔에 그대로 찍히고, 실패 시 마지막 줄들이 err.tail_output에 담겨온다)
+        _run_subprocess_captured(cmd, env)
 
         append_job_log(job_id, "[END] build_graph_json success")
         update_job(job_id, progress=15, message="그래프 데이터 JSON 생성 완료")
@@ -196,7 +220,10 @@ def build_graph_json(job_id, paths, env):
     except Exception as e:
         print(f"[JOB][parquet2json][ERROR] job_id={job_id} error={e}")
         traceback.print_exc()
+        tail = getattr(e, "tail_output", "")
         append_job_log(job_id, f"[ERROR] build_graph_json failed: {e}")
+        if tail:
+            append_job_log(job_id, f"[ERROR][TAIL]\n{tail}")
         raise
 
 
@@ -626,13 +653,7 @@ def build_graphrag_index(job_id, paths, env, max_mails=None):
     try:
         update_job(job_id, progress=30, message="GraphRAG 인덱싱 실행 중")
 
-        subprocess.run(
-            cmd,
-            check=True,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            env=env,
-        )
+        _run_subprocess_captured(cmd, env)
 
         append_job_log(job_id, "[END] build_graphrag_index success")
         update_job(job_id, progress=90, message="GraphRAG 인덱싱 완료")
@@ -661,7 +682,11 @@ def build_graphrag_index(job_id, paths, env, max_mails=None):
     except Exception as e:
         print(f"[JOB][graphrag][ERROR] job_id={job_id} error={e}")
         traceback.print_exc()
+        tail = getattr(e, "tail_output", "")
         append_job_log(job_id, f"[ERROR] build_graphrag_index failed: {e}")
+        if tail:
+            append_job_log(job_id, f"[ERROR][TAIL]\n{tail}")
+            update_job(job_id, message=f"인덱싱 실패: {tail.splitlines()[-1] if tail.splitlines() else e}")
         raise
 
     finally:
@@ -718,13 +743,7 @@ def build_graphrag_update(job_id,paths, env):
     try:
         update_job(job_id, progress=30, message="GraphRAG 업데이트 실행 중")
 
-        subprocess.run(
-            cmd,
-            check=True,
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            env=env,
-        )
+        _run_subprocess_captured(cmd, env)
 
         append_job_log(job_id, "[END] build_graphrag_update success")
         update_job(job_id, progress=90, message="GraphRAG 업데이트 완료")
@@ -753,7 +772,11 @@ def build_graphrag_update(job_id,paths, env):
     except Exception as e:
         print(f"[JOB][graphrag-update][ERROR] job_id={job_id} error={e}")
         traceback.print_exc()
+        tail = getattr(e, "tail_output", "")
         append_job_log(job_id, f"[ERROR] build_graphrag_update failed: {e}")
+        if tail:
+            append_job_log(job_id, f"[ERROR][TAIL]\n{tail}")
+            update_job(job_id, message=f"업데이트 실패: {tail.splitlines()[-1] if tail.splitlines() else e}")
         raise
 
     finally:
