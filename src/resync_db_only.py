@@ -4,11 +4,13 @@
 # 저장됐을 수 있으므로, 통계 재추출(_extract_statics_pipeline, mode="rewrite")부터 다시 돌린
 # 뒤 DB 저장 단계(create_mail_account ~ save_mail_to_db 등)를 실행한다.
 # MailGrapher 폴더 루트(src/ 옆)에 놓고 실행하세요:
-#   가상환경 켜고 -> python resync_db_only.py
+#   가상환경 켜고 -> python resync_db_only.py [user_id] [mail_platform]
+#   인자를 안 주면 아래 기본값(USER_ID/MAIL_PLATFORM)을 사용
 # 필요하면 먼저 reset_account.py로 기존 DB 행을 지우고 실행하세요.
 
 import sys
 import os
+import re
 import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
@@ -27,11 +29,20 @@ from util.database.db_writer import (
     save_keyword_stats_to_db,
 )
 
-USER_ID = "soyeon@icloud"
-MAIL_PLATFORM = "icloud"
-MAIL_COUNT = 1180  # 참고용 메타데이터일 뿐, 실제 mail 테이블 건수와 무관하게 동작에 영향 없음
+USER_ID = sys.argv[1] if len(sys.argv) > 1 else "soyeon@icloud"
+MAIL_PLATFORM = sys.argv[2] if len(sys.argv) > 2 else "icloud"
 
 paths = UserPaths(BASE_DIR, USER_ID, "mail")
+
+# mail_latest.txt의 [ID] 라인 개수로 메일 총 건수를 구함 (참고용 메타데이터일 뿐, 동작에 영향 없음)
+def _count_total_mails(p):
+    if not os.path.exists(p.MAIL_LATEST_PATH):
+        return 0
+    with open(p.MAIL_LATEST_PATH, "r", encoding="utf-8") as f:
+        text = f.read()
+    return len(re.findall(r'^\[ID\][ \t]*.+$', text, re.MULTILINE))
+
+MAIL_COUNT = _count_total_mails(paths)
 target_update_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 print(f"### {USER_ID} DB 재저장 시작 (index_date={target_update_date})")

@@ -30,28 +30,6 @@ async function getCurrentMailId() {
 // 2. 채팅방 피커 초기화 및 스토어 데이터 동기화
 let selectedChatroomId = "";
 
-/* 앱 초기화 및 사이드바 바인딩 */
-document.addEventListener("DOMContentLoaded", () => {
-  // 사이드바 렌더링 + 계정/채팅방 목록 조회는 initGlobalFilter가 전부 처리한다.
-  initGlobalFilter((filterState, meta) => {
-    if (filterState.mail) {
-      currentMailId = filterState.mail;
-      avatarGenStarted = false; // 새 계정 기준으로 아바타 생성도 다시 돌게
-      periodStatsLoaded = false;
-      periodStats = {};
-      currentDetailPerson = null;
-      document.getElementById("mp-detail")?.classList.remove("open");
-      setChannel("mail");
-      loadPeople().then(() => fetchPeriodStats());
-    } else if (filterState.room) {
-      selectedChatroomId = filterState.room;
-      setChannel("messenger");
-      // refreshMessengerRoomsForRange();
-      openSelectedChatroomFromSidebar();
-    }
-  });
-});
-
 /* 같은 name을 가진 브랜드 엔트리 통합 (친밀도 높은 대표 1개만 유지)
          no-reply@google.com, no-reply@accounts.google.com, google-noreply@google.com 처럼
          실제로는 서로 다른 발신 주소지만 화면엔 전부 "google"로 표시되는 브랜드/발신전용
@@ -729,13 +707,23 @@ async function fetchPeriodStats() {
         newStats[e].received = item.received || 0;
       });
     }
+    // 요청 — loadPeople()과 동일한 이유로, 이 fetch들이 진행되는 사이 사용자가 이미
+    // 다른 계정으로 넘어갔으면(currentMailId가 바뀌었으면) 이 통계는 낡은 계정 것이다.
+    // 그대로 반영하면 방금 고른 새 계정 카드에 이전 계정의 송수신 통계가 잘못
+    // 붙어버리므로, 여기서 버리고 반영하지 않는다(renderCards()도 호출하지 않음 —
+    // 이미 새 계정의 fetchPeriodStats()가 따로 돌고 있거나 곧 돌 것이다).
+    if (gmailId !== currentMailId) {
+      return;
+    }
     periodStats = newStats;
     periodStatsLoaded = true;
   } catch (e) {
     console.error("fetchPeriodStats 오류:", e);
   } finally {
-    // renderCards()는 성공/실패 상관없이 여기 finally에서 한 번만 호출한다.
-    renderCards();
+    if (gmailId === currentMailId) {
+      // renderCards()는 성공/실패 상관없이 여기 finally에서 한 번만 호출한다.
+      renderCards();
+    }
   }
 }
 
@@ -969,10 +957,16 @@ function initTimeline(firstMs, lastMs) {
 
   const inMin = document.getElementById("tl-min");
   const inMax = document.getElementById("tl-max");
-  const defaultStartMs = Math.min(
-    Math.max(TL_DEFAULT_START_MS, firstMs),
-    lastMs,
-  );
+  // 버그 수정 — 아래 defaultStartMs가 TL_DEFAULT_START_MS(2017.01.04)를 계정
+  // 상관없이 항상 하한선으로 걸어놔서, 실제 데이터가 2017년보다 앞서는 계정
+  // (예: soyeon@icloud, 2015.01.02부터 데이터 있음)도 슬라이더 시작점이 무조건
+  // 2017.01.04로 고정돼버렸다(왼쪽 끝 라벨은 2015.01.02인데 손잡이는 2017에 멈춰
+  // 있는 것처럼 보임). 위 라벨 수정과 동일하게 03yeah03@gmail.com 계정일 때만 이
+  // 데모용 시작점을 적용한다.
+  const isDemoAccount = currentChannel === "mail" && currentMailId === "03yeah03@gmail.com";
+  const defaultStartMs = isDemoAccount
+    ? Math.min(Math.max(TL_DEFAULT_START_MS, firstMs), lastMs)
+    : firstMs;
   const defaultStartVal =
     firstMs < lastMs ? msToVal(defaultStartMs) : 0;
   inMin.value = Math.max(0, Math.min(1000, defaultStartVal));
@@ -980,10 +974,16 @@ function initTimeline(firstMs, lastMs) {
   selMin = valToMs(+inMin.value);
   selMax = lastMs;
 
-  // 요청 — 03yeah03@gmail.com 타임라인 시작 라벨을 실제 데이터 시작일(2017.01.07)
+  // 요청 — 03yeah03@gmail.com 타임라인 시작 라벨만 실제 데이터 시작일(2017.01.07)
   // 대신 2017.01.04로 표시(화면 표시만 바꾼 것, 슬라이더 계산/실제 데이터는 그대로).
-  document.getElementById("tl-start-lbl").textContent =
-    currentChannel === "mail" ? "2017.01.04" : fmtDate(firstMs);
+  // 버그 수정 — 조건이 currentChannel === "mail"(메일 채널이면 무조건)이라서, 다른
+  // 계정(예: 03yeeun03@naver.com)을 봐도 이 계정과 무관한 "2017.01.04"가 왼쪽
+  // 라벨에 그대로 박혀 나왔다. 실제 선택 범위 텍스트는 그 계정의 진짜 시작일을
+  // 쓰기 때문에 라벨과 선택 범위가 서로 안 맞아 보이는 문제였다 — 계정 조건을
+  // 03yeah03@gmail.com일 때로 한정한다.
+  document.getElementById("tl-start-lbl").textContent = isDemoAccount
+    ? "2017.01.04"
+    : fmtDate(firstMs);
   document.getElementById("tl-end-lbl").textContent = fmtDate(lastMs);
 
   buildTicks(firstMs, lastMs);
@@ -1075,6 +1075,9 @@ async function loadPeople() {
   });
 
   let dateRange = null;
+  let fetchedPeople = allPeople;
+  let fetchedPhotos = contactPhotos;
+  let fetchedAvatars = generatedAvatars;
 
   try {
     const [pRes, dRes, phRes, avRes] = await Promise.all([
@@ -1086,18 +1089,34 @@ async function loadPeople() {
 
     if (pRes.ok) {
       const j = await pRes.json();
-      allPeople = j.data || j || [];
+      fetchedPeople = j.data || j || [];
     }
     if (dRes.ok) {
       const j = await dRes.json();
       const d = j.data || j;
       if (d.first_date && d.last_date) dateRange = d;
     }
-    if (phRes.ok) contactPhotos = await phRes.json();
-    if (avRes.ok) generatedAvatars = await avRes.json();
+    if (phRes.ok) fetchedPhotos = await phRes.json();
+    if (avRes.ok) fetchedAvatars = await avRes.json();
   } catch (e) {
     console.error("loadPeople 네트워크 오류:", e);
   }
+
+  // 요청 — 이 fetch들이 진행되는 사이(await하는 동안) 사용자가 이미 다른 계정을
+  // 선택해서 currentMailId가 바뀌었으면, 이 응답은 그 시점엔 이미 낡은 결과다.
+  // 응답 도착 순서는 보낸 순서와 무관하므로, 먼저 시작된 이전 계정(예: 사이드바
+  // 기본값인 03yeah03@gmail.com) 응답이 나중에 도착해서 방금 고른 새 계정의
+  // 화면(특히 타임라인 날짜 범위)을 도로 덮어쓰는 경쟁 상태가 있었다 — "다른
+  // 계정인데 03yeah03@gmail.com 날짜로 타임슬라이더가 고정된다"는 증상이 이것.
+  // 여기서 바로 버려서 절대 화면에 반영하지 않는다(allPeople/사진/아바타/날짜
+  // 범위 전부 포함).
+  if (gmailId !== currentMailId) {
+    return;
+  }
+
+  allPeople = fetchedPeople;
+  contactPhotos = fetchedPhotos;
+  generatedAvatars = fetchedAvatars;
 
   if (dateRange) {
     mailDateRange = {
@@ -3109,21 +3128,35 @@ export function initMyPeoplePage() {
     if (person) openDetail(person, Math.floor(idx / 7));
   });
 
-  loadPeople().then(() => fetchPeriodStats());
-
+  // 초기 로딩은 아래 initGlobalFilter()의 콜백이 "지금 사이드바가 고른 상태"를
+  // 무조건 한 번 전달해주므로(filterSync.js 4단계) 거기서 한 번만 한다 — 여기서
+  // loadPeople()을 한 번 더 부르면 페이지가 뜨자마자 카드가 떴다가 그 직후
+  // initGlobalFilter 쪽 로드가 또 겹쳐서 "데이터를 불러오는 중..."으로 순간
+  // 되돌아가는 깜빡임이 생겼다.
   setTimeout(_initMiniGraph, 2500);
 
   initGlobalFilter((filterState, meta) => {
     // filterSync.js가 사이드바 상태를 한 번은 확실히 전달해주므로, isInitial 여부와 상관없이 항상 그 상태를 그대로 반영한다 — 페이지는 사이드바가 고른 채널만 그린다.
     if (filterState.mail) {
+      // 실제로 계정이 바뀐 경우(또는 이 페이지에서 아직 한 번도 안 그린 최초 진입)에만
+      // 캐시를 비우고 다시 불러온다. gwStoreStateChanged는 계정 선택이 바뀔 때 말고도
+      // 인덱싱 폴링 등으로 목록 내용만 바뀌어도 같은 계정 값으로 다시 쏘일 수 있는데,
+      // 그때마다 여기서 매번 초기화하면 이미 잘 떠 있던 카드가 "데이터를 불러오는
+      // 중..."으로 도로 바뀌었다가 다시 뜨는 깜빡임으로 보인다.
+      const accountChanged = filterState.mail !== currentMailId;
       currentMailId = filterState.mail;
+      setChannel("mail");
+      if (!accountChanged && periodStatsLoaded) {
+        return;
+      }
       avatarGenStarted = false; // 새 계정 기준으로 아바타 생성도 다시 돌게
       periodStatsLoaded = false;
       periodStats = {};
       currentDetailPerson = null;
       document.getElementById("mp-detail")?.classList.remove("open");
-      setChannel("mail");
-      loadPeople().then(() => fetchPeriodStats());
+      // loadPeople()이 내부에서 fetchPeriodStats()까지 한 번만 호출하고 카드를
+      // 그리므로 여기서 fetchPeriodStats()를 따로 또 부르지 않는다(중복 호출 제거).
+      loadPeople();
     } else if (filterState.room) {
       selectedChatroomId = filterState.room;
       setChannel("messenger");

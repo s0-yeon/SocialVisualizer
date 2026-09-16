@@ -7,6 +7,11 @@ Singleton global store for the selected mail/room filter and the fetched account
 Refreshes lists via the backend's /accounts and /messenger-chatrooms, and fires a gwStoreStateChanged event only when the selection actually changes.
  */
 
+// 사이드바 목록 라벨에 표시 이름 오버라이드(accountPicker.js의 DISPLAY_EMAIL_OVERRIDES)를
+// 적용하기 위한 import. 실제 선택/필터/등 내부 로직은 여전히 id(acc.user_id) 그대로 쓰고,
+// 화면에 보여줄 라벨만 이걸로 바꾼다.
+import { displayAccountLabel } from "../features/accountPicker.js";
+
 const STORAGE_KEYS = {
   MAIL: "gw_selected_mail",
   ROOM: "gw_selected_room",
@@ -57,7 +62,7 @@ class GlobalStore {
       // label: 화면에 보여줄 이름.
       const mails = (mailsData.accounts || []).map((acc) => ({
         id: acc.user_id,
-        label: acc.user_id,
+        label: displayAccountLabel(acc.user_id),
         indexed: !!acc.indexed,
       }));
 

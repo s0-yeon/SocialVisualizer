@@ -389,6 +389,9 @@ Styles for the "Recap" stats page (migrated from inline <style>, excluding share
   grid-template-columns: 1fr 1fr;
   gap: 22px;
 }
+.rc-grid2 > .rc-card {
+  min-width: 0;
+}
 @media (max-width: 900px) {
   .rc-grid2 {
     grid-template-columns: 1fr;
@@ -444,6 +447,7 @@ Styles for the "Recap" stats page (migrated from inline <style>, excluding share
 /* 친밀도 도넛 차트 */
 .rc-af-donut-wrap {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
   gap: 40px;

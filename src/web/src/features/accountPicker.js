@@ -20,6 +20,11 @@ const DISPLAY_EMAIL_OVERRIDES = {
   // 요청 — 지식그래프에서 이 계정 이름이 이상하게(엉뚱한 아이클라우드 주소로)
   // 나와서, 원래 아이디 03yeeun03@naver.com 그대로 보이도록 오버라이드 제거.
   "324dfan@naver.com": "moonlight_haru@icloud.com",
+  // 요청 — 이 계정의 실제 식별자(user_id)는 폴더/DB/아바타 매칭 등 내부적으로 전부
+  // "soyeon@icloud"(.com 없음) 그대로 써야 하지만(다른 스크립트/DB가 전부 이 값
+  // 기준이라 바꾸면 다 깨짐), 화면에는 실제 주소인 "soyeon@icloud.com"으로 보이길
+  // 원해서 표시 라벨만 오버라이드한다. API 호출/파일 경로/DB 조회에는 영향 없음.
+  "soyeon@icloud": "soyeon@icloud.com",
 };
 
 /** 화면에 보여줄 계정 라벨을 반환 — 오버라이드가 있으면 그걸, 없으면 원래 id 그대로. */

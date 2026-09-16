@@ -848,6 +848,10 @@ def save_mail_to_db(paths, update_date=None):
 
         date_match = re.search(r'^\[날짜\][ \t]*(.+)$', text, re.MULTILINE)
         mail_date = date_match.group(1).strip() if date_match else None
+        # 라벨은 있는데 값이 공백/탭뿐이면 strip() 후 빈 문자열이 되는데, MySQL DATETIME 컬럼에
+        # 빈 문자열을 넣으면 DataError가 나므로 이 경우 값 없음(None)으로 정규화한다.
+        if not mail_date:
+            mail_date = None
 
         # mail.mail_folder_name은 NOT NULL이며 mail_folder에 대한 FK이므로, 파싱 실패 시에도 'UNKNOWN'으로 대체
         folder_match = re.search(r'\[폴더 정보\][ \t]*(.+)', text)
@@ -935,12 +939,18 @@ def save_mail_to_db(paths, update_date=None):
                                 pass
 
             # print(f"[DEBUG] receiver (len={len(mail['receiver'] or '')}) = {mail['receiver']}")
-            cursor.execute(insert_sql, (
-                mail['mail_id'], user_mail_account_id, update_date, mail['mail_folder_name'],
-                mail['mail_date'], mail['sender'], mail['receiver'], mail['direction'],
-                mail['kg_tone'], mail['llm_tone'], mail['is_reply'], reply_to_mail_id, reply_elapsed_hours
-            ))
-            count += 1
+            try:
+                cursor.execute(insert_sql, (
+                    mail['mail_id'], user_mail_account_id, update_date, mail['mail_folder_name'],
+                    mail['mail_date'], mail['sender'], mail['receiver'], mail['direction'],
+                    mail['kg_tone'], mail['llm_tone'], mail['is_reply'], reply_to_mail_id, reply_elapsed_hours
+                ))
+                count += 1
+            except Exception as row_err:
+                # 행 하나가 형식 오류(예: mail_date 파싱 실패)로 깨져도 전체 executemany성 배치가
+                # 롤백되는 걸 막기 위해, 이 메일만 건너뛰고 계속 진행한다.
+                print(f"[WARN] mail 저장 스킵 mail_id={mail['mail_id']!r} mail_date={mail['mail_date']!r}: {row_err}")
+                continue
 
         conn.commit()
         print(f"[DB] mail 테이블 저장 완료: {count}건")

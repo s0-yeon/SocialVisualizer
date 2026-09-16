@@ -1,7 +1,8 @@
 # reset_account.py
 # 특정 계정의 mail_account/person/mail/mail_keyword/mail_folder 행을 전부 삭제한다.
 # MailGrapher 폴더 루트(src/ 옆)에 놓고 실행하세요:
-#   가상환경 켜고 -> python reset_account.py
+#   가상환경 켜고 -> python reset_account.py [user_id]
+#   user_id를 안 주면 아래 기본값(USER_ID)을 사용
 
 import sys
 import os
@@ -10,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 
 from config.db import get_db_connection
 
-USER_ID = "soyeon@icloud"
+USER_ID = sys.argv[1] if len(sys.argv) > 1 else "soyeon@icloud"
 
 TABLES = ["mail_keyword", "mail_folder", "mail", "person", "mail_account"]
 
