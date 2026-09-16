@@ -355,6 +355,336 @@ def _filter_invalid_chatrooms(paths):
         print(f"[FILTER] 연결된 relationship {removed_rels}개도 함께 제거")
 
 
+# 헤더 표기 차이(예: "박세아" vs "박세아 (채팅방)")로 같은 방이 ChatRoom 엔티티 2개로 쪼개진 경우
+# 코어 이름(_strip_chatroom_decorations 기준)이 같으면 하나로 병합한다 (messenger 전용).
+# LLM이 인덱싱마다 접미사를 다르게 붙이더라도, 이 후처리가 매번 자동으로 다시 합쳐주므로
+# 프롬프트 수정만으로는 줄 수 없는 재발 방지 보장을 제공한다.
+def _merge_chatroom_aliases(paths):
+    if getattr(paths, "DOMAIN", None) != "messenger":
+        return
+
+    import pandas as pd
+
+    output_dir = os.path.join(paths.GRAPHRAG_ROOT, "output")
+    entities_path = os.path.join(output_dir, "entities.parquet")
+    relationships_path = os.path.join(output_dir, "relationships.parquet")
+
+    if not os.path.exists(entities_path):
+        return
+
+    entities = pd.read_parquet(entities_path)
+    is_chatroom = entities["type"].astype(str).str.upper() == "CHATROOM"
+    chatroom = entities[is_chatroom]
+    if len(chatroom) <= 1:
+        return 0
+
+    # 코어 이름(접미사 제거)별로 그룹화 -- 2개 이상 모이면 같은 방의 별칭으로 간주
+    core_names = chatroom["title"].map(_strip_chatroom_decorations)
+    groups = {}
+    for idx, core in zip(chatroom.index, core_names):
+        groups.setdefault(core, []).append(idx)
+    dup_groups = {core: idxs for core, idxs in groups.items() if core and len(idxs) > 1}
+    if not dup_groups:
+        return 0
+
+    rename_map = {}
+    drop_idx = []
+    merged_count = 0
+
+    for core, idxs in dup_groups.items():
+        rows = entities.loc[idxs]
+        # 접미사 없이 코어 이름 그대로인 제목을 대표로 우선 채택, 없으면 첫 번째로 채택
+        exact = rows[rows["title"] == core]
+        canonical_idx = exact.index[0] if len(exact) else idxs[0]
+        canonical_title = entities.loc[canonical_idx, "title"]
+
+        for idx in idxs:
+            if idx == canonical_idx:
+                continue
+            dup_title = entities.loc[idx, "title"]
+            rename_map[dup_title] = canonical_title
+            drop_idx.append(idx)
+            merged_count += 1
+
+            # description/text_unit_ids는 대표 엔티티로 흡수
+            if "description" in entities.columns:
+                cv = str(entities.at[canonical_idx, "description"] or "")
+                dv = str(entities.at[idx, "description"] or "")
+                if dv and dv not in cv:
+                    entities.at[canonical_idx, "description"] = (cv + "\n" + dv).strip()
+            if "text_unit_ids" in entities.columns:
+                cv = entities.at[canonical_idx, "text_unit_ids"]
+                dv = entities.at[idx, "text_unit_ids"]
+                merged_ids = list(cv) if cv is not None else []
+                for tid in (list(dv) if dv is not None else []):
+                    if tid not in merged_ids:
+                        merged_ids.append(tid)
+                entities.at[canonical_idx, "text_unit_ids"] = merged_ids
+
+    if not drop_idx:
+        return 0
+
+    entities.drop(index=drop_idx).to_parquet(entities_path, index=False)
+
+    merged_rel = 0
+    if os.path.exists(relationships_path) and rename_map:
+        rel = pd.read_parquet(relationships_path)
+        rel["source"] = rel["source"].replace(rename_map)
+        rel["target"] = rel["target"].replace(rename_map)
+        rel = rel[rel["source"] != rel["target"]]  # 병합으로 자기참조가 된 관계 제거
+        before = len(rel)
+        rel = rel.drop_duplicates(subset=["source", "target"], keep="first")
+        merged_rel = before - len(rel)
+        rel.to_parquet(relationships_path, index=False)
+
+    print(f"[FILTER] ChatRoom 별칭 병합: {merged_count}개 -> {rename_map}" + (f" (중복 relationship {merged_rel}개 정리)" if merged_rel else ""))
+    return merged_count
+
+
+# ChatRoom 별칭이 병합된 뒤(entities/relationships가 바뀐 뒤), 그 변화를 반영해
+# communities/community_reports/text_embeddings만 다시 만든다. extract_graph 등
+# 앞단은 다시 돌리지 않으므로 추가 추출 LLM 호출 없이 병합 결과와 일관된 그래프로 맞춰진다.
+# 이걸 build_graphrag_index 안에서 병합이 실제로 일어났을 때만 자동으로 호출하므로,
+# "ChatRoom 2개 생기는" 문제가 다시 발생해도 사람이 수동으로 재인덱싱할 필요가 없다.
+def _rerun_communities_after_chatroom_merge(paths, env):
+    import shutil
+
+    settings_path = paths.USER_GRAPH_SETTINGS_PATH
+    backup_path = settings_path + ".bak"
+    workflows_override = (
+        "\nworkflows: [create_communities, create_final_text_units, "
+        "create_community_reports, generate_text_embeddings]\n"
+    )
+
+    shutil.copy2(settings_path, backup_path)
+    with open(settings_path, "a", encoding="utf-8") as f:
+        f.write(workflows_override)
+
+    run_env = env.copy()
+    run_env["PYTHONUNBUFFERED"] = "1"
+    patches_dir = os.path.join(BASE_DIR, "parquet_template", "src", "graphrag_patches")
+    run_env["PYTHONPATH"] = patches_dir + os.pathsep + run_env.get("PYTHONPATH", "")
+
+    try:
+        cmd = [
+            sys.executable, "-u", "-X", "utf8",
+            "-m", "graphrag", "index", "--root", paths.GRAPHRAG_ROOT,
+        ]
+        print(f"[FILTER] ChatRoom 별칭 병합 반영을 위해 communities/reports/embeddings 재생성 시작")
+        subprocess.run(cmd, check=True, env=run_env)
+        print(f"[FILTER] communities/reports/embeddings 재생성 완료")
+    finally:
+        shutil.move(backup_path, settings_path)
+
+
+# 1:1 채팅방인데(참여자 정확히 2명) 상대방 Person 엔티티가 통째로 안 만들어진 경우를 복구한다 (messenger 전용).
+# messenger.json 프롬프트에 이 실패를 막는 명시적 규칙(+few-shot 예시)이 이미 있음에도 모델이 가끔
+# ChatRoom "(채팅방)" 접미사 규칙과 Person 생성 규칙을 동시에 놓치는 사례가 실제로 관측되어 추가한 결정론적 안전망.
+# 원본 text_unit에서 "HH:MM 이름:" 발화 패턴을 직접 스캔해 누락된 Person과 최소 관계(participates_in/spoke_on/interacts_with)를
+# 재구성하므로, 몇 번을 다시 인덱싱해도 이 실패가 재발할 때마다 자동으로 고쳐진다.
+# 저비용 부가작업용 로컬 모델(SUB_TASK_CHAT_MODEL, Qwen2.5-7B / GPU3:8003)로 짧은 텍스트 하나를 생성한다.
+# extract_graph에 쓰이는 메인 인덱싱 모델보다 훨씬 저렴 -- 이미 첨부파일 요약 등 부가 작업에 쓰이는 것과 동일한 모델/경로를 재사용.
+# 실패하면 None을 반환하므로 호출부는 항상 기계적 템플릿 문장으로 폴백해야 한다 (이 함수 자체가 절대 예외를 올리지 않음).
+def _llm_subtask_complete(system_prompt: str, user_content: str, max_tokens: int = 120):
+    try:
+        client = openai.OpenAI(
+            api_key=os.environ.get("LLM_API_KEY"),
+            base_url=os.environ.get("SUB_TASK_API_BASE") or None,
+        )
+        response = client.chat.completions.create(
+            model=os.getenv("SUB_TASK_CHAT_MODEL"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            max_completion_tokens=max_tokens,
+        )
+        text = (response.choices[0].message.content or "").strip()
+        return text or None
+    except Exception as e:
+        print(f"[FILTER][WARN] LLM 서술 보강 실패 (템플릿으로 대체): {e}")
+        return None
+
+
+# 1:1 채팅방인데(참여자 정확히 2명) 상대방 Person 엔티티가 통째로 안 만들어진 경우를 복구한다 (messenger 전용).
+# messenger.json 프롬프트에 이 실패를 막는 명시적 규칙(+few-shot 예시)이 이미 있음에도 모델이 가끔
+# ChatRoom "(채팅방)" 접미사 규칙과 Person 생성 규칙을 동시에 놓치는 사례가 실제로 관측되어 추가한 결정론적 안전망.
+# 원본 text_unit에서 "HH:MM 이름:" 발화 패턴을 직접 스캔해 누락된 Person과 관계(participates_in/spoke_on/interacts_with)를
+# 재구성하고, spoke_on/interacts_with의 서술은 SUB_TASK 모델로 실제 대화 내용을 요약해 채운다(실패 시 기계적 템플릿으로 폴백)
+# -- 그래야 정상적으로 추출된 다른 엔티티들과 서술 품질 격차가 크지 않다.
+def _reconstruct_missing_person_in_1on1(paths):
+    if getattr(paths, "DOMAIN", None) != "messenger":
+        return 0
+
+    import pandas as pd
+    import uuid
+
+    output_dir = os.path.join(paths.GRAPHRAG_ROOT, "output")
+    entities_path = os.path.join(output_dir, "entities.parquet")
+    relationships_path = os.path.join(output_dir, "relationships.parquet")
+    text_units_path = os.path.join(output_dir, "text_units.parquet")
+
+    if not (os.path.exists(entities_path) and os.path.exists(text_units_path)):
+        return 0
+
+    entities = pd.read_parquet(entities_path)
+    text_units = pd.read_parquet(text_units_path)
+    tu_text_by_id = dict(zip(text_units["id"], text_units["text"].astype(str)))
+
+    chatroom = entities[entities["type"].astype(str).str.upper() == "CHATROOM"]
+    if len(chatroom) == 0:
+        return 0  # ChatRoom 자체가 없으면(비정상 계정 등) 이 안전망의 대상이 아님
+    if len(chatroom) > 1:
+        # _merge_chatroom_aliases가 먼저 실행되어 있어야 하는데도 1개로 안 줄었다면(코어 이름이 서로 다른 채로 남는 등)
+        # 이 함수가 자동으로 판단하기 애매한 상황이라 손대지 않고 경고만 남긴다 -- 예전엔 조용히 스킵돼서 안 보였음
+        print(f"[FILTER][WARN] 1:1 Person 복구 스킵: ChatRoom이 병합 후에도 {len(chatroom)}개 남음 -- 수동 확인 필요")
+        return 0
+    chatroom_idx = chatroom.index[0]
+    chatroom_title = str(entities.at[chatroom_idx, "title"])
+    core_name = _strip_chatroom_decorations(chatroom_title)
+
+    # 원본 대화에서 실제 참여자 목록을 직접 읽는다 (LLM 추출 결과가 아니라 원본 "참여자:" 헤더 기준)
+    participants = set()
+    for text in text_units["text"].astype(str):
+        for m in re.finditer(r"참여자\s*:\s*(.+)", text):
+            for name in m.group(1).split(","):
+                name = name.strip()
+                if name:
+                    participants.add(name)
+
+    if len(participants) != 2:
+        return 0  # 그룹 채팅이면 대상이 아님
+
+    persons = set(entities[entities["type"].astype(str).str.upper() == "PERSON"]["title"].astype(str))
+    missing = participants - persons
+    if not missing:
+        return 0  # 이미 둘 다 정상 -- 손대지 않음
+
+    # 1:1 방인데 ChatRoom 이름에 "(채팅방)" 접미사가 없으면(=이번 실패의 짝) 여기서 같이 바로잡는다
+    if chatroom_title == core_name:
+        new_chatroom_title = f"{core_name} (채팅방)"
+        entities.at[chatroom_idx, "title"] = new_chatroom_title
+        if os.path.exists(relationships_path):
+            rel_fix = pd.read_parquet(relationships_path)
+            rel_fix["source"] = rel_fix["source"].replace({chatroom_title: new_chatroom_title})
+            rel_fix["target"] = rel_fix["target"].replace({chatroom_title: new_chatroom_title})
+            rel_fix.to_parquet(relationships_path, index=False)
+        chatroom_title = new_chatroom_title
+
+    two_participants = list(participants)
+
+    new_person_rows = []
+    new_rels = []
+    rel = pd.read_parquet(relationships_path) if os.path.exists(relationships_path) else pd.DataFrame(
+        columns=["id", "human_readable_id", "source", "target", "description", "weight", "combined_degree", "text_unit_ids"]
+    )
+    existing_pairs = set(zip(rel["source"], rel["target"])) if len(rel) else set()
+    next_hrid = int(entities["human_readable_id"].max()) + 1 if len(entities) else 0
+    next_rel_hrid = int(rel["human_readable_id"].max()) + 1 if len(rel) else 0
+
+    def _mk_rel(source, target, description, tu_ids):
+        nonlocal next_rel_hrid
+        r = {
+            "id": str(uuid.uuid4()),
+            "human_readable_id": next_rel_hrid,
+            "source": source,
+            "target": target,
+            "description": description,
+            "weight": float(len(tu_ids)),
+            "combined_degree": 0,
+            "text_unit_ids": tu_ids,
+        }
+        next_rel_hrid += 1
+        return r
+
+    date_entities = entities[entities["type"].astype(str).str.upper() == "DATE"]
+    per_person_tu_ids = {}
+
+    for missing_name in missing:
+        # 누락된 사람이 발화자로 등장하는 text_unit을 원본 텍스트에서 직접 찾는다
+        sender_re = re.compile(rf"\d{{1,2}}:\d{{2}}\s+{re.escape(missing_name)}\s*:")
+        missing_tu_ids = [tid for tid, text in tu_text_by_id.items() if sender_re.search(text)]
+        if not missing_tu_ids:
+            print(f"[FILTER][WARN] 1:1 Person 복구 실패: '{missing_name}' 발화 근거를 text_unit에서 못 찾음 ({chatroom_title}) -- 만들어내지 않고 스킵")
+            continue
+        per_person_tu_ids[missing_name] = missing_tu_ids
+
+        new_person_rows.append({
+            "id": str(uuid.uuid4()),
+            "human_readable_id": next_hrid,
+            "title": missing_name,
+            "type": "PERSON",
+            "description": f"Name: {missing_name}",
+            "text_unit_ids": missing_tu_ids,
+            "frequency": len(missing_tu_ids),
+            "degree": 0,  # 아래에서 생성하는 관계 수만큼 갱신
+        })
+        next_hrid += 1
+
+        # participates_in: 누락된 사람 -> ChatRoom (실제 추출된 데이터도 이 관계는 항상 기계적 템플릿이라 그대로 둠)
+        new_rels.append(_mk_rel(
+            missing_name, chatroom_title,
+            f"{missing_name}은(는) {chatroom_title} 채팅방의 대화 참여자다.",
+            missing_tu_ids,
+        ))
+
+        # spoke_on: 누락된 사람이 실제로 발화한 날짜마다, 그 날의 실제 대화 내용을 SUB_TASK 모델로 한 줄 요약해서 채운다
+        missing_tu_set = set(missing_tu_ids)
+        for _, drow in date_entities.iterrows():
+            date_tu_ids = list(drow["text_unit_ids"]) if drow["text_unit_ids"] is not None else []
+            overlap = [tid for tid in date_tu_ids if tid in missing_tu_set]
+            if not overlap:
+                continue
+            date_title = str(drow["title"])
+            chunk_text = "\n".join(tu_text_by_id.get(tid, "") for tid in overlap)[:3000]
+            summary = _llm_subtask_complete(
+                "너는 카카오톡 대화 로그를 보고 특정 인물이 그 날 대화에서 무엇을 했는지 한국어 한 문장으로 요약하는 도우미다. "
+                "예시 스타일: '여러 주제를 제안하고 대화를 이끌었다', '식사 약속을 제안하고 만남을 조율했다', '메시지를 보냈다'. "
+                "다른 설명 없이 딱 한 문장만 출력해.",
+                f"[{date_title}, 발화자: {missing_name}]\n{chunk_text}",
+                max_tokens=60,
+            )
+            desc = f"{missing_name}이(가) {date_title}에 {summary}" if summary else f"{missing_name}이(가) {date_title}에 메시지를 보냈다."
+            new_rels.append(_mk_rel(missing_name, date_title, desc, overlap))
+
+    if not new_person_rows:
+        return 0
+
+    # interacts_with: 두 참여자 사이 관계 서술을 SUB_TASK 모델로 한 번 생성 (이미 정상 추출된 방향이 있으면 그건 건드리지 않음)
+    a, b = two_participants
+    if a in per_person_tu_ids or b in per_person_tu_ids:
+        evidence_ids = sorted(set(per_person_tu_ids.get(a, []) + per_person_tu_ids.get(b, [])))
+        chunk_text = "\n".join(tu_text_by_id.get(tid, "") for tid in evidence_ids[:20])[:4000]
+        summary = _llm_subtask_complete(
+            "너는 카카오톡 1:1 대화 로그를 보고 두 사람의 관계와 대화 스타일을 요약하는 도우미다. "
+            "'[관계: 친구/연인/동료/가족 등 추정]'으로 시작한 뒤, 존댓말/반말 여부와 주요 화제를 2~3문장 한국어로 요약해. "
+            "예시: '[관계: 친구] 반말을 사용해 자연스럽게 안부와 일상 이야기를 주고받았다. 저녁 약속과 장소를 편하게 조율했다.'",
+            f"[참여자: {a}, {b}]\n{chunk_text}",
+            max_tokens=150,
+        )
+        desc_ab = summary or f"{a}과(와) {b}은(는) 이 채팅방에서 대화를 나눴다."
+        desc_ba = summary or f"{b}과(와) {a}은(는) 이 채팅방에서 대화를 나눴다."
+        if (a, b) not in existing_pairs:
+            new_rels.append(_mk_rel(a, b, desc_ab, evidence_ids))
+        if (b, a) not in existing_pairs:
+            new_rels.append(_mk_rel(b, a, desc_ba, evidence_ids))
+
+    rel_count_by_person = {}
+    for r in new_rels:
+        rel_count_by_person[r["source"]] = rel_count_by_person.get(r["source"], 0) + 1
+    for row in new_person_rows:
+        row["degree"] = rel_count_by_person.get(row["title"], 0)
+
+    entities = pd.concat([entities, pd.DataFrame(new_person_rows)], ignore_index=True)
+    entities.to_parquet(entities_path, index=False)
+
+    rel = pd.concat([rel, pd.DataFrame(new_rels)], ignore_index=True)
+    rel.to_parquet(relationships_path, index=False)
+
+    names = ", ".join(row["title"] for row in new_person_rows)
+    print(f"[FILTER] 1:1 채팅 Person 엔티티 복구: '{names}' ({chatroom_title}, 관계 {len(new_rels)}개 생성, LLM 서술 보강 적용)")
+    return len(new_person_rows)
+
 _DATE_HEADER_RE_TMPL = r"\ub0a0\uc9dc\s*:\s*{date}"
 
 
@@ -668,6 +998,24 @@ def build_graphrag_index(job_id, paths, env, max_mails=None):
             _filter_invalid_chatrooms(paths)
         except Exception as e:
             print(f"[FILTER][WARN] ChatRoom 근거 검증 필터링 실패 (무시): {e}")
+
+        merged_chatrooms = 0
+        reconstructed_persons = 0
+        try:
+            merged_chatrooms = _merge_chatroom_aliases(paths)
+        except Exception as e:
+            print(f"[FILTER][WARN] ChatRoom 별칭 병합 실패 (무시): {e}")
+
+        try:
+            reconstructed_persons = _reconstruct_missing_person_in_1on1(paths)
+        except Exception as e:
+            print(f"[FILTER][WARN] 1:1 채팅 Person 엔티티 복구 실패 (무시): {e}")
+
+        if merged_chatrooms or reconstructed_persons:
+            try:
+                _rerun_communities_after_chatroom_merge(paths, env)
+            except Exception as e:
+                print(f"[FILTER][WARN] communities/reports/embeddings 재생성 실패 (무시): {e}")
 
         try:
             _filter_invalid_dates(paths)

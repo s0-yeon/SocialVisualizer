@@ -65,9 +65,59 @@ def _load_account_sender_map(paths) -> dict:
 def _strip_id_punct(mail_id: str) -> str:
     return mail_id.strip(']),.;:》」』')
 
+# ID 값에 허용되는 문자만 (영문/숫자/@ . _ -) — 메일 ID(예: "5b25c2b94f60e201")와
+# 메신저 ID(예: "2022-05-07_01") 둘 다 이 문자만으로 이뤄져 있다. LLM이 "ID: 2022-08-21_01이며"처럼
+# 공백 없이 한글 조사를 ID 뒤에 바로 붙여 쓰는 경우가 있어, 예전엔 \S+로 통째로 잡고
+# 문장부호만 벗겨내던 _strip_id_punct()로는 한글이 안 지워져 원본 ID와 매칭에 실패했다
+# (예: "2022-08-21_01이며" != "2022-08-21_01") — 아예 ID 문자 집합만 추출해서 근본적으로 막는다.
+_ID_TOKEN_RE = r'ID:\s*([A-Za-z0-9@._-]+)'
+
 # 메일 ID가 올바른지 판단한다 (LLM이 순번 "2" 등을 ID로 잘못 쓴 짧은 숫자는 걸러냄)
 def _is_plausible_mail_id(mail_id: str) -> bool:
     return not (mail_id.isdigit() and len(mail_id) <= 6)
+
+# 사용자가 원하는 최종 목표 답변 형식(번호 매김 + 5개 필드) —
+# parquet_template/src/configs/{messenger,mail}.json의 local_search.citation_extra_rules에서
+# 모델에게 이 형식을 그대로 지시함. 서브필드는 3칸 들여쓰기로 온다. 1번째·3번째 필드 이름은
+# 도메인마다 다르다(메신저: 메시지/채팅방, 메일: 제목/계정) — 골드 데이터(sft_gold_answers_final_406)
+# 기준으로 확인된 실제 라벨이며, 2번째(날짜)·4번째(내용)·5번째(ID)는 두 도메인에서 공통.
+# 라벨 이름 자체는 캡처하지 않고 위치만 이용하므로, 도메인별 라벨 차이에 안전하다.
+# 'ID:' 필드는 골드 데이터에도 있긴 하지만, 사용자 설명대로 그건 "근거메일/근거메신저 보기"
+# 버튼으로 연결되는 값이고 평문인 골드 데이터가 버튼을 표현할 수 없어서 텍스트 필드로 대신
+# 적어둔 것일 뿐 — 실제 서비스 화면에는 이 줄 자체를 노출하지 않고 버튼으로만 보여준다.
+# 그래서 캡처한 뒤 'idline' 그룹째로 통째로 제거하고, source_ids는 항목이 답변에 나온 순서
+# 그대로(중복 제거 없이) 반환해 호출부가 "N번째 항목 = source_ids[N]"으로 위치 매칭할 수 있게 한다.
+_STRUCTURED_ITEM_RE = re.compile(
+    r'^\d+\.\s*[^\n:]+:.*?\n'
+    r'[ \t]*날짜:.*?\n'
+    r'[ \t]*[^\n:]+:.*?\n'
+    r'[ \t]*내용:.*?\n'
+    r'(?P<idline>[ \t]*ID:\s*(?P<id>[A-Za-z0-9@._-]+)[ \t]*\n?)',
+    re.MULTILINE,
+)
+
+# 목표 형식(번호 매김 5필드)으로 답변이 왔는지 확인하고, 왔다면 각 항목의 'ID:' 줄을 화면에서
+# 지운 표시용 텍스트와 (항목 순서 그대로인) source_ids를 반환한다. 목표 형식이 아니면
+# (None, [])을 반환하여 호출부가 기존 폴백 로직으로 넘어가게 한다.
+# account_resolver(block_id) -> 계정 user_id 문자열 또는 None
+def _format_structured_answer(answer: str, account_resolver) -> tuple:
+    matches = list(_STRUCTURED_ITEM_RE.finditer(answer))
+    if not matches:
+        return None, []
+
+    source_ids = []
+    out = answer
+    # 뒤에서부터 제거해야 앞쪽 매치의 span 인덱스가 안 밀림
+    for m in reversed(matches):
+        block_id = _strip_id_punct(m.group('id'))
+        account = account_resolver(block_id)
+        source_ids.append({"id": block_id, "account": account})
+        start, end = m.span('idline')
+        out = out[:start] + out[end:]
+    source_ids.reverse()  # 답변에 나온 순서대로 복원 (프론트가 항목 순서로 그대로 매칭)
+
+    out = re.sub(r'\*+|#+', '', out).strip()
+    return out, source_ids
 
 # 두 문자열 사이 최장 연속 공통 부분문자열의 길이를 계산한다 (동적 계획법)
 def _longest_common_substring_len(a: str, b: str) -> int:
@@ -169,8 +219,22 @@ def strip_ids_for_display(text: str) -> str:
     # "- " 불릿이라 대시가 섞이면 스타일이 들쭉날쭉해 보임)
     text = re.sub(r'^[—–][ \t]*', '- ', text, flags=re.MULTILINE)
     text = re.sub(r'(?<!\n) - (?=\S)', '\n- ', text)
-    text = re.sub(r'^[ \t]*\[?[ \t]*[-*]?[ \t]*(ID|계정):\s*[^\s\]]+\]?[ \t]*\n?', '', text, flags=re.MULTILINE)
-    text = re.sub(r'\[?(ID|계정):\s*[^\s\]]+\]?', '', text)
+    # "날짜: 2024-12-25 대화에서 ..."처럼 날짜 뒤에 공백만 두고 바로 본문이 이어지면
+    # 한 문장에 다 뭉쳐 보여 가독성이 떨어짐 — 날짜 뒤에서 한 번 끊어줌.
+    # 주의: "2024-12-25에 아빠가"처럼 날짜에 조사("에")가 공백 없이 바로 붙는 경우가
+    # 흔한데, [ \t]*(0개 이상)로 매칭하면 이 조사 앞에서까지 잘라버려 "에 아빠가"처럼
+    # 조사만 다음 줄 맨 앞에 뚝 떨어지는 어색한 결과가 났다 — 공백이 실제로 있을 때만
+    # ([ \t]+, 1개 이상) 끊도록 해서 조사가 붙은 경우는 건드리지 않는다.
+    text = re.sub(r'(날짜:\s*\d{4}-\d{2}-\d{2})[ \t]+(?=\S)', r'\1\n', text)
+    # 'ID:'/'계정:' 줄 제거. '채팅방:'도 같이 제거함 — 메신저 답변에서 모델이 '계정:'과
+    # 별개로 '채팅방:' 줄을 중복으로 더 쓰는 경우가 있어(원래는 '계정: 채팅방이름' 한
+    # 줄로만 쓰라고 지시함) 방어적으로 같이 지운다.
+    text = re.sub(r'^[ \t]*\[?[ \t]*[-*]?[ \t]*(ID|계정|채팅방):\s*[^\s\]]+\]?[ \t]*\n?', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\[?(ID|계정|채팅방):\s*[^\s\]]+\]?', '', text)
+    # 'ID:'/'계정:' 줄로 넘어가기 전 모델이 가끔 덧붙이는 전환 문구("해당 대화 블록
+    # 정보는 아래와 같습니다" 등) — 근거 표기 자체가 아니라서 위 정규식엔 안 걸리므로
+    # 별도로 제거함.
+    text = re.sub(r'^[ \t]*[-*]?[ \t]*해당[^\n]*(블록|정보)[^\n]*같습니다\.?[ \t]*\n?', '', text, flags=re.MULTILINE)
     text = re.sub(r'^[ \t]*(?:\d+[.)]|[-*])[ \t]*$', '', text, flags=re.MULTILINE)
     # 위 단계들이 인용 표기를 지우는 과정에서 짝이 안 맞는 대괄호가 낱개로 남을 수 있어
     # (예: 모델이 인용을 쓰다 만 경우) 남은 대괄호는 통째로 제거함
@@ -203,8 +267,16 @@ def run_graphrag_query(message: str, original_message: str, paths, method: str =
                 answer = re.sub(r'\*+|#+', '', answer) # 마크다운 강조 기호 제거 (**, ## 등)
                 answer = answer.strip() # 앞뒤 공백 제거
 
+                # 목표 형식(번호 매김 5필드)으로 답이 왔으면 그대로 사용 — 단일 계정 질의라
+                # 계정은 항상 paths.USER_ID로 확정돼 있음
+                display_answer, source_ids = _format_structured_answer(answer, lambda _bid: paths.USER_ID)
+                if display_answer is not None:
+                    return display_answer, source_ids
+
+                # 모델이 목표 형식을 못 지킨 경우(부정 답변 등) — 기존 폴백 로직으로 근거 추출
+
                 # 1차: 답변 텍스트에서 실제로 인용한 ID를 추출함
-                found = [_strip_id_punct(m) for m in re.findall(r'ID:\s*(\S+)', answer)]
+                found = [_strip_id_punct(m) for m in re.findall(_ID_TOKEN_RE, answer)]
                 found = [m for m in found if _is_plausible_mail_id(m)]
 
                 # 2차: 답변이 ID를 하나도 안 썼을 때(요약형 답변 등) — 예전엔 LLM에 넘긴
@@ -343,22 +415,32 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
         try:
             # 계정별 로컬 엔진 컨텍스트를 모아 답변을 생성하고 근거를 추출한다
             async def _search():
-                engines = []
-                for paths in accounts_paths:
+                # 엔진 로드도 계정별로 동시에 (run_federated_global_search와 동일한 패턴) —
+                # get_engines는 동기 함수라 스레드로 병렬화 (내부 _cache_lock이 있어 안전함)
+                async def _load_engine(paths):
                     try:
                         output_dir = os.path.join(paths.GRAPHRAG_ROOT, "output")
-                        local_engine, _ = get_engines(paths.USER_ID, output_dir, paths.GRAPHRAG_ROOT)
-                        engines.append((paths, local_engine))
+                        local_engine, _ = await asyncio.to_thread(
+                            get_engines, paths.USER_ID, output_dir, paths.GRAPHRAG_ROOT
+                        )
+                        return paths, local_engine
                     except Exception as e:
                         print(f"[FEDERATED] {paths.USER_ID} 엔진 로드 실패, 스킵: {e}")
+                        return None
+
+                loaded = await asyncio.gather(*[_load_engine(paths) for paths in accounts_paths])
+                engines = [item for item in loaded if item is not None]
 
                 if not engines:
                     return "인덱싱된 계정이 없습니다.", []
 
-                combined_chunks = []
-                account_sender_maps = {}  # user_id -> {메일ID(소문자): 진짜 발신인 값}
-                for paths, engine in engines:
-                    context_result = engine.context_builder.build_context(
+                # 컨텍스트 조립(질의 임베딩 + lancedb 검색 포함)도 계정별로 동시에 실행한다.
+                # build_context는 동기 함수라(내부에서 임베딩 API를 동기 호출) 예전엔 계정
+                # 수만큼 순차 for로 돌면서 API 왕복 지연이 그대로 누적돼 느렸음(계정 14개 기준
+                # 체감 9~11초) — asyncio.to_thread로 스레드풀에 넘겨 계정별로 동시에 기다리게 함.
+                async def _build_account_chunk(paths, engine):
+                    context_result = await asyncio.to_thread(
+                        engine.context_builder.build_context,
                         query=message,
                         **engine.context_builder_params,
                     )
@@ -371,11 +453,32 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
                     if len(tokens) > per_account_max_tokens:
                         chunk_text = engine.tokenizer.decode(tokens[:per_account_max_tokens])
 
-                    account_sender_maps[paths.USER_ID] = _load_account_sender_map(paths)
+                    # _load_account_sender_map()은 메일 전용 파일 형식([ID]/[발신인] 필드)만
+                    # 파싱하므로 메신저 계정에 그대로 쓰면 항상 빈 맵만 나와 _resolve_account가
+                    # 절대 성공할 수 없었다("계정 매칭 실패"가 항상 찍히고, ref.account가 None으로
+                    # 프론트까지 넘어가 /messenger-body-by-ids에서 500 에러로 이어졌음). 메신저는
+                    # 실제로 이 계정 컨텍스트에 실린 'ID:' 값들을 그대로 맵으로 써서(발신인 교정은
+                    # 메신저 블록에 '발신인:' 필드 자체가 없어 _fix_paragraph_sender가 자연히
+                    # no-op이라 문제 없음) _find_real_id가 정상적으로 역추적하게 한다.
+                    if paths.DOMAIN == "messenger":
+                        found_ids = re.findall(r'^ID:\s*([A-Za-z0-9@._-]+)', chunk_text, re.MULTILINE)
+                        sender_map = {i.lower(): i for i in found_ids}
+                    else:
+                        sender_map = _load_account_sender_map(paths)
                     used_tokens = min(len(tokens), per_account_max_tokens)
-                    print(f"[FEDERATED] {paths.USER_ID}: 컨텍스트 {used_tokens}토큰, 보유 메일 {len(account_sender_maps[paths.USER_ID])}건")
+                    print(f"[FEDERATED] {paths.USER_ID}: 컨텍스트 {used_tokens}토큰, 보유 항목 {len(sender_map)}건")
 
-                    combined_chunks.append(f"[계정: {paths.USER_ID}]\n{chunk_text}")
+                    return paths.USER_ID, sender_map, f"[계정: {paths.USER_ID}]\n{chunk_text}"
+
+                built = await asyncio.gather(*[
+                    _build_account_chunk(paths, engine) for paths, engine in engines
+                ])
+
+                combined_chunks = []
+                account_sender_maps = {}  # user_id -> {메일ID(소문자): 진짜 발신인 값}
+                for user_id, sender_map, chunk in built:
+                    account_sender_maps[user_id] = sender_map
+                    combined_chunks.append(chunk)
 
                 merged_context = "\n\n".join(combined_chunks)
 
@@ -397,6 +500,23 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
                         for user_id, smap in account_sender_maps.items():
                             for real_id in smap:
                                 if real_id.startswith(key) or key.startswith(real_id):
+                                    return real_id, user_id
+
+                    # 4차: 메신저 블록 ID 형식("YYYY-MM-DD_순번")이면 날짜만으로 재시도.
+                    # 목표 구조화 형식은 항목마다 이 함수로 개별 역추적하는데, 원래 이 날짜
+                    # 폴백이 옛 자유서술형 답변 전체에 대한 최후 수단으로만(아래쪽 mentioned_dates
+                    # 블록) 있어서 구조화 형식 경로에는 전혀 적용되지 않았음 — per_account_max_tokens
+                    # 절삭으로 해당 블록의 ID가 sender_map에서 통째로 빠지면(토큰 예산이 작은
+                    # 계정에서 실제로 발생, "보유 항목 1~2건" 로그가 그 증거) 완전/부분일치가
+                    # 다 실패해서 계정이 None으로 넘어가고, 프론트에서 /messenger-body-by-ids가
+                    # 400을 내며 "근거메신저 보기"가 그대로 죽어버렸음. 메일 ID는 날짜 형식이
+                    # 아니라 이 폴백에 걸리지 않으므로 메일 쪽엔 영향 없음.
+                    m = re.match(r'^(\d{4}-\d{2}-\d{2})_', key)
+                    if m:
+                        date = m.group(1)
+                        for user_id, smap in account_sender_maps.items():
+                            for real_id in smap:
+                                if real_id.startswith(date):
                                     return real_id, user_id
 
                     return None, None
@@ -428,14 +548,13 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
                         "갖고 있고, 실제 발화 내용은 '[대화 내용]' 아래 'HH:MM 이름: 메시지' 형태로 적혀있다. "
                         "발화자를 언급할 때는 그 줄의 이름을 그대로 쓰고, 'ID:' 필드의 값을 발화자 이름 "
                         "자리에 쓰지 마라. "
-                        "목록으로 나열하든 묶어서 요약하든 답변 형식과 무관하게, 실제로 언급/근거로 삼은 "
-                        "대화 블록마다 'ID: 원본ID값'을 요약 문장에 섞어 쓰지 말고 그 항목의 별도 줄로 표기하라. "
-                        "'ID:' 뒤에는 반드시 데이터에 있는 실제 ID 값을 정확히 그대로 옮겨 적어야 한다. "
-                        "답변에서 대화를 1번, 2번처럼 순서대로 나열하더라도 그 순번을 'ID: 1', 'ID: 2'처럼 "
-                        "ID인 것으로 쓰지 마라 — 그건 데이터에 없는 값을 지어내는 것이다. "
-                        "그리고 언급/근거로 삼은 대화 블록마다 'ID:'와 같은 줄에 '계정: 채팅방이름' 줄도 "
-                        "추가하라 — 그 대화가 어느 [계정: ...] 블록에서 나온 데이터인지, 컨텍스트에 표시된 "
-                        "채팅방 이름을 정확히 그대로 옮겨 적어라."
+                        "답변은 위에서 지시한 STRUCTURED ANSWER FORMAT(번호 매김 + 메시지/날짜/채팅방/내용/ID "
+                        "5개 필드)을 그대로 따른다 — 이 규칙은 그 형식 위에 추가로 적용되는 것이다. "
+                        "각 항목의 '채팅방:' 필드에는 그 항목이 실제로 나온 [계정: 채팅방이름] 블록에 표시된 "
+                        "채팅방 이름을 정확히 그대로 적어라 — 다른 채팅방 이름을 섞어 쓰지 마라. "
+                        "'ID:' 필드에는 그 대화가 속한 블록의 'ID:' 필드 값만 정확히 그대로 옮겨 적어라 — "
+                        "계정이나 채팅방 이름을 ID 앞에 덧붙이지 말고, 대화를 1번·2번처럼 나열하는 항목 "
+                        "번호를 'ID: 1'처럼 ID로 쓰지도 마라(둘 다 데이터에 없는 값을 지어내는 것이다)."
                     )
                 else:
                     search_prompt += (
@@ -447,14 +566,11 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
                         "원본 데이터에는 메일마다 '[ID]'와 '[발신인]'이 서로 다른 별개 필드로 있으니 "
                         "절대 혼동하지 말 것 — 발신자를 쓸 때는 반드시 '[발신인]' 필드의 이메일 주소를 쓰고, "
                         "'[ID]' 필드의 값을 발신자 자리에 쓰지 마라. "
-                        "목록으로 나열하든 묶어서 요약하든 답변 형식과 무관하게, 실제로 언급/근거로 삼은 "
-                        "메일마다 'ID: 원본ID값'을 요약 문장에 섞어 쓰지 말고 그 메일 항목의 별도 줄로 표기하라. "
-                        "'ID:' 뒤에는 반드시 데이터에 있는 실제 ID 값을 정확히 그대로 옮겨 적어야 한다. "
-                        "답변에서 메일을 1번, 2번처럼 순서대로 나열하더라도 그 순번을 'ID: 1', 'ID: 2'처럼 "
-                        "ID인 것으로 쓰지 마라 — 그건 데이터에 없는 값을 지어내는 것이다. "
-                        "그리고 언급/근거로 삼은 메일마다 'ID:', '발신인:'과 같은 줄에 '계정: 이메일주소' 줄도 "
-                        "추가하라 — 그 메일이 어느 [계정: ...] 블록에서 나온 데이터인지, 컨텍스트에 표시된 "
-                        "계정 이메일 주소를 정확히 그대로 옮겨 적어라."
+                        "답변은 위에서 지시한 STRUCTURED ANSWER FORMAT(번호 매김 + 메시지/날짜/발신인/내용/ID "
+                        "5개 필드)을 그대로 따른다 — 이 규칙은 그 형식 위에 추가로 적용되는 것이다. "
+                        "'ID:' 필드에는 그 메일의 'ID:' 필드 값만 정확히 그대로 옮겨 적어라 — 계정 이메일 "
+                        "주소를 ID 앞에 덧붙이지 말고, 메일을 1번·2번처럼 나열하는 항목 번호를 'ID: 1'처럼 "
+                        "ID로 쓰지도 마라(둘 다 데이터에 없는 값을 지어내는 것이다)."
                     )
                 
                 
@@ -485,7 +601,7 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
 
                 # 답변 문단 하나에서 ID에 해당하는 진짜 발신인 값으로 '발신인:' 줄을 강제 교정한다
                 def _fix_paragraph_sender(p):
-                    id_m = re.search(r'ID:\s*(\S+)', p)
+                    id_m = re.search(_ID_TOKEN_RE, p)
                     if not id_m:
                         return p
                     real_id, user_id = _find_real_id(_strip_id_punct(id_m.group(1)))
@@ -498,8 +614,15 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
 
                 answer = '\n\n'.join(_fix_paragraph_sender(p) for p in answer.split('\n\n'))
 
+                # 목표 형식(번호 매김 5필드)으로 답이 왔으면 각 항목의 ID로 소속 계정을 역추적
+                display_answer, source_ids = _format_structured_answer(answer, _resolve_account)
+                if display_answer is not None:
+                    return display_answer, source_ids
+
+                # 모델이 목표 형식을 못 지킨 경우 — 기존 폴백 로직으로 근거 추출
+
                 # 항목마다 ID가 있으면 그 ID로 진짜 소속 계정을 역추적
-                found = [_strip_id_punct(m) for m in re.findall(r'ID:\s*(\S+)', answer)]
+                found = [_strip_id_punct(m) for m in re.findall(_ID_TOKEN_RE, answer)]
                 found = [m for m in found if _is_plausible_mail_id(m)]
                 seen = set()
                 source_ids = []
@@ -517,6 +640,23 @@ def run_federated_local_search(message: str, original_message: str, accounts_pat
                         if real:
                             cited_accounts.append(real)
                     source_ids = [{"id": None, "account": acc} for acc in cited_accounts]
+
+                if not source_ids:
+                    # 'ID:'도 '계정:'도 하나도 안 쓴 경우(지시를 따르지 않고 본문에만 날짜를
+                    # 언급하고 끝내는 경우가 실제로 있었음 — "근거메신저 보기 버튼이 아예 안
+                    # 뜬다"는 사용자 리포트의 원인) 최후 폴백: 답변 본문에 실제로 언급된
+                    # 날짜(YYYY-MM-DD)로 그 날짜의 블록을 가진 계정을 역추적한다. 메신저 블록
+                    # ID는 항상 "날짜_순번" 형태라 날짜만으로도 계정을 특정할 수 있다(메일
+                    # ID는 날짜 형식이 아니라 자연히 매칭되지 않아 메일에는 영향 없음).
+                    mentioned_dates = dict.fromkeys(re.findall(r'\d{4}-\d{2}-\d{2}', answer))
+                    seen_ids = set()
+                    for date in mentioned_dates:
+                        for user_id, smap in account_sender_maps.items():
+                            match = next((real_id for real_id in smap if real_id.startswith(date)), None)
+                            if match and match not in seen_ids:
+                                seen_ids.add(match)
+                                source_ids.append({"id": match, "account": user_id})
+                                break  # 같은 날짜라도 계정 하나에만 귀속 — 여러 계정에 중복 귀속 방지
 
                 display_answer = strip_ids_for_display(answer)
 
@@ -572,25 +712,31 @@ def run_federated_global_search(message: str, original_message: str, accounts_pa
         try:
             # 계정별 map 응답을 모아 reduce를 1회 실행해 최종 답변을 만든다
             async def _search():
-                engines = []
-                for paths in accounts_paths:
+                # 엔진 로드도 계정별로 동시에 — get_engines는 동기 함수라 스레드로 병렬화
+                # (내부 _cache_lock이 있어 여러 스레드에서 동시에 불러도 안전함)
+                async def _load_engine(paths):
                     try:
                         output_dir = os.path.join(paths.GRAPHRAG_ROOT, "output")
-                        _, global_engine = get_engines(paths.USER_ID, output_dir, paths.GRAPHRAG_ROOT)
-                        engines.append((paths, global_engine))
+                        _, global_engine = await asyncio.to_thread(
+                            get_engines, paths.USER_ID, output_dir, paths.GRAPHRAG_ROOT
+                        )
+                        return paths, global_engine
                     except Exception as e:
                         print(f"[FEDERATED-GLOBAL] {paths.USER_ID} 엔진 로드 실패, 스킵: {e}")
+                        return None
+
+                loaded = await asyncio.gather(*[_load_engine(paths) for paths in accounts_paths])
+                engines = [item for item in loaded if item is not None]
 
                 if not engines:
                     return "인덱싱된 계정이 없습니다.", [], []
 
-                all_map_responses = []
-                for paths, engine in engines:
+                # map: 계정별로도 동시에 실행 (이전엔 계정 수만큼 순차 누적되어 느렸음 — 병렬화로 수정)
+                async def _process_account(paths, engine):
                     context_result = await engine.context_builder.build_context(
                         query=message,
                         **engine.context_builder_params,
                     )
-                    # map: 커뮤니티 보고서 묶음마다 개별 LLM 호출 (계정별로 각자 실행)
                     map_responses = await asyncio.gather(*[
                         engine._map_response_single_batch(
                             context_data=data, query=message,
@@ -600,7 +746,12 @@ def run_federated_global_search(message: str, original_message: str, accounts_pa
                         for data in context_result.context_chunks
                     ])
                     print(f"[FEDERATED-GLOBAL] {paths.USER_ID}: map 배치 {len(map_responses)}개")
-                    all_map_responses.extend(map_responses)
+                    return map_responses
+
+                account_results = await asyncio.gather(*[
+                    _process_account(paths, engine) for paths, engine in engines
+                ])
+                all_map_responses = [r for responses in account_results for r in responses]
 
                 # reduce: 전체 계정의 map 결과를 모아 딱 1번만 합성 (계정 수와 무관하게 항상 1번)
                 _, first_engine = engines[0]

@@ -1,447 +1,803 @@
 {
-    "config": "mail",
-    "description": "이메일 데이터에서 추출하는 기본(base) 지식 그래프",
-    "entity_types": [
-        { "name": "Email", "format": "Subject: <subject> | ID: <mail_id> | Date: <YYYY-MM-DD HH:MM> | Tone: <formal/casual/transactional/notification/alert> | Summary: <1-sentence>" },
-        { "name": "Person", "format": "Account: <email> | Name: <name/None>" },
-        { "name": "Organization", "format": "OrgName: <organization_name> | Department: <department/None>" },
-        { "name": "Topic", "format": "Priority: <high/mid/low> | Summary: <Core topic of this email in 1 sentence>" },
-        { "name": "Event", "format": "EventName: <event_title> | Schedule: <YYYY-MM-DD HH:MM> | Location: <place/None> | Status: <confirmed/tentative>" },
-        { "name": "Attachment", "format": "Filename: <name> | Type: <file_type> | Summary: <content_summary>" }
-    ],
-    "relationship_types" : [
-        { "name": "sent_by", "source": "Email", "target": "Person", "when": "Email sender" },
-        { "name": "sent_to", "source": "Email", "target": "Person", "when": "Email recipient (To Field)" },
-        { "name": "cc_to", "source": "Email", "target": "Person","when": "CC recipient (CC field)" },
-        { "name": "affiliated_with", "source": "Person", "target": "Organization", "when": "Person's affiliated organization" },
-        { "name": "discusses", "source": "Email", "target": "Topic", "when": "Contextual topic discussed in email body" },
-        { "name": "schedules", "source": "Email", "target": "Event", "when": "Event/Schedule mentioned in email" },
-        { "name": "has_attachment", "source": "Email", "target": "Attachment", "when": "File attached to email" }
-    ],
-    "free_form_relationships": false,
-    "grounding_rules": [
-        "Do NOT extract one-time codes, OTPs, temporary tokens, or any ephemeral numeric/alphanumeric strings as entities.",
-        "Do NOT extract serial numbers within filenames, or transaction identifiers such as invoice numbers, order numbers, or tracking IDs.",
-        "CRITICAL: Only extract entities that represent meaningful, persistent concepts, people, organizations, or events.",
-        "CRITICAL: An entity MUST NOT be created if any of its core fields (name, type, or description) cannot be populated with a valid, meaningful value.",
-        "CRITICAL: Strings representing absence of value such as 'None', 'NONE', 'null', '없음', '-' MUST NOT be used as entity names under any type.",
-        "CRITICAL: Do NOT create entities whose name consists solely of a person's display name without a valid email address.",
-        "Do NOT create duplicate entities.",
-        "CRITICAL: Every extracted entity MUST be linked to at least one other entity (typically an Email). DO NOT extract isolated entities."
-    ],
-    "citation_rule": [
-        "Points supported by data should list their data references as follows:",
-        "\"This is an example sentence supported by data references [Data: <dataset name> (record ids); <dataset name> (record ids)].\"",
-        "Do not list more than 5 record ids in a single reference. Instead, list the top 5 most relevant record ids and add \"+more\" to indicate that there are more.",
-        "Do not include information where the supporting evidence is not provided."
-    ],
-    "category_taxonomy": [
-        { "name": "대인 커뮤니케이션", "description": "사람 간 직접 주고받는 이메일" },
-        { "name": "프로젝트/학습", "description": "과제, 개발, 교육, 협업 등 실질적 업무/학습" },
-        { "name": "서비스 커뮤니케이션", "description": "온보딩, 마케팅, 공지, 약관 등 정보성 이메일" },
-        { "name": "트랜잭션", "description": "인증코드, 결제, 구독, 보안 알림 등 자동 발송 이메일" }
-    ],
-    "extract_graph": {
-        "goal": "Given a text document and a list of entity types, identify all entities and the relationships between them. Output both using the specified formats. The input may be an email, a structured table, or plain text — adapt accordingly.",
-        "entity_type_rules": {
-            "Email": [
-                "The 'name' (title) of an Email entity MUST always be the <mail_id> (Unique Identifier).",
-                "CRITICAL: If the '[ID]' field is missing, unreadable, or empty, DO NOT create the Email entity.",
-                "CRITICAL: NEVER generate or use dummy IDs (e.g., 'MAIL_001', 'mail_001', 'temp_id'). Only authentic IDs from the source data are allowed.",
-                "The 'Title' attribute MUST use the exact subject from the '[제목]' field. If the subject is missing or empty, set it to '(제목 없음)'.",
-                "Date Attribute: Use the exact value from the '[날짜]' field. Format: YYYY-MM-DD HH:MM (Include up to minutes; exclude seconds). If the date field is missing or unreadable, set it to 'None'.",
-                "Tone Classification (Select ONLY ONE): formal = Professional business emails, official correspondence from institutions/professors. casual = Informal emails between acquaintances or personal contacts. transactional = Automated transaction emails (payments, refunds, order confirmations). notification = Service alerts, newsletters, marketing updates. alert = Security codes, password resets, urgent warnings.",
-                "CRITICAL: No values other than the five specified above are allowed. If Tone cannot be clearly determined, select the closest matching value. 'None' is strictly forbidden.",
-                "Summary MUST be a concise, one-sentence description of the email content.",
-                "CRITICAL: All Email entity names and all relationship references to Email IDs MUST use the uppercase form of the ID."
-            ],
-            "Person": [
-                "The 'name' (title) of a Person entity MUST always be the Account (email address). Do NOT use the display name as the entity name, even if available.",
-                "CRITICAL: NEVER include the display name in the entity name field. Display names belong ONLY in the 'Name' attribute of the description.",
-                "Integrate multiple Person mentions with the same Account into a single entity.",
-                "The 'Name' attribute should only be filled if a display name is explicitly mentioned. Otherwise, set it to 'None'.",
-                "CRITICAL: Do NOT create a Person node if the Account (email address) is unknown. Each Person entity MUST have a valid email address as its identifier.",
-                "CRITICAL: NEVER use or generate fake/dummy email addresses (e.g., '@unknown.com', '@unknown', 'user@example.com') as an Account.",
-                "If a valid, real-world email address cannot be identified from the text, the Person entity MUST NOT be created."
-            ],
-            "Organization": [
-                "The 'name' (title) of an Organization entity MUST be the OrgName.",
-                "Extract ONLY organizations, institutions, or companies explicitly mentioned in the text.",
-                "CRITICAL: Do NOT classify Hotels, Cafes, Buildings, physical locations, or meeting venues as Organization.",
-                "CRITICAL: Do NOT create or hallucinate organization entities based on inference or context alone if the specific name is not present.",
-                "The 'Department' attribute should be filled ONLY if explicitly stated; otherwise, set it to 'None'.",
-                "If multiple departments belong to the same Organization, they should be linked to a single Organization entity."
-            ],
-            "Topic": [
-                "Extract ONLY contextual themes that represent the core purpose of the email (e.g., 'Claude Pro Refund Processing', 'Web Tutoring Schedule Coordination').",
-                "The 'name' (title) MUST be a concise and reusable noun phrase summarizing the theme — prefer stable/generalizable names, avoid exact dates/identifiers/long phrases.",
-                "Do NOT extract as Topics: technical terms, file names, coding stacks (Python, Flask, CSS); one-time codes, alerts, or emails lacking substantive discussion; pure system notifications, OTP messages, or security alerts without meaningful context.",
-                "Consolidate multiple mentions of the same context into a single, normalized Topic entity. For recurring automated emails (e.g., OTP), use a single generalized Topic such as '인증코드 수신' rather than one Topic per email.",
-                "Priority Classification: high = requires immediate response/action (deadlines, urgent requests, payment errors). mid = general information exchange or ongoing discussions. low = simple notifications, newsletters, automated system emails.",
-                "CRITICAL: Do NOT create a Topic entity if there is no clearly discussed subject. Use the body text as the primary source; the subject line may support only when the body is too short/minimal."
-            ],
-            "Event": [
-                "The 'name' (title) of an Event entity MUST be the EventName.",
-                "Extract ONLY if explicit date or time information is present in the text.",
-                "CRITICAL: Do NOT create an Event entity if the 'Schedule' attribute cannot be populated.",
-                "Do NOT extract class titles, content names, or session titles as Events unless accompanied by specific scheduling information.",
-                "If 'Status' cannot be clearly determined, mark it as 'tentative'."
-            ],
-            "Attachment": [
-                "The Attachment entity's Summary must be based on the provided summary text and strictly follow the defined format.",
-                "See integrated_document_rules for how Attachment extraction interacts with the '[첨부파일 추출 내용]' section."
-            ]
-        },
-        "integrated_document_rules": {
-            "main_content_rule": "MAIN CONTENT: Extract Email, Person, Organization, Topic, and Event entities from the main email header and body.",
-            "special_section_marker": "[첨부파일 추출 내용]",
-            "special_section_rules": [
-                "Extract ONLY 'Attachment' type entities from this section.",
-                "CRITICAL: Names, email addresses, organizations, topics, dates, and labels appearing inside this section are attachment content only and MUST NOT be extracted as separate entities.",
-                "CRITICAL: DO NOT extract any Person, Topic, Organization, or Event entities from content inside this section, even if they appear meaningful.",
-                "CRITICAL: Violating this rule is an extraction failure."
-            ]
-        },
-        "relationship_rules": [
-            "CRITICAL: Each relationship MUST have exactly ONE type from the allowed list. NEVER combine multiple types in a single relationship.",
-            "Self-mail rule: If the sender and receiver are the same email address, create TWO separate relationships (sent_by and sent_to).",
-            "affiliated_with target MUST be an Organization type.",
-            "sent_to MUST be used ONLY for primary recipients (To field). Use cc_to for carbon copy recipients.",
-            "has_attachment MUST be created ONLY if the attachment is explicitly mentioned in the text.",
-            "Do NOT use sent_by, sent_to, cc_to if no Email entity exists.",
-            "Do NOT create relationships that are NOT clearly supported by the text.",
-            "Relationship strength MUST be a float between 1.0 and 10.0. Explicit: 7.0+ / Inferred: 4.0 or below.",
-            "Do NOT create duplicate relationships with the same source-target-type combination.",
-            "Relationship descriptions MUST be in Korean and MUST be a meaningful sentence — NEVER use the relationship type name itself as the description."
-        ],
-        "examples": [
-            {
-                "entity_types": ["Email", "Person", "Organization", "Topic", "Attachment"],
-                "text": "[메일 1]\n\n[ID] 19d4da32341500e4\n[제목] [Vocarush] 4월 스프린트 계획 확정\n[구분] 발신\n[날짜] 2026-04-02 18:02\n[발신인] 김민준 <minjun.kim@vocarush.io>\n[수신인] 박서연 <seoyeon.park@vocarush.io>\n[참조(CC)] 없음\n[폴더 정보] 스프린트\n\n[메일 본문]\n박서연님, 4월 스프린트 계획을 확정하여 공유드립니다.\n첨부파일 확인 부탁드립니다.\nProduct팀 김민준 드림\n\n[첨부파일 정보]\n- sprint_plan.pdf (120.0 KB) (포함)",
-                "entities": [
-                    { "name": "19D4DA32341500E4", "type": "Email", "description": "Subject: [Vocarush] 4월 스프린트 계획 확정 | ID: 19d4da32341500e4 | Date: 2026-04-02 18:02 | Tone: formal | Summary: 4월 스프린트 계획을 공유하는 공식 메일" },
-                    { "name": "minjun.kim@vocarush.io", "type": "Person", "description": "Account: minjun.kim@vocarush.io | Name: 김민준" },
-                    { "name": "seoyeon.park@vocarush.io", "type": "Person", "description": "Account: seoyeon.park@vocarush.io | Name: 박서연" },
-                    { "name": "Vocarush", "type": "Organization", "description": "OrgName: Vocarush | Department: Product" },
-                    { "name": "스프린트 계획 수립", "type": "Topic", "description": "Priority: high | Summary: Vocarush 4월 스프린트 계획을 팀 내 공유하고 확정하는 논의" },
-                    { "name": "sprint_plan.pdf", "type": "Attachment", "description": "Filename: sprint_plan.pdf | Type: pdf | Summary: 4월 스프린트 계획 문서로, 각 업무의 우선순위와 담당자를 명확히 설정해 계획된 일정 내에 서비스를 성공적으로 출시하고자 하는 것을 목적으로 한다." }
-                ],
-                "relationships": [
-                    { "source": "19D4DA32341500E4", "target": "minjun.kim@vocarush.io", "type": "sent_by", "description": "이메일의 발신자는 minjun.kim@vocarush.io이다.", "strength": 10 },
-                    { "source": "19D4DA32341500E4", "target": "seoyeon.park@vocarush.io", "type": "sent_to", "description": "이메일의 수신자는 seoyeon.park@vocarush.io이다.", "strength": 10 },
-                    { "source": "minjun.kim@vocarush.io", "target": "Vocarush", "type": "affiliated_with", "description": "minjun.kim@vocarush.io는 Vocarush Product팀에 소속되어 있다.", "strength": 9 },
-                    { "source": "19D4DA32341500E4", "target": "스프린트 계획 수립", "type": "discusses", "description": "메일 본문에서 4월 스프린트 계획 수립을 주요 주제로 다룬다.", "strength": 9 },
-                    { "source": "19D4DA32341500E4", "target": "sprint_plan.pdf", "type": "has_attachment", "description": "이메일에 스프린트 계획 문서가 첨부되어 있다.", "strength": 10 }
-                ]
-            },
-            {
-                "entity_types": ["Email", "Person", "Event"],
-                "text": "[메일 2]\n\n[ID] 19d4a5b4a4703a36\n[제목] Re: 수락\n[구분] 수신\n[날짜] 2026-04-02 03:43\n[발신인] Winston from Anthropic <support@mail.anthropic.com>\n[수신인] 최지유 <gpttitti@hansung.ac.kr>\n[참조(CC)] 김예은 <03yeah03@gmail.com>\n[폴더 정보] Recent-Labeled, 캘린더\n\n[메일 본문]\n3월 15일 오전 10시에 공학관에서 만나요.\n\n[첨부파일 정보]\n없음",
-                "entities": [
-                    { "name": "19D4A5B4A4703A36", "type": "Email", "description": "Subject: Re: 수락 | ID: 19d4a5b4a4703a36 | Date: 2026-04-02 03:43 | Tone: formal | Summary: 수락 답변과 함께 공학관 미팅 일정을 안내하는 메일" },
-                    { "name": "support@mail.anthropic.com", "type": "Person", "description": "Account: support@mail.anthropic.com | Name: Winston from Anthropic" },
-                    { "name": "gpttitti@hansung.ac.kr", "type": "Person", "description": "Account: gpttitti@hansung.ac.kr | Name: 최지유" },
-                    { "name": "03yeah03@gmail.com", "type": "Person", "description": "Account: 03yeah03@gmail.com | Name: 김예은" },
-                    { "name": "공학관 미팅", "type": "Event", "description": "EventName: 공학관 미팅 | Schedule: 2026-03-15 10:00 | Location: 공학관 | Status: confirmed" }
-                ],
-                "relationships": [
-                    { "source": "19D4A5B4A4703A36", "target": "support@mail.anthropic.com", "type": "sent_by", "description": "이메일의 발신자는 support@mail.anthropic.com이다.", "strength": 10 },
-                    { "source": "19D4A5B4A4703A36", "target": "gpttitti@hansung.ac.kr", "type": "sent_to", "description": "이메일의 수신자는 gpttitti@hansung.ac.kr이다.", "strength": 10 },
-                    { "source": "19D4A5B4A4703A36", "target": "03yeah03@gmail.com", "type": "cc_to", "description": "이메일의 참조 수신자는 03yeah03@gmail.com이다.", "strength": 10 },
-                    { "source": "19D4A5B4A4703A36", "target": "공학관 미팅", "type": "schedules", "description": "메일을 통해 공학관 미팅 일정이 안내되었다.", "strength": 10 }
-                ]
-            },
-            {
-                "entity_types": ["Email", "Person"],
-                "text": "[메일 3]\n\n[ID] 19d615cb9c3d0153\n[제목] sisi\n[구분] 발신\n[날짜] 2026-04-06 14:55\n[발신인] 최지유 <gpttitti@hansung.ac.kr>\n[수신인] 최지유 <gpttitti@hansung.ac.kr>\n[참조(CC)] 없음\n[폴더 정보] 없음\n\n[메일 본문]\nsisi\n\n[첨부파일 정보]\n없음",
-                "entities": [
-                    { "name": "19D615CB9C3D0153", "type": "Email", "description": "Subject: sisi | ID: 19d615cb9c3d0153 | Date: 2026-04-06 14:55 | Tone: casual | Summary: 발신인과 수신인이 동일한 자기 자신에게 보낸 메일" },
-                    { "name": "gpttitti@hansung.ac.kr", "type": "Person", "description": "Account: gpttitti@hansung.ac.kr | Name: 최지유" }
-                ],
-                "relationships": [
-                    { "source": "19D615CB9C3D0153", "target": "gpttitti@hansung.ac.kr", "type": "sent_by", "description": "이메일의 발신자는 gpttitti@hansung.ac.kr이다.", "strength": 10 },
-                    { "source": "19D615CB9C3D0153", "target": "gpttitti@hansung.ac.kr", "type": "sent_to", "description": "이메일의 수신자도 gpttitti@hansung.ac.kr로, 자기 자신에게 보낸 메일이다.", "strength": 10 }
-                ]
-            },
-            {
-                "entity_types": ["Email", "Person", "Attachment"],
-                "text": "[메일 17]\n\n[ID] 19d8fd9a3fd77c73\n[제목] 과제 제출\n[구분] 발신\n[날짜] 2026-04-15 15:34\n[발신인] 최지유 <gpttitti@hansung.ac.kr>\n[수신인] 최지유 <gpttitti@hansung.ac.kr>\n[참조(CC)] 없음\n[폴더 정보] 없음\n\n[메일 본문]\n과제 제출합니다.\n\n[첨부파일 정보]\n- HW3_2471239_최지유.pdf (257.3 KB) (포함)\n\n[첨부파일 추출 내용]\nFile 1: HW3_2471239_최지유.pdf\n최지유 학생의 자료구조[C] 과제 3에 대한 내용으로, 연결리스트를 활용하여 여러 개의 큐를 관리하는 프로그램을 구현하였다.",
-                "entities": [
-                    { "name": "19D8FD9A3FD77C73", "type": "Email", "description": "Subject: 과제 제출 | ID: 19d8fd9a3fd77c73 | Date: 2026-04-15 15:34 | Tone: casual | Summary: 첨부파일로 자료구조 과제를 제출하는 메일" },
-                    { "name": "gpttitti@hansung.ac.kr", "type": "Person", "description": "Account: gpttitti@hansung.ac.kr | Name: 최지유" },
-                    { "name": "HW3_2471239_최지유.pdf", "type": "Attachment", "description": "Filename: HW3_2471239_최지유.pdf | Type: pdf | Summary: 연결리스트를 활용하여 여러 개의 큐를 관리하는 프로그램을 구현한 자료구조 과제 3 제출물" }
-                ],
-                "relationships": [
-                    { "source": "19D8FD9A3FD77C73", "target": "gpttitti@hansung.ac.kr", "type": "sent_by", "description": "이메일의 발신자는 gpttitti@hansung.ac.kr이다.", "strength": 10 },
-                    { "source": "19D8FD9A3FD77C73", "target": "gpttitti@hansung.ac.kr", "type": "sent_to", "description": "이메일의 수신자도 gpttitti@hansung.ac.kr로, 자기 자신에게 보낸 메일이다.", "strength": 10 },
-                    { "source": "19D8FD9A3FD77C73", "target": "HW3_2471239_최지유.pdf", "type": "has_attachment", "description": "이메일에 자료구조 과제 PDF가 첨부되어 있다.", "strength": 10 }
-                ]
-            }
-        ]
+  "config": "mail",
+  "description": "이메일 데이터에서 추출하는 기본(base) 지식 그래프",
+  "entity_types": [
+    {
+      "name": "Email",
+      "format": "Subject: <subject> | ID: <mail_id> | Date: <YYYY-MM-DD HH:MM> | Tone: <formal/casual/transactional/notification/alert> | Summary: <1-sentence>"
     },
-    "summarize_descriptions": {
-        "goal": "You are a helpful assistant responsible for generating a comprehensive summary of the data provided below. Given one or two entities, and a list of descriptions, all related to the same entity or group of entities. Please concatenate all of these into a single, comprehensive description. Make sure to include information collected from all the descriptions. If the provided descriptions are contradictory, please resolve the contradictions and provide a single, coherent summary. Make sure it is written in third person, and include the entity names so we have the full context.",
-        "additional_rules": [
-            "Reconcile Name attribute conflicts within the same entity: by the time this step runs, the entity name (e.g. an Account/email) is already fixed, and this step only receives descriptions that already share that exact name. If those descriptions list different display names for the same Account (e.g. 'Name: 최지유' vs 'Name: 지유띠니'), keep a single consistent Name value in the merged description. This step does NOT merge entities that have different names — that identity resolution already happens at extraction time via the Account-based naming rule.",
-            "CRITICAL: Do NOT create an entity if its description is 'None' or contains no meaningful information.",
-            "Output language: Write in Korean. However, keep email addresses, proper nouns, and service names in their original form.",
-            "Merge the two pieces of information into a single sentence. The 'Filename' and 'Type' fields are never duplicated across descriptions, so keep them as-is."
-        ],
-        "examples": [
-            {
-                "type": "Email",
-                "entity_name": "19DDCAD4FFCA17CF",
-                "description_list": [
-                    "Subject: Your receipt from Anthropic, PBC #2148-6096-8161 | ID: 19ddcad4ffca17cf | Date: 2026-04-30 13:37 | Tone: transactional | Summary: Anthropic으로부터 $22.00 결제 영수증 수신",
-                    "Subject: Your receipt from Anthropic, PBC #2148-6096-8161 | ID: 19ddcad4ffca17cf | Date: 2026-04-30 13:37 | Tone: transactional | Summary: Anthropic Claude Pro 구독 결제 영수증 수신. 첨부: Invoice-7VNMPZBZ-0004.pdf, Receipt-2148-6096-8161.pdf 포함."
-                ],
-                "output": "Subject: Your receipt from Anthropic, PBC #2148-6096-8161 | ID: 19ddcad4ffca17cf | Date: 2026-04-30 13:37 | Tone: transactional | Summary: Anthropic Claude Pro 구독 $22.00 결제 영수증 수신. 첨부: 인보이스 및 영수증 PDF 2건 포함."
-            },
-            {
-                "type": "Person",
-                "entity_name": "GPTTITTI@HANSUNG.AC.KR",
-                "description_list": [
-                    "Account: gpttitti@hansung.ac.kr | Name: 최지유",
-                    "Account: gpttitti@hansung.ac.kr | Name: 지유띠니"
-                ],
-                "output": "Account: gpttitti@hansung.ac.kr | Name: 최지유"
-            },
-            {
-                "type": "Attachment",
-                "entity_name": "2471239_최지유_중간보고서.PDF",
-                "description_list": [
-                    "Filename: 2471239_최지유_중간보고서.PDF | Type: pdf | Summary: GraphRAG 기반 Gmail 관리 애드온 개발 산학공동연구 중간보고서",
-                    "Filename: 2471239_최지유_중간보고서.PDF | Type: pdf | Summary: 2026학년도 산학공동연구 프로젝트 중간보고서로, GraphRAG 활용 Gmail 애드온 개발 진행 상황 포함"
-                ],
-                "output": "Filename: 2471239_최지유_중간보고서.PDF | Type: pdf | Summary: \"2471239_최지유_중간보고서.PDF\"는 최지유가 2026학년도 산학공동연구 프로젝트에 참여하여 작성한 중간보고서로, PDF 형식으로 제공된다. 이 문서는 2026학년도 대학혁신지원사업의 진행 상황을 기록한 내용으로, 최지유의 연구 활동을 반영하고 있다. 전체적으로 GraphRAG 기반 Gmail 관리 애드온 개발 진행 상황이 기록된 문서이다."
-            },
-            {
-                "type": "Attachment",
-                "entity_name": "INVOICE-7VNMPZBZ-0004.PDF",
-                "description_list": [
-                    "Filename: Invoice-7VNMPZBZ-0004.pdf | Type: pdf | Summary: 2026년 4월 29일에 발행된 송장",
-                    "Filename: Invoice-7VNMPZBZ-0004.pdf | Type: pdf | Summary: 청구서 번호 7VNMPZBZ-0004, 발행일 2026년 4월 29일, 만기일 2026년 4월 29일입니다. 청구액은 $22.00 USD로, Anthropic, PBC에 보내야 합니다."
-                ],
-                "output": "Filename: Invoice-7VNMPZBZ-0004.pdf | Type: pdf | Summary: 청구서 번호 7VNMPZBZ-0004, 발행일 2026년 4월 29일, 만기일 2026년 4월 29일입니다. 청구액은 $22.00 USD로, Anthropic, PBC에 보내야 하는 송장이다."
-            }
-        ]
+    {
+      "name": "Person",
+      "format": "Account: <email> | Name: <name/None>"
     },
-    "extract_claims": {
-        "target_activity": "You are an intelligent assistant that helps a human analyst to analyze claims against certain entities presented in a text document.",
-        "goal": "Given a text document that is potentially relevant to this activity, an entity specification, and a claim description, extract all entities that match the entity specification and all claims against those entities.",
-        "claim_fields": [
-            { "name": "Subject", "description": "name of the entity that is subject of the claim, capitalized. The subject entity is one that committed the action described in the claim. Subject needs to be one of the named entities identified in step 1." },
-            { "name": "Object", "description": "name of the entity that is object of the claim, capitalized. The object entity is one that either reports/handles or is affected by the action described in the claim. If object entity is unknown, use **NONE**." },
-            { "name": "Claim Type", "description": "overall category of the claim, capitalized. Name it in a way that can be repeated across multiple text inputs, so that similar claims share the same claim type." },
-            { "name": "Claim Status", "description": "**TRUE**, **FALSE**, or **SUSPECTED**. TRUE means the claim is confirmed, FALSE means the claim is found to be False, SUSPECTED means the claim is not verified." },
-            { "name": "Claim Description", "description": "Detailed description explaining the reasoning behind the claim, together with all the related evidence and references." },
-            { "name": "Claim Date", "description": "Period (start_date, end_date) when the claim was made. Both start_date and end_date should be in ISO-8601 format. If the claim was made on a single date rather than a date range, set the same date for both start_date and end_date. If date is unknown, return **NONE**." },
-            { "name": "Claim Source Text", "description": "List of **all** quotes from the original text that are relevant to the claim." }
-        ],
-        "examples": [
-            {
-                "entity_specification": "organization",
-                "claim_description": "red flags associated with an entity",
-                "text": "According to an article on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B. The company is owned by Person C who was suspected of engaging in corruption activities in 2015.",
-                "claims": [
-                    {
-                        "subject": "COMPANY A", "object": "GOVERNMENT AGENCY B", "type": "ANTI-COMPETITIVE PRACTICES", "status": "TRUE",
-                        "start_date": "2022-01-10T00:00:00", "end_date": "2022-01-10T00:00:00",
-                        "description": "Company A was found to engage in anti-competitive practices because it was fined for bid rigging in multiple public tenders published by Government Agency B according to an article published on 2022/01/10",
-                        "source": "According to an article published on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B."
-                    }
-                ]
-            },
-            {
-                "entity_specification": "Company A, Person C",
-                "claim_description": "red flags associated with an entity",
-                "text": "According to an article on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B. The company is owned by Person C who was suspected of engaging in corruption activities in 2015.",
-                "claims": [
-                    {
-                        "subject": "COMPANY A", "object": "GOVERNMENT AGENCY B", "type": "ANTI-COMPETITIVE PRACTICES", "status": "TRUE",
-                        "start_date": "2022-01-10T00:00:00", "end_date": "2022-01-10T00:00:00",
-                        "description": "Company A was found to engage in anti-competitive practices because it was fined for bid rigging in multiple public tenders published by Government Agency B according to an article published on 2022/01/10",
-                        "source": "According to an article published on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B."
-                    },
-                    {
-                        "subject": "PERSON C", "object": "NONE", "type": "CORRUPTION", "status": "SUSPECTED",
-                        "start_date": "2015-01-01T00:00:00", "end_date": "2015-12-30T00:00:00",
-                        "description": "Person C was suspected of engaging in corruption activities in 2015",
-                        "source": "The company is owned by Person C who was suspected of engaging in corruption activities in 2015"
-                    }
-                ]
-            }
-        ]
+    {
+      "name": "Organization",
+      "format": "OrgName: <organization_name> | Department: <department/None>"
     },
-    "community_reports": {
-        "category_field_scope": "the primary purpose of the emails in this cluster",
-        "importance_rating_scope": "this email cluster is to the user's activity",
-        "goal_intro": "You are an AI assistant that helps a human analyst explore and understand a personal email archive. Your goal is to produce structured summaries of email communities that help the user quickly grasp who is involved, what topics recur, and why this group of emails matters.",
-        "goal": "Write a comprehensive report of a community, given a list of entities that belong to the community as well as their relationships. The community is derived from a personal Gmail archive and may be centered around a person, an organization, or a recurring topic. The report will help the user understand the nature and importance of this email cluster.",
-        "report_sections": {
-            "title_rule": "A short but specific name for the community. Prefer using a person name or organization name when available. Write in Korean.",
-            "summary_rule": "An executive summary written in Korean describing: (1) what kind of community this is (person-based, org-based, or topic-based — pick the single most dominant type) (2) who the key participants are (3) what the emails in this cluster are generally about. Keep it under 3 sentences.",
-            "purpose_rule": "State the core function/purpose of this community in a single sentence. Include the unique characteristic that distinguishes it from other communities. (e.g., \"Receiving one-time authentication codes for OpenAI service login\", \"Team communication related to the VocaRush game development project\")",
-            "rating_explanation_rule": "A single sentence in Korean explaining the score."
+    {
+      "name": "Topic",
+      "format": "Priority: <high/mid/low> | Summary: <Core topic of this email in 1 sentence>"
+    },
+    {
+      "name": "Event",
+      "format": "EventName: <event_title> | Schedule: <YYYY-MM-DD HH:MM> | Location: <place/None> | Status: <confirmed/tentative>"
+    },
+    {
+      "name": "Attachment",
+      "format": "Filename: <name> | Type: <file_type> | Summary: <content_summary>"
+    }
+  ],
+  "relationship_types": [
+    {
+      "name": "sent_by",
+      "source": "Email",
+      "target": "Person",
+      "when": "Email sender"
+    },
+    {
+      "name": "sent_to",
+      "source": "Email",
+      "target": "Person",
+      "when": "Email recipient (To Field)"
+    },
+    {
+      "name": "cc_to",
+      "source": "Email",
+      "target": "Person",
+      "when": "CC recipient (CC field)"
+    },
+    {
+      "name": "affiliated_with",
+      "source": "Person",
+      "target": "Organization",
+      "when": "Person's affiliated organization"
+    },
+    {
+      "name": "discusses",
+      "source": "Email",
+      "target": "Topic",
+      "when": "Contextual topic discussed in email body"
+    },
+    {
+      "name": "schedules",
+      "source": "Email",
+      "target": "Event",
+      "when": "Event/Schedule mentioned in email"
+    },
+    {
+      "name": "has_attachment",
+      "source": "Email",
+      "target": "Attachment",
+      "when": "File attached to email"
+    }
+  ],
+  "free_form_relationships": false,
+  "grounding_rules": [
+    "Do NOT extract one-time codes, OTPs, temporary tokens, or any ephemeral numeric/alphanumeric strings as entities.",
+    "Do NOT extract serial numbers within filenames, or transaction identifiers such as invoice numbers, order numbers, or tracking IDs.",
+    "CRITICAL: Only extract entities that represent meaningful, persistent concepts, people, organizations, or events.",
+    "CRITICAL: An entity MUST NOT be created if any of its core fields (name, type, or description) cannot be populated with a valid, meaningful value.",
+    "CRITICAL: Strings representing absence of value such as 'None', 'NONE', 'null', '없음', '-' MUST NOT be used as entity names under any type.",
+    "CRITICAL: Do NOT create entities whose name consists solely of a person's display name without a valid email address.",
+    "Do NOT create duplicate entities.",
+    "CRITICAL: Every extracted entity MUST be linked to at least one other entity (typically an Email). DO NOT extract isolated entities."
+  ],
+  "citation_rule": [
+    "Points supported by data should list their data references as follows:",
+    "\"This is an example sentence supported by data references [Data: <dataset name> (record ids); <dataset name> (record ids)].\"",
+    "Do not list more than 5 record ids in a single reference. Instead, list the top 5 most relevant record ids and add \"+more\" to indicate that there are more.",
+    "Do not include information where the supporting evidence is not provided."
+  ],
+  "category_taxonomy": [
+    {
+      "name": "대인 커뮤니케이션",
+      "description": "사람 간 직접 주고받는 이메일"
+    },
+    {
+      "name": "프로젝트/학습",
+      "description": "과제, 개발, 교육, 협업 등 실질적 업무/학습"
+    },
+    {
+      "name": "서비스 커뮤니케이션",
+      "description": "온보딩, 마케팅, 공지, 약관 등 정보성 이메일"
+    },
+    {
+      "name": "트랜잭션",
+      "description": "인증코드, 결제, 구독, 보안 알림 등 자동 발송 이메일"
+    }
+  ],
+  "extract_graph": {
+    "goal": "Given a text document and a list of entity types, identify all entities and the relationships between them. Output both using the specified formats. The input may be an email, a structured table, or plain text — adapt accordingly.",
+    "entity_type_rules": {
+      "Email": [
+        "The 'name' (title) of an Email entity MUST always be the <mail_id> (Unique Identifier).",
+        "CRITICAL: If the '[ID]' field is missing, unreadable, or empty, DO NOT create the Email entity.",
+        "CRITICAL: NEVER generate or use dummy IDs (e.g., 'MAIL_001', 'mail_001', 'temp_id'). Only authentic IDs from the source data are allowed.",
+        "The 'Title' attribute MUST use the exact subject from the '[제목]' field. If the subject is missing or empty, set it to '(제목 없음)'.",
+        "Date Attribute: Use the exact value from the '[날짜]' field. Format: YYYY-MM-DD HH:MM (Include up to minutes; exclude seconds). If the date field is missing or unreadable, set it to 'None'.",
+        "Tone Classification (Select ONLY ONE): formal = Professional business emails, official correspondence from institutions/professors. casual = Informal emails between acquaintances or personal contacts. transactional = Automated transaction emails (payments, refunds, order confirmations). notification = Service alerts, newsletters, marketing updates. alert = Security codes, password resets, urgent warnings.",
+        "CRITICAL: No values other than the five specified above are allowed. If Tone cannot be clearly determined, select the closest matching value. 'None' is strictly forbidden.",
+        "Summary MUST be a concise, one-sentence description of the email content.",
+        "CRITICAL: All Email entity names and all relationship references to Email IDs MUST use the uppercase form of the ID."
+      ],
+      "Person": [
+        "The 'name' (title) of a Person entity MUST always be the Account (email address). Do NOT use the display name as the entity name, even if available.",
+        "CRITICAL: NEVER include the display name in the entity name field. Display names belong ONLY in the 'Name' attribute of the description.",
+        "Integrate multiple Person mentions with the same Account into a single entity.",
+        "The 'Name' attribute should only be filled if a display name is explicitly mentioned. Otherwise, set it to 'None'.",
+        "CRITICAL: Do NOT create a Person node if the Account (email address) is unknown. Each Person entity MUST have a valid email address as its identifier.",
+        "CRITICAL: NEVER use or generate fake/dummy email addresses (e.g., '@unknown.com', '@unknown', 'user@example.com') as an Account.",
+        "If a valid, real-world email address cannot be identified from the text, the Person entity MUST NOT be created."
+      ],
+      "Organization": [
+        "The 'name' (title) of an Organization entity MUST be the OrgName.",
+        "Extract ONLY organizations, institutions, or companies explicitly mentioned in the text.",
+        "CRITICAL: Do NOT classify Hotels, Cafes, Buildings, physical locations, or meeting venues as Organization.",
+        "CRITICAL: Do NOT create or hallucinate organization entities based on inference or context alone if the specific name is not present.",
+        "The 'Department' attribute should be filled ONLY if explicitly stated; otherwise, set it to 'None'.",
+        "If multiple departments belong to the same Organization, they should be linked to a single Organization entity."
+      ],
+      "Topic": [
+        "Extract ONLY contextual themes that represent the core purpose of the email (e.g., 'Claude Pro Refund Processing', 'Web Tutoring Schedule Coordination').",
+        "The 'name' (title) MUST be a concise and reusable noun phrase summarizing the theme — prefer stable/generalizable names, avoid exact dates/identifiers/long phrases.",
+        "Do NOT extract as Topics: technical terms, file names, coding stacks (Python, Flask, CSS); one-time codes, alerts, or emails lacking substantive discussion; pure system notifications, OTP messages, or security alerts without meaningful context.",
+        "Consolidate multiple mentions of the same context into a single, normalized Topic entity. For recurring automated emails (e.g., OTP), use a single generalized Topic such as '인증코드 수신' rather than one Topic per email.",
+        "Priority Classification: high = requires immediate response/action (deadlines, urgent requests, payment errors). mid = general information exchange or ongoing discussions. low = simple notifications, newsletters, automated system emails.",
+        "CRITICAL: Do NOT create a Topic entity if there is no clearly discussed subject. Use the body text as the primary source; the subject line may support only when the body is too short/minimal."
+      ],
+      "Event": [
+        "The 'name' (title) of an Event entity MUST be the EventName.",
+        "Extract ONLY if explicit date or time information is present in the text.",
+        "CRITICAL: Do NOT create an Event entity if the 'Schedule' attribute cannot be populated.",
+        "Do NOT extract class titles, content names, or session titles as Events unless accompanied by specific scheduling information.",
+        "If 'Status' cannot be clearly determined, mark it as 'tentative'."
+      ],
+      "Attachment": [
+        "The Attachment entity's Summary must be based on the provided summary text and strictly follow the defined format.",
+        "See integrated_document_rules for how Attachment extraction interacts with the '[첨부파일 추출 내용]' section."
+      ]
+    },
+    "integrated_document_rules": {
+      "main_content_rule": "MAIN CONTENT: Extract Email, Person, Organization, Topic, and Event entities from the main email header and body.",
+      "special_section_marker": "[첨부파일 추출 내용]",
+      "special_section_rules": [
+        "Extract ONLY 'Attachment' type entities from this section.",
+        "CRITICAL: Names, email addresses, organizations, topics, dates, and labels appearing inside this section are attachment content only and MUST NOT be extracted as separate entities.",
+        "CRITICAL: DO NOT extract any Person, Topic, Organization, or Event entities from content inside this section, even if they appear meaningful.",
+        "CRITICAL: Violating this rule is an extraction failure."
+      ]
+    },
+    "relationship_rules": [
+      "CRITICAL: Each relationship MUST have exactly ONE type from the allowed list. NEVER combine multiple types in a single relationship.",
+      "Self-mail rule: If the sender and receiver are the same email address, create TWO separate relationships (sent_by and sent_to).",
+      "affiliated_with target MUST be an Organization type.",
+      "sent_to MUST be used ONLY for primary recipients (To field). Use cc_to for carbon copy recipients.",
+      "has_attachment MUST be created ONLY if the attachment is explicitly mentioned in the text.",
+      "Do NOT use sent_by, sent_to, cc_to if no Email entity exists.",
+      "Do NOT create relationships that are NOT clearly supported by the text.",
+      "Relationship strength MUST be a float between 1.0 and 10.0. Explicit: 7.0+ / Inferred: 4.0 or below.",
+      "Do NOT create duplicate relationships with the same source-target-type combination.",
+      "Relationship descriptions MUST be in Korean and MUST be a meaningful sentence — NEVER use the relationship type name itself as the description."
+    ],
+    "examples": [
+      {
+        "entity_types": [
+          "Email",
+          "Person",
+          "Organization",
+          "Topic",
+          "Attachment"
+        ],
+        "text": "[메일 1]\n\n[ID] 19d4da32341500e4\n[제목] [Vocarush] 4월 스프린트 계획 확정\n[구분] 발신\n[날짜] 2026-04-02 18:02\n[발신인] 김민준 <minjun.kim@vocarush.io>\n[수신인] 박서연 <seoyeon.park@vocarush.io>\n[참조(CC)] 없음\n[폴더 정보] 스프린트\n\n[메일 본문]\n박서연님, 4월 스프린트 계획을 확정하여 공유드립니다.\n첨부파일 확인 부탁드립니다.\nProduct팀 김민준 드림\n\n[첨부파일 정보]\n- sprint_plan.pdf (120.0 KB) (포함)",
+        "entities": [
+          {
+            "name": "19D4DA32341500E4",
+            "type": "Email",
+            "description": "Subject: [Vocarush] 4월 스프린트 계획 확정 | ID: 19d4da32341500e4 | Date: 2026-04-02 18:02 | Tone: formal | Summary: 4월 스프린트 계획을 공유하는 공식 메일"
+          },
+          {
+            "name": "minjun.kim@vocarush.io",
+            "type": "Person",
+            "description": "Account: minjun.kim@vocarush.io | Name: 김민준"
+          },
+          {
+            "name": "seoyeon.park@vocarush.io",
+            "type": "Person",
+            "description": "Account: seoyeon.park@vocarush.io | Name: 박서연"
+          },
+          {
+            "name": "Vocarush",
+            "type": "Organization",
+            "description": "OrgName: Vocarush | Department: Product"
+          },
+          {
+            "name": "스프린트 계획 수립",
+            "type": "Topic",
+            "description": "Priority: high | Summary: Vocarush 4월 스프린트 계획을 팀 내 공유하고 확정하는 논의"
+          },
+          {
+            "name": "sprint_plan.pdf",
+            "type": "Attachment",
+            "description": "Filename: sprint_plan.pdf | Type: pdf | Summary: 4월 스프린트 계획 문서로, 각 업무의 우선순위와 담당자를 명확히 설정해 계획된 일정 내에 서비스를 성공적으로 출시하고자 하는 것을 목적으로 한다."
+          }
+        ],
+        "relationships": [
+          {
+            "source": "19D4DA32341500E4",
+            "target": "minjun.kim@vocarush.io",
+            "type": "sent_by",
+            "description": "이메일의 발신자는 minjun.kim@vocarush.io이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D4DA32341500E4",
+            "target": "seoyeon.park@vocarush.io",
+            "type": "sent_to",
+            "description": "이메일의 수신자는 seoyeon.park@vocarush.io이다.",
+            "strength": 10
+          },
+          {
+            "source": "minjun.kim@vocarush.io",
+            "target": "Vocarush",
+            "type": "affiliated_with",
+            "description": "minjun.kim@vocarush.io는 Vocarush Product팀에 소속되어 있다.",
+            "strength": 9
+          },
+          {
+            "source": "19D4DA32341500E4",
+            "target": "스프린트 계획 수립",
+            "type": "discusses",
+            "description": "메일 본문에서 4월 스프린트 계획 수립을 주요 주제로 다룬다.",
+            "strength": 9
+          },
+          {
+            "source": "19D4DA32341500E4",
+            "target": "sprint_plan.pdf",
+            "type": "has_attachment",
+            "description": "이메일에 스프린트 계획 문서가 첨부되어 있다.",
+            "strength": 10
+          }
+        ]
+      },
+      {
+        "entity_types": [
+          "Email",
+          "Person",
+          "Event"
+        ],
+        "text": "[메일 2]\n\n[ID] 19d4a5b4a4703a36\n[제목] Re: 수락\n[구분] 수신\n[날짜] 2026-04-02 03:43\n[발신인] Winston from Anthropic <support@mail.anthropic.com>\n[수신인] 최지유 <gpttitti@hansung.ac.kr>\n[참조(CC)] 김예은 <03yeah03@gmail.com>\n[폴더 정보] Recent-Labeled, 캘린더\n\n[메일 본문]\n3월 15일 오전 10시에 공학관에서 만나요.\n\n[첨부파일 정보]\n없음",
+        "entities": [
+          {
+            "name": "19D4A5B4A4703A36",
+            "type": "Email",
+            "description": "Subject: Re: 수락 | ID: 19d4a5b4a4703a36 | Date: 2026-04-02 03:43 | Tone: formal | Summary: 수락 답변과 함께 공학관 미팅 일정을 안내하는 메일"
+          },
+          {
+            "name": "support@mail.anthropic.com",
+            "type": "Person",
+            "description": "Account: support@mail.anthropic.com | Name: Winston from Anthropic"
+          },
+          {
+            "name": "gpttitti@hansung.ac.kr",
+            "type": "Person",
+            "description": "Account: gpttitti@hansung.ac.kr | Name: 최지유"
+          },
+          {
+            "name": "03yeah03@gmail.com",
+            "type": "Person",
+            "description": "Account: 03yeah03@gmail.com | Name: 김예은"
+          },
+          {
+            "name": "공학관 미팅",
+            "type": "Event",
+            "description": "EventName: 공학관 미팅 | Schedule: 2026-03-15 10:00 | Location: 공학관 | Status: confirmed"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "19D4A5B4A4703A36",
+            "target": "support@mail.anthropic.com",
+            "type": "sent_by",
+            "description": "이메일의 발신자는 support@mail.anthropic.com이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D4A5B4A4703A36",
+            "target": "gpttitti@hansung.ac.kr",
+            "type": "sent_to",
+            "description": "이메일의 수신자는 gpttitti@hansung.ac.kr이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D4A5B4A4703A36",
+            "target": "03yeah03@gmail.com",
+            "type": "cc_to",
+            "description": "이메일의 참조 수신자는 03yeah03@gmail.com이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D4A5B4A4703A36",
+            "target": "공학관 미팅",
+            "type": "schedules",
+            "description": "메일을 통해 공학관 미팅 일정이 안내되었다.",
+            "strength": 10
+          }
+        ]
+      },
+      {
+        "entity_types": [
+          "Email",
+          "Person"
+        ],
+        "text": "[메일 3]\n\n[ID] 19d615cb9c3d0153\n[제목] sisi\n[구분] 발신\n[날짜] 2026-04-06 14:55\n[발신인] 최지유 <gpttitti@hansung.ac.kr>\n[수신인] 최지유 <gpttitti@hansung.ac.kr>\n[참조(CC)] 없음\n[폴더 정보] 없음\n\n[메일 본문]\nsisi\n\n[첨부파일 정보]\n없음",
+        "entities": [
+          {
+            "name": "19D615CB9C3D0153",
+            "type": "Email",
+            "description": "Subject: sisi | ID: 19d615cb9c3d0153 | Date: 2026-04-06 14:55 | Tone: casual | Summary: 발신인과 수신인이 동일한 자기 자신에게 보낸 메일"
+          },
+          {
+            "name": "gpttitti@hansung.ac.kr",
+            "type": "Person",
+            "description": "Account: gpttitti@hansung.ac.kr | Name: 최지유"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "19D615CB9C3D0153",
+            "target": "gpttitti@hansung.ac.kr",
+            "type": "sent_by",
+            "description": "이메일의 발신자는 gpttitti@hansung.ac.kr이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D615CB9C3D0153",
+            "target": "gpttitti@hansung.ac.kr",
+            "type": "sent_to",
+            "description": "이메일의 수신자도 gpttitti@hansung.ac.kr로, 자기 자신에게 보낸 메일이다.",
+            "strength": 10
+          }
+        ]
+      },
+      {
+        "entity_types": [
+          "Email",
+          "Person",
+          "Attachment"
+        ],
+        "text": "[메일 17]\n\n[ID] 19d8fd9a3fd77c73\n[제목] 과제 제출\n[구분] 발신\n[날짜] 2026-04-15 15:34\n[발신인] 최지유 <gpttitti@hansung.ac.kr>\n[수신인] 최지유 <gpttitti@hansung.ac.kr>\n[참조(CC)] 없음\n[폴더 정보] 없음\n\n[메일 본문]\n과제 제출합니다.\n\n[첨부파일 정보]\n- HW3_2471239_최지유.pdf (257.3 KB) (포함)\n\n[첨부파일 추출 내용]\nFile 1: HW3_2471239_최지유.pdf\n최지유 학생의 자료구조[C] 과제 3에 대한 내용으로, 연결리스트를 활용하여 여러 개의 큐를 관리하는 프로그램을 구현하였다.",
+        "entities": [
+          {
+            "name": "19D8FD9A3FD77C73",
+            "type": "Email",
+            "description": "Subject: 과제 제출 | ID: 19d8fd9a3fd77c73 | Date: 2026-04-15 15:34 | Tone: casual | Summary: 첨부파일로 자료구조 과제를 제출하는 메일"
+          },
+          {
+            "name": "gpttitti@hansung.ac.kr",
+            "type": "Person",
+            "description": "Account: gpttitti@hansung.ac.kr | Name: 최지유"
+          },
+          {
+            "name": "HW3_2471239_최지유.pdf",
+            "type": "Attachment",
+            "description": "Filename: HW3_2471239_최지유.pdf | Type: pdf | Summary: 연결리스트를 활용하여 여러 개의 큐를 관리하는 프로그램을 구현한 자료구조 과제 3 제출물"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "19D8FD9A3FD77C73",
+            "target": "gpttitti@hansung.ac.kr",
+            "type": "sent_by",
+            "description": "이메일의 발신자는 gpttitti@hansung.ac.kr이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D8FD9A3FD77C73",
+            "target": "gpttitti@hansung.ac.kr",
+            "type": "sent_to",
+            "description": "이메일의 수신자도 gpttitti@hansung.ac.kr로, 자기 자신에게 보낸 메일이다.",
+            "strength": 10
+          },
+          {
+            "source": "19D8FD9A3FD77C73",
+            "target": "HW3_2471239_최지유.pdf",
+            "type": "has_attachment",
+            "description": "이메일에 자료구조 과제 PDF가 첨부되어 있다.",
+            "strength": 10
+          }
+        ]
+      }
+    ]
+  },
+  "summarize_descriptions": {
+    "goal": "You are a helpful assistant responsible for generating a comprehensive summary of the data provided below. Given one or two entities, and a list of descriptions, all related to the same entity or group of entities. Please concatenate all of these into a single, comprehensive description. Make sure to include information collected from all the descriptions. If the provided descriptions are contradictory, please resolve the contradictions and provide a single, coherent summary. Make sure it is written in third person, and include the entity names so we have the full context.",
+    "additional_rules": [
+      "Reconcile Name attribute conflicts within the same entity: by the time this step runs, the entity name (e.g. an Account/email) is already fixed, and this step only receives descriptions that already share that exact name. If those descriptions list different display names for the same Account (e.g. 'Name: 최지유' vs 'Name: 지유띠니'), keep a single consistent Name value in the merged description. This step does NOT merge entities that have different names — that identity resolution already happens at extraction time via the Account-based naming rule.",
+      "CRITICAL: Do NOT create an entity if its description is 'None' or contains no meaningful information.",
+      "Output language: Write in Korean. However, keep email addresses, proper nouns, and service names in their original form.",
+      "Merge the two pieces of information into a single sentence. The 'Filename' and 'Type' fields are never duplicated across descriptions, so keep them as-is."
+    ],
+    "examples": [
+      {
+        "type": "Email",
+        "entity_name": "19DDCAD4FFCA17CF",
+        "description_list": [
+          "Subject: Your receipt from Anthropic, PBC #2148-6096-8161 | ID: 19ddcad4ffca17cf | Date: 2026-04-30 13:37 | Tone: transactional | Summary: Anthropic으로부터 $22.00 결제 영수증 수신",
+          "Subject: Your receipt from Anthropic, PBC #2148-6096-8161 | ID: 19ddcad4ffca17cf | Date: 2026-04-30 13:37 | Tone: transactional | Summary: Anthropic Claude Pro 구독 결제 영수증 수신. 첨부: Invoice-7VNMPZBZ-0004.pdf, Receipt-2148-6096-8161.pdf 포함."
+        ],
+        "output": "Subject: Your receipt from Anthropic, PBC #2148-6096-8161 | ID: 19ddcad4ffca17cf | Date: 2026-04-30 13:37 | Tone: transactional | Summary: Anthropic Claude Pro 구독 $22.00 결제 영수증 수신. 첨부: 인보이스 및 영수증 PDF 2건 포함."
+      },
+      {
+        "type": "Person",
+        "entity_name": "GPTTITTI@HANSUNG.AC.KR",
+        "description_list": [
+          "Account: gpttitti@hansung.ac.kr | Name: 최지유",
+          "Account: gpttitti@hansung.ac.kr | Name: 지유띠니"
+        ],
+        "output": "Account: gpttitti@hansung.ac.kr | Name: 최지유"
+      },
+      {
+        "type": "Attachment",
+        "entity_name": "2471239_최지유_중간보고서.PDF",
+        "description_list": [
+          "Filename: 2471239_최지유_중간보고서.PDF | Type: pdf | Summary: GraphRAG 기반 Gmail 관리 애드온 개발 산학공동연구 중간보고서",
+          "Filename: 2471239_최지유_중간보고서.PDF | Type: pdf | Summary: 2026학년도 산학공동연구 프로젝트 중간보고서로, GraphRAG 활용 Gmail 애드온 개발 진행 상황 포함"
+        ],
+        "output": "Filename: 2471239_최지유_중간보고서.PDF | Type: pdf | Summary: \"2471239_최지유_중간보고서.PDF\"는 최지유가 2026학년도 산학공동연구 프로젝트에 참여하여 작성한 중간보고서로, PDF 형식으로 제공된다. 이 문서는 2026학년도 대학혁신지원사업의 진행 상황을 기록한 내용으로, 최지유의 연구 활동을 반영하고 있다. 전체적으로 GraphRAG 기반 Gmail 관리 애드온 개발 진행 상황이 기록된 문서이다."
+      },
+      {
+        "type": "Attachment",
+        "entity_name": "INVOICE-7VNMPZBZ-0004.PDF",
+        "description_list": [
+          "Filename: Invoice-7VNMPZBZ-0004.pdf | Type: pdf | Summary: 2026년 4월 29일에 발행된 송장",
+          "Filename: Invoice-7VNMPZBZ-0004.pdf | Type: pdf | Summary: 청구서 번호 7VNMPZBZ-0004, 발행일 2026년 4월 29일, 만기일 2026년 4월 29일입니다. 청구액은 $22.00 USD로, Anthropic, PBC에 보내야 합니다."
+        ],
+        "output": "Filename: Invoice-7VNMPZBZ-0004.pdf | Type: pdf | Summary: 청구서 번호 7VNMPZBZ-0004, 발행일 2026년 4월 29일, 만기일 2026년 4월 29일입니다. 청구액은 $22.00 USD로, Anthropic, PBC에 보내야 하는 송장이다."
+      }
+    ]
+  },
+  "extract_claims": {
+    "target_activity": "You are an intelligent assistant that helps a human analyst to analyze claims against certain entities presented in a text document.",
+    "goal": "Given a text document that is potentially relevant to this activity, an entity specification, and a claim description, extract all entities that match the entity specification and all claims against those entities.",
+    "claim_fields": [
+      {
+        "name": "Subject",
+        "description": "name of the entity that is subject of the claim, capitalized. The subject entity is one that committed the action described in the claim. Subject needs to be one of the named entities identified in step 1."
+      },
+      {
+        "name": "Object",
+        "description": "name of the entity that is object of the claim, capitalized. The object entity is one that either reports/handles or is affected by the action described in the claim. If object entity is unknown, use **NONE**."
+      },
+      {
+        "name": "Claim Type",
+        "description": "overall category of the claim, capitalized. Name it in a way that can be repeated across multiple text inputs, so that similar claims share the same claim type."
+      },
+      {
+        "name": "Claim Status",
+        "description": "**TRUE**, **FALSE**, or **SUSPECTED**. TRUE means the claim is confirmed, FALSE means the claim is found to be False, SUSPECTED means the claim is not verified."
+      },
+      {
+        "name": "Claim Description",
+        "description": "Detailed description explaining the reasoning behind the claim, together with all the related evidence and references."
+      },
+      {
+        "name": "Claim Date",
+        "description": "Period (start_date, end_date) when the claim was made. Both start_date and end_date should be in ISO-8601 format. If the claim was made on a single date rather than a date range, set the same date for both start_date and end_date. If date is unknown, return **NONE**."
+      },
+      {
+        "name": "Claim Source Text",
+        "description": "List of **all** quotes from the original text that are relevant to the claim."
+      }
+    ],
+    "examples": [
+      {
+        "entity_specification": "organization",
+        "claim_description": "red flags associated with an entity",
+        "text": "According to an article on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B. The company is owned by Person C who was suspected of engaging in corruption activities in 2015.",
+        "claims": [
+          {
+            "subject": "COMPANY A",
+            "object": "GOVERNMENT AGENCY B",
+            "type": "ANTI-COMPETITIVE PRACTICES",
+            "status": "TRUE",
+            "start_date": "2022-01-10T00:00:00",
+            "end_date": "2022-01-10T00:00:00",
+            "description": "Company A was found to engage in anti-competitive practices because it was fined for bid rigging in multiple public tenders published by Government Agency B according to an article published on 2022/01/10",
+            "source": "According to an article published on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B."
+          }
+        ]
+      },
+      {
+        "entity_specification": "Company A, Person C",
+        "claim_description": "red flags associated with an entity",
+        "text": "According to an article on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B. The company is owned by Person C who was suspected of engaging in corruption activities in 2015.",
+        "claims": [
+          {
+            "subject": "COMPANY A",
+            "object": "GOVERNMENT AGENCY B",
+            "type": "ANTI-COMPETITIVE PRACTICES",
+            "status": "TRUE",
+            "start_date": "2022-01-10T00:00:00",
+            "end_date": "2022-01-10T00:00:00",
+            "description": "Company A was found to engage in anti-competitive practices because it was fined for bid rigging in multiple public tenders published by Government Agency B according to an article published on 2022/01/10",
+            "source": "According to an article published on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B."
+          },
+          {
+            "subject": "PERSON C",
+            "object": "NONE",
+            "type": "CORRUPTION",
+            "status": "SUSPECTED",
+            "start_date": "2015-01-01T00:00:00",
+            "end_date": "2015-12-30T00:00:00",
+            "description": "Person C was suspected of engaging in corruption activities in 2015",
+            "source": "The company is owned by Person C who was suspected of engaging in corruption activities in 2015"
+          }
+        ]
+      }
+    ]
+  },
+  "community_reports": {
+    "category_field_scope": "the primary purpose of the emails in this cluster",
+    "importance_rating_scope": "this email cluster is to the user's activity",
+    "goal_intro": "You are an AI assistant that helps a human analyst explore and understand a personal email archive. Your goal is to produce structured summaries of email communities that help the user quickly grasp who is involved, what topics recur, and why this group of emails matters.",
+    "goal": "Write a comprehensive report of a community, given a list of entities that belong to the community as well as their relationships. The community is derived from a personal Gmail archive and may be centered around a person, an organization, or a recurring topic. The report will help the user understand the nature and importance of this email cluster.",
+    "report_sections": {
+      "title_rule": "A short but specific name for the community. Prefer using a person name or organization name when available. Write in Korean.",
+      "summary_rule": "An executive summary written in Korean describing: (1) what kind of community this is (person-based, org-based, or topic-based — pick the single most dominant type) (2) who the key participants are (3) what the emails in this cluster are generally about. Keep it under 3 sentences.",
+      "purpose_rule": "State the core function/purpose of this community in a single sentence. Include the unique characteristic that distinguishes it from other communities. (e.g., \"Receiving one-time authentication codes for OpenAI service login\", \"Team communication related to the VocaRush game development project\")",
+      "rating_explanation_rule": "A single sentence in Korean explaining the score."
+    },
+    "rating_criteria": [
+      {
+        "range": "8-10",
+        "description": "사람 간 직접 소통, 반복적 프로젝트 협업, 중요한 의사결정 포함"
+      },
+      {
+        "range": "5-8",
+        "description": "구독/결제 관리, 서비스 공지 등 주기적으로 확인이 필요한 이메일"
+      },
+      {
+        "range": "2-5",
+        "description": "자동 발송 트랜잭션 이메일 (인증코드, 보안 알림 등)"
+      },
+      {
+        "range": "0-2",
+        "description": "마케팅, 광고, 일회성 알림 등 거의 무시해도 되는 이메일"
+      }
+    ],
+    "finding_angles": [
+      "Community identity — what person or topic anchors this cluster",
+      "Key emails — the most significant emails and what they contain",
+      "People and relationships — who sends to whom, and what roles they play",
+      "Recurring topics — what subjects or themes appear repeatedly",
+      "Events and schedules — any time-based information found in the emails",
+      "Organizations involved — what companies or teams appear"
+    ],
+    "output_format": "{{\n    \"title\": <report_title>,\n    \"summary\": <executive_summary>,\n    \"category\": <top_level_category>,\n    \"purpose\": <single_sentence_purpose>,\n    \"rating\": <importance_rating>,\n    \"rating_explanation\": <rating_explanation>,\n    \"findings\": [\n        {{\n            \"summary\": <insight_summary>,\n            \"explanation\": <insight_explanation>\n        }}\n    ]\n}}",
+    "additional_rules_intro": "엔티티는 반복적으로 의미를 가지는 개념만 추출한다. 즉, 다른 이메일에서도 동일한 의미로 재등장할 수 있는 것만 포함한다.",
+    "examples": [
+      {
+        "entities": [
+          {
+            "id": 1,
+            "entity": "19D1A2B3C4D5E6F7",
+            "description": "Subject: ChatGPT 코드는 146672입니다 | ID: 19d1a2b3c4d5e6f7 | Date: 2026-03-10 09:12 | Tone: alert | Summary: ChatGPT 인증 코드를 전달하는 자동 발송 메일"
+          },
+          {
+            "id": 2,
+            "entity": "noreply@tm.openai.com",
+            "description": "Name: Unknown | Account: noreply@tm.openai.com"
+          },
+          {
+            "id": 3,
+            "entity": "gpttitti@hansung.ac.kr",
+            "description": "Name: Unknown | Account: gpttitti@hansung.ac.kr"
+          },
+          {
+            "id": 4,
+            "entity": "인증코드 수신",
+            "description": "Priority: low | Summary: ChatGPT 로그인을 위한 일회성 인증코드를 반복적으로 수신하는 자동화 흐름"
+          }
+        ],
+        "relationships": [
+          {
+            "id": 1,
+            "source": "19D1A2B3C4D5E6F7",
+            "target": "noreply@tm.openai.com",
+            "description": "이메일의 발신자는 noreply@tm.openai.com이다."
+          },
+          {
+            "id": 2,
+            "source": "19D1A2B3C4D5E6F7",
+            "target": "gpttitti@hansung.ac.kr",
+            "description": "이메일의 수신자는 gpttitti@hansung.ac.kr이다."
+          },
+          {
+            "id": 3,
+            "source": "19D1A2B3C4D5E6F7",
+            "target": "인증코드 수신",
+            "description": "메일 본문에서 ChatGPT 인증코드 수신을 반복적인 주제로 다룬다."
+          }
+        ],
+        "output": "{{\n    \"title\": \"인증코드 수신 — OpenAI 자동 발송 클러스터\",\n    \"summary\": \"OpenAI의 noreply 주소에서 gpttitti@hansung.ac.kr로 자동 발송된 인증코드 이메일 클러스터다. 반복적으로 동일한 인증 흐름이 발생하며, 모든 이메일이 트랜잭션 목적의 단방향 자동 발송이다.\",\n    \"category\": \"트랜잭션\",\n    \"purpose\": \"ChatGPT 로그인을 위한 일회성 인증코드를 수신하는 자동화 채널\",\n    \"rating\": 2.5,\n    \"rating_explanation\": \"자동 발송 인증코드 이메일로만 구성되어 있어 사용자의 실질적 활동을 반영하지 않는다.\",\n    \"findings\": [\n        {{\n            \"summary\": \"'인증코드 수신' Topic으로 묶인 자동 발송 클러스터\",\n            \"explanation\": \"모든 이메일이 동일한 인증코드 수신 흐름을 공유하며, 반복적으로 재등장하는 주제로 묶인 그룹이다. [Data: Entities (4); Relationships (3)]\"\n        }},\n        {{\n            \"summary\": \"OpenAI noreply 주소에서 발송\",\n            \"explanation\": \"noreply@tm.openai.com에서 발송된 자동 알림이며, 인증코드 전달 외의 목적이 없다. [Data: Entities (1, 2); Relationships (1)]\"\n        }},\n        {{\n            \"summary\": \"단일 수신자: gpttitti@hansung.ac.kr\",\n            \"explanation\": \"모든 이메일의 수신자가 동일하며 CC나 다른 수신자는 없다. [Data: Entities (3); Relationships (2)]\"\n        }}\n    ]\n}}"
+      }
+    ]
+  },
+  "local_search": {
+    "date_field_note": "Note: Email entities contain date information in the format 'Date: YYYY-MM-DD HH:MM' within their description field. When filtering by date, match against this field.",
+    "answering_rules": [
+      "If the user requests N items but fewer than N matching records exist, return ONLY the records that actually match. NEVER pad the result with non-matching records to reach the requested count.",
+      "If no records match the query condition, explicitly state that no matching data was found. Do NOT return unrelated records as substitutes.",
+      "If a record shows up among the retrieved data but its actual content does NOT genuinely match the user's specific query topic, EXCLUDE it entirely from the response. Do NOT mention an unrelated record while adding a disclaimer that it is unrelated — a record that needs such a disclaimer to justify its inclusion does not belong in the answer at all.",
+      "The provided data tables are the ONLY source of factual information.",
+      "Do NOT infer, guess, assume, or speculate beyond what is explicitly supported by the data tables.",
+      "Do NOT fill in missing details using general knowledge, common sense, or external assumptions.",
+      "General knowledge may be used ONLY to rephrase or clarify facts that are already explicitly supported by the data tables. It MUST NOT introduce new facts or claims.",
+      "Do NOT include any statement that cannot be directly supported by the provided data.",
+      "If the data tables do not contain sufficient information to answer the question, respond explicitly that the information is not available.",
+      "Do NOT make anything up.",
+      "When the user asks for a LIST of items (e.g., emails on a specific date, all emails from a sender), you MUST enumerate ALL matching records found in the data tables — do NOT stop at the first match.",
+      "If multiple Email entities share the same date prefix (YYYY-MM-DD), ALL of them must be included in the response.",
+      "Before generating any response, scan ALL rows in the provided data tables completely. Do not stop scanning after finding the first match.",
+      "Pay equal attention to ALL entities in the data tables, regardless of their position in the list.",
+      "Do NOT skip or ignore any entity that matches the query condition.",
+      "When answering date range queries, do NOT limit the response to the most recent matches. ALL emails within the specified date range MUST be included regardless of recency."
+    ],
+    "citation_extra_rules": [
+      "Do NOT use the generic '[Data: ...]' citation format described above. Instead, follow the STRUCTURED ANSWER FORMAT below exactly — it OVERRIDES the generic citation style for this answer.",
+      "STRUCTURED ANSWER FORMAT — begin the answer with exactly this one line and nothing else before it: '문의하신 내용과 관련된 메일을 찾아 정리해드립니다.' Then leave exactly one blank line.",
+      "After the intro line, list every email that supports the answer as a numbered item ('1.', '2.', '3.', ...). The number and '제목:' are on the same line; the other 4 fields each go on their OWN line indented with exactly 3 spaces, in this exact order:",
+      "N. 제목: <the email's exact subject line, copied from the Email entity's 'Subject:' field>",
+      "   날짜: <the item's date, format 'YYYY-MM-DD HH:MM' if a time is known, otherwise 'YYYY-MM-DD'>",
+      "   계정: <the account's email address that this email belongs to>",
+      "   내용: <1-2 sentences in polite Korean (-습니다/-입니다 endings) describing what this email actually says, specific enough to stand on its own>",
+      "   ID: <the exact email identifier from the Email entity's 'ID:' field in the data tables. Copy it exactly, character for character — do NOT invent, guess, renumber, or omit it.>",
+      "Leave exactly one blank line between numbered items, and nothing after the last item's 'ID:' line.",
+      "Every numbered item MUST include all 5 fields without exception, even when the answer only has one item — never omit the 'ID:' line.",
+      "Never reuse the same 'ID:' value for two different numbered items, and never invent an ID that does not literally appear in the source data as shown.",
+      "Do NOT add any other text, heading, closing remark, or transition sentence outside of the fixed intro line and the numbered items themselves.",
+      "If no matching email is found, do NOT use the numbered format at all — respond with exactly this one sentence and nothing else: '문의하신 내용과 관련된 대화 내용을 찾지 못했습니다.'",
+      "'ID:' in each item refers to the email identifier field in the source data, NOT an index or the item's own numbered position (do not write 'ID: 1', 'ID: 2', etc.)."
+    ],
+    "citation_example": "문의하신 내용과 관련된 메일을 찾아 정리해드립니다.\n\n1. 제목: 3분기 로드맵 검토 요청\n   날짜: 2024-09-02 10:15\n   계정: hajun.jung@example.com\n   내용: 정하준이 3분기 로드맵 초안을 공유하며 금주 내 피드백을 요청했습니다.\n   ID: 1a2b3c4d5e6f7890",
+    "output_instructions": [
+      "Produce the response strictly based on the provided data tables.",
+      "Follow the STRUCTURED ANSWER FORMAT given in the citation rules above exactly — do not fall back to plain prose or generic Markdown bullets when the answer cites specific data.",
+      "Style the response in plain text, not Markdown (no '**', '#', or other Markdown symbols).",
+      "If no supported answer can be produced, respond with one plain polite Korean sentence stating that the available data does not contain sufficient information to answer the question — do not use the numbered format in that case.",
+      "Do NOT generate verbose preambles or restate the question — the only fixed lead-in is the single intro line required by the STRUCTURED ANSWER FORMAT.",
+      "Respond in the same language as the user's question.",
+      "Korean questions MUST be answered in Korean.",
+      "When answering in Korean, ALWAYS use polite formal speech (존댓말/합쇼체, e.g. sentence endings like '-습니다', '-입니다', '-했습니다') in the '내용:' field and the intro line. NEVER use casual/informal speech (반말) regardless of the tone of the source data.",
+      "NEVER repeat the same numbered item (same ID, or same near-duplicate content) more than once — before finishing, review the list and remove duplicates so every item covers a genuinely distinct block.",
+      "Do NOT pad the response with generic filler items just to lengthen the answer — every item must be a specific, distinctive result that clearly supports the answer."
+    ]
+  },
+  "global_search": {
+    "map": {
+      "data_source_intro": "The data originates from a personal email archive and contains the following entity\ntypes extracted by an entity extraction pipeline:",
+      "extraction_rules_heading": "-Email-Specific Key Point Extraction Rules-",
+      "extraction_rules_intro": "When extracting key points from email archive data, apply ALL of the following rules:",
+      "goal": "Generate a response consisting of a list of key points that responds to the user's question, summarizing all relevant information in the input data tables. You should use the data provided in the data tables below as the primary context for generating the response. If you don't know the answer or if the input data tables do not contain sufficient information to provide an answer, just say so. Do not make anything up.",
+      "key_point_elements": [
+        {
+          "name": "Description",
+          "description": "A comprehensive description of the point."
         },
-        "rating_criteria": [
-            { "range": "8-10", "description": "사람 간 직접 소통, 반복적 프로젝트 협업, 중요한 의사결정 포함" },
-            { "range": "5-8", "description": "구독/결제 관리, 서비스 공지 등 주기적으로 확인이 필요한 이메일" },
-            { "range": "2-5", "description": "자동 발송 트랜잭션 이메일 (인증코드, 보안 알림 등)" },
-            { "range": "0-2", "description": "마케팅, 광고, 일회성 알림 등 거의 무시해도 되는 이메일" }
-        ],
-        "finding_angles": [
-            "Community identity — what person or topic anchors this cluster",
-            "Key emails — the most significant emails and what they contain",
-            "People and relationships — who sends to whom, and what roles they play",
-            "Recurring topics — what subjects or themes appear repeatedly",
-            "Events and schedules — any time-based information found in the emails",
-            "Organizations involved — what companies or teams appear"
-        ],
-        "output_format": "{{\n    \"title\": <report_title>,\n    \"summary\": <executive_summary>,\n    \"category\": <top_level_category>,\n    \"purpose\": <single_sentence_purpose>,\n    \"rating\": <importance_rating>,\n    \"rating_explanation\": <rating_explanation>,\n    \"findings\": [\n        {{\n            \"summary\": <insight_summary>,\n            \"explanation\": <insight_explanation>\n        }}\n    ]\n}}",
-        "additional_rules_intro": "엔티티는 반복적으로 의미를 가지는 개념만 추출한다. 즉, 다른 이메일에서도 동일한 의미로 재등장할 수 있는 것만 포함한다.",
-        "examples": [
-            {
-                "entities": [
-                    { "id": 1, "entity": "19D1A2B3C4D5E6F7", "description": "Subject: ChatGPT 코드는 146672입니다 | ID: 19d1a2b3c4d5e6f7 | Date: 2026-03-10 09:12 | Tone: alert | Summary: ChatGPT 인증 코드를 전달하는 자동 발송 메일" },
-                    { "id": 2, "entity": "noreply@tm.openai.com", "description": "Name: Unknown | Account: noreply@tm.openai.com" },
-                    { "id": 3, "entity": "gpttitti@hansung.ac.kr", "description": "Name: Unknown | Account: gpttitti@hansung.ac.kr" },
-                    { "id": 4, "entity": "인증코드 수신", "description": "Priority: low | Summary: ChatGPT 로그인을 위한 일회성 인증코드를 반복적으로 수신하는 자동화 흐름" }
-                ],
-                "relationships": [
-                    { "id": 1, "source": "19D1A2B3C4D5E6F7", "target": "noreply@tm.openai.com", "description": "이메일의 발신자는 noreply@tm.openai.com이다." },
-                    { "id": 2, "source": "19D1A2B3C4D5E6F7", "target": "gpttitti@hansung.ac.kr", "description": "이메일의 수신자는 gpttitti@hansung.ac.kr이다." },
-                    { "id": 3, "source": "19D1A2B3C4D5E6F7", "target": "인증코드 수신", "description": "메일 본문에서 ChatGPT 인증코드 수신을 반복적인 주제로 다룬다." }
-                ],
-                "output": "{{\n    \"title\": \"인증코드 수신 — OpenAI 자동 발송 클러스터\",\n    \"summary\": \"OpenAI의 noreply 주소에서 gpttitti@hansung.ac.kr로 자동 발송된 인증코드 이메일 클러스터다. 반복적으로 동일한 인증 흐름이 발생하며, 모든 이메일이 트랜잭션 목적의 단방향 자동 발송이다.\",\n    \"category\": \"트랜잭션\",\n    \"purpose\": \"ChatGPT 로그인을 위한 일회성 인증코드를 수신하는 자동화 채널\",\n    \"rating\": 2.5,\n    \"rating_explanation\": \"자동 발송 인증코드 이메일로만 구성되어 있어 사용자의 실질적 활동을 반영하지 않는다.\",\n    \"findings\": [\n        {{\n            \"summary\": \"'인증코드 수신' Topic으로 묶인 자동 발송 클러스터\",\n            \"explanation\": \"모든 이메일이 동일한 인증코드 수신 흐름을 공유하며, 반복적으로 재등장하는 주제로 묶인 그룹이다. [Data: Entities (4); Relationships (3)]\"\n        }},\n        {{\n            \"summary\": \"OpenAI noreply 주소에서 발송\",\n            \"explanation\": \"noreply@tm.openai.com에서 발송된 자동 알림이며, 인증코드 전달 외의 목적이 없다. [Data: Entities (1, 2); Relationships (1)]\"\n        }},\n        {{\n            \"summary\": \"단일 수신자: gpttitti@hansung.ac.kr\",\n            \"explanation\": \"모든 이메일의 수신자가 동일하며 CC나 다른 수신자는 없다. [Data: Entities (3); Relationships (2)]\"\n        }}\n    ]\n}}"
-            }
-        ]
-    },
-    "local_search": {
-        "date_field_note": "Note: Email entities contain date information in the format 'Date: YYYY-MM-DD HH:MM' within their description field. When filtering by date, match against this field.",
-        "answering_rules": [
-            "If the user requests N items but fewer than N matching records exist, return ONLY the records that actually match. NEVER pad the result with non-matching records to reach the requested count.",
-            "If no records match the query condition, explicitly state that no matching data was found. Do NOT return unrelated records as substitutes.",
-            "If a record shows up among the retrieved data but its actual content does NOT genuinely match the user's specific query topic, EXCLUDE it entirely from the response. Do NOT mention an unrelated record while adding a disclaimer that it is unrelated — a record that needs such a disclaimer to justify its inclusion does not belong in the answer at all.",
-            "The provided data tables are the ONLY source of factual information.",
-            "Do NOT infer, guess, assume, or speculate beyond what is explicitly supported by the data tables.",
-            "Do NOT fill in missing details using general knowledge, common sense, or external assumptions.",
-            "General knowledge may be used ONLY to rephrase or clarify facts that are already explicitly supported by the data tables. It MUST NOT introduce new facts or claims.",
-            "Do NOT include any statement that cannot be directly supported by the provided data.",
-            "If the data tables do not contain sufficient information to answer the question, respond explicitly that the information is not available.",
-            "Do NOT make anything up.",
-            "When the user asks for a LIST of items (e.g., emails on a specific date, all emails from a sender), you MUST enumerate ALL matching records found in the data tables — do NOT stop at the first match.",
-            "If multiple Email entities share the same date prefix (YYYY-MM-DD), ALL of them must be included in the response.",
-            "Before generating any response, scan ALL rows in the provided data tables completely. Do not stop scanning after finding the first match.",
-            "Pay equal attention to ALL entities in the data tables, regardless of their position in the list.",
-            "Do NOT skip or ignore any entity that matches the query condition.",
-            "When answering date range queries, do NOT limit the response to the most recent matches. ALL emails within the specified date range MUST be included regardless of recency."
-        ],
-        "citation_extra_rules": [
-            "Record ids refer to the record ID, NOT the index.",
-            "When citing Email entities, use the exact ID value from the 'ID:' field in the entity description. Do NOT paraphrase or abbreviate the ID."
-        ],
-        "citation_example": "\"Person X is the owner of Company Y and subject to many allegations of wrongdoing [Data: Sources (15, 16), Reports (1), Entities (5, 7); Relationships (23)].\"",
-        "output_instructions": [
-            "Produce the response strictly based on the provided data tables.",
-            "Organize the response into clear sections as appropriate for the target length and format.",
-            "Style the response in Markdown.",
-            "If no supported answer can be produced, clearly state that the available data does not contain sufficient information to answer the question.",
-            "Do NOT generate verbose preambles or restate the question.",
-            "Begin the answer directly with the relevant data.",
-            "Omit sections that have no supporting data — do not write empty headers.",
-            "Respond in the same language as the user's question.",
-            "Korean questions MUST be answered in Korean.",
-            "When answering in Korean, ALWAYS use polite formal speech (존댓말/합쇼체, e.g. sentence endings like '-습니다', '-입니다', '-했습니다'). NEVER use casual/informal speech (반말) regardless of the tone of the source data.",
-            "When the answer consists of multiple points, format it as a real Markdown bulleted list — each bullet MUST start on its own new line with '- ', never run multiple bullets together in one paragraph.",
-            "NEVER repeat the same category, topic, or near-duplicate bullet point more than once. Before finishing, review the list and merge or remove duplicates so every bullet covers a genuinely distinct point.",
-            "Do NOT pad the response with generic filler examples just to lengthen the answer — every example cited must be a specific, distinctive expression that clearly supports its bullet.",
-            "When listing emails in your response, always include the email ID in the format \"ID: <16-digit-hex>\" for each email mentioned.",
-            "When listing multiple emails, ALWAYS include one short sentence describing that specific email's actual content directly below its subject/title. This is required even when several emails share the same or a very similar subject line — the content sentence is the only way to tell them apart in that case. NEVER list a bare subject with no accompanying content sentence."
-        ]
-    },
-    "global_search": {
-        "map": {
-            "data_source_intro": "The data originates from a personal email archive and contains the following entity\ntypes extracted by an entity extraction pipeline:",
-            "extraction_rules_heading": "-Email-Specific Key Point Extraction Rules-",
-            "extraction_rules_intro": "When extracting key points from email archive data, apply ALL of the following rules:",
-            "goal": "Generate a response consisting of a list of key points that responds to the user's question, summarizing all relevant information in the input data tables. You should use the data provided in the data tables below as the primary context for generating the response. If you don't know the answer or if the input data tables do not contain sufficient information to provide an answer, just say so. Do not make anything up.",
-            "key_point_elements": [
-                { "name": "Description", "description": "A comprehensive description of the point." },
-                { "name": "Importance Score", "description": "An integer score between 0-100 that indicates how important the point is in answering the user's question. An 'I don't know' type of response should have a score of 0." }
-            ],
-            "importance_score_rules": {
-                "highest_priority": "If the data includes a community report with a numeric `rank` field (scale 0-10), use that as the primary signal: base_score = rank × 10. Then adjust ±10 based on how directly the point answers the user's question. Example: rank=8.5 → base 85, highly relevant to query → final 90~95",
-                "field_modifiers_up": [
-                    "Email.Attachments 가 None/없음이 아님 → +5",
-                    "Topic.Priority = \"high\" → +10",
-                    "Topic.Priority = \"mid\" → +3",
-                    "sent_by + sent_to 엣지가 모두 존재 (직접 소통) → +5",
-                    "Email.Summary 또는 Topic.Summary에 요청/확인/검토/제출/부탁 등 액션 키워드 포함 → +10",
-                    "Event.Status = \"tentative\" (미확정 일정 = 미해결) → +8"
-                ],
-                "field_modifiers_down": [
-                    "Email.Tone = \"notification\" 또는 \"alert\" → -20",
-                    "Topic.Domain이 인증/결제/보안/마케팅 관련 → -20",
-                    "마케팅·광고성 메일 → -30"
-                ],
-                "fallback": [
-                    "80-100 : 사람 간 직접 소통 + 액션아이템 포함",
-                    "60-79  : 반복 프로젝트/협업 Topic",
-                    "40-59  : 구독·결제·서비스 알림",
-                    "10-39  : 자동발송 트랜잭션 메일",
-                    "0-9    : 마케팅·광고·일회성 알림"
-                ]
-            },
-            "extraction_rules": [
-                { "title": "엣지 조합 — 하나의 풍부한 key point로 합치기", "body": "동일한 Email 노드에 sent_by + sent_to + discusses 엣지가 함께 존재하면, 세 엣지를 각각 별개 포인트로 쪼개지 말고 아래 형식으로 하나로 합칠 것:\n  \"[발신자 실명]이 [수신자 실명]에게 [Topic.Summary] 관련 메일을 보냈다.\"\ncc_to 엣지가 있으면 문장 뒤에 \"(참조: [이름])\"을 덧붙인다." },
-                { "title": "첨부파일 — 별도 key point로 추출", "body": "has_attachment 관계가 존재하는 경우, 첨부파일 존재 사실을 독립적인 key point로 추출할 것:\n  \"[이메일 제목] 메일에 [파일명] 첨부파일이 포함되어 있다.\"" },
-                { "title": "미확정 일정 — 미해결 항목으로 분류", "body": "Event.Status = \"tentative\"인 Event와 schedules 엣지가 있는 Email은 해당 key point description 앞에 \"[미확정]\" 태그를 붙일 것:\n  \"[미확정] [이메일 제목]에서 [Event.Schedule] [Event.Location] 일정이 언급되었으나 확정되지 않았다.\"" },
-                { "title": "다중 계정 Person — 실명으로 통합", "body": "Person 노드의 description에 특정 이메일 주소가 포함되어 있으면, 해당 이메일 주소를 Account로 가진 다른 Person 노드는 동일인으로 간주한다. 동일인으로 판단되는 경우 실명이 있는 노드의 이름으로 통합하여 언급한다." },
-                { "title": "Topic.Priority — 중요도 맥락 명시", "body": "Topic.Priority = \"high\"인 Topic이 discusses 엣지로 연결된 Email은 key point description에 \"(우선순위: 높음)\"을 포함할 것." },
-                { "title": "Community 필드 활용", "body": "community report에 `category` 또는 `purpose` 필드가 있으면:\n- category → 해당 이메일 클러스터의 성격을 분류하는 데 사용\n- purpose  → 이 클러스터가 무엇을 위한 것인지 한 문장으로 설명하는 데 사용\n이 필드들을 key point의 맥락 설명에 적극 활용할 것." },
-                { "title": "메일 개수 카운팅", "body": "메일 개수를 셀 때는 반드시 type=EMAIL인 엔티티 수만 카운트한다. sent_to / sent_by 엣지 수를 메일 개수로 혼동하지 않는다. 동일 Email 노드에 연결된 sent_to 엣지가 여러 개여도 메일은 1통이다." },
-                { "title": "날짜 기반 필터링", "body": "사용자가 특정 날짜 또는 날짜 범위를 명시한 경우, Email.Date 필드가 해당 날짜와 일치하는 Email 엔티티만 key point로 추출한다. Email.Date가 None인 경우 해당 이메일은 \"날짜 정보 없음\"으로 별도 언급한다." }
-            ],
-            "output_format": "{{\n    \"points\": [\n        {{\"description\": \"Description of point 1 [Data: Reports (report ids)]\", \"score\": score_value}},\n        {{\"description\": \"Description of point 2 [Data: Reports (report ids)]\", \"score\": score_value}}\n    ]\n}}",
-            "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\"."
-        },
-        "reduce": {
-            "role_intro": "You are a helpful assistant responding to questions about a personal email archive\nby synthesizing perspectives from multiple analysts.",
-            "response_rules_heading": "-Email Archive Response Rules-",
-            "response_rules_intro": "When the answer is based on email archive data, apply ALL of the following rules:",
-            "goal": "Generate a response of the target length and format that responds to the user's question, summarizing all the reports from multiple analysts who focused on different parts of the dataset.",
-            "note_ranked": "Note that the analysts' reports provided below are ranked in the **descending order of importance**.",
-            "merge_instruction": "The final response should remove all irrelevant information from the analysts' reports and merge the cleaned information into a comprehensive answer that provides explanations of all the key points and implications appropriate for the response length and format.",
-            "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\".",
-            "preserve_references_note": "The response should also preserve all the data references previously included in the analysts' reports, but do not mention the roles of multiple analysts in the analysis process.",
-            "category_grouping_rule": { "title": "CATEGORY별 그룹핑", "body": "동일한 category를 가진 커뮤니티가 2개 이상이면 해당 카테고리로 묶어 서술한다.\n아래 우선순위 순서로 섹션을 배치한다:" },
-            "response_rules_before_category": [
-                { "title": "응답 상단 메타 헤더 (항상 포함)", "body": "답변 최상단에 아래 형식의 요약 헤더를 마크다운 blockquote로 포함하라. 해당 정보가 데이터에 없으면 그 줄만 생략하고, 절대 추정하거나 지어내지 않는다.\n\n> **관련 커뮤니티:** N개\n> **주요 참여자:** [실명 또는 이메일, 쉼표 구분]\n> **기간:** YYYY-MM-DD ~ YYYY-MM-DD  ← Email.Date 또는 Event 데이터가 있을 때 포함\n> **미확정 항목:** N건          ← [미확정] 태그가 붙은 key point가 있을 때만 포함" },
-                { "title": "중요 커뮤니티 강조 섹션 분리", "body": "key points 중 importance score ≥ 70 (또는 community report rank ≥ 7.0)에 해당하는 항목이 있으면, 본문을 아래 두 섹션으로 나눠서 제시한다:\n\n#### 주요 커뮤니티\n(score 높은 항목 — 사람 간 직접 소통, 프로젝트 협업 등)\n\n#### 기타 커뮤니티\n(score 낮은 항목 — 트랜잭션, 마케팅 등)\n\nscore가 모두 유사하거나 rank 정보가 없으면 이 구분을 생략해도 된다." }
-            ],
-            "response_rules_after_category": [
-                { "title": "스레드 및 시간순 정렬", "body": "* 동일 Topic 또는 동일 Email Subject를 공유하는 이메일은 스레드로 묶어 서술한다.\n* 스레드 내부는 Event.Schedule 기준 시간순으로 흐름을 설명한다.\n* [미확정] 태그가 붙은 key point는 반드시 아래 섹션으로 분리한다:\n\n#### 미확정/미해결 항목\n* [ ] [내용] [Data: Reports (...)]\n* [ ] [내용] [Data: Reports (...)]\n\n해당 항목이 없으면 이 섹션을 생략한다." },
-                { "title": "인물 통합 언급", "body": "동일 인물이 여러 커뮤니티에 걸쳐 등장하면 중복 설명 없이 한 번만 소개하고 이후에는 실명으로만 지칭한다. Person 노드에 여러 Account가 있는 경우 이메일 주소를 나열하지 말고 실명으로만 지칭한다. 실명이 Unknown일 때만 이메일 주소를 사용한다." },
-                { "title": "첨부파일 언급", "body": "key point에 첨부파일 정보가 포함된 경우, 관련 메일 설명 안에 자연스럽게 \"[파일명] 첨부\" 형태로 포함한다. 별도 섹션으로 분리하지 않아도 된다." },
-                { "title": "메일 개수 표현", "body": "key points에서 Email 엔티티가 1개로 확인되는 커뮤니티에 대해서는 \"모든 이메일\", \"이메일들\" 같은 복수 표현을 사용하지 않는다. \"이메일 1통이 ~\" 형태의 단수 표현을 사용한다. community_report의 서술이 복수여도 실제 Email 엔티티 수를 우선한다." },
-                { "title": "날짜 기반 쿼리 응답", "body": "사용자가 특정 날짜를 지정한 경우:\n* Email.Date 또는 community_report.date_range 기준으로 필터링한다.\n* 일치하는 이메일이 없으면: \"해당 날짜에 수신/발신된 이메일이 데이터에 없습니다.\"라고 명시한다. \"데이터를 찾을 수 없습니다\" 같은 모호한 표현을 쓰지 않는다.\n* Email.Date가 None인 이메일은 별도로 언급한다: \"날짜 정보가 없는 이메일 N통이 존재합니다.\"" },
-                { "title": "Community Report 필드 활용", "body": "context에 community report가 포함된 경우:\n* report.category    → 이메일 클러스터 성격 분류에 활용\n* report.purpose     → 클러스터 설명 시 한 문장 요약으로 활용\n* report.rank      → 중요도 판단 기준 (rank ≥ 7.0 우선 서술)" }
-            ]
-        },
-        "knowledge": {
-            "intro": "The response may also include relevant real-world knowledge outside the dataset, but it must be explicitly annotated with a verification tag [LLM: verify].",
-            "example": "\"This is an example sentence supported by real-world knowledge [LLM: verify].\"",
-            "caution_intro": "When applying real-world knowledge to email archive data, be especially cautious about the following cases — these are where assumptions most commonly go wrong:",
-            "caution_cases": [
-                { "title": "서비스/플랫폼명", "description": "이메일에 등장하는 서비스 이름(예: \"VocaRush\", \"코딩라운지\")은 외부에 알려진 서비스가 아닐 수 있다. 이름만으로 기능이나 성격을 추정할 때는 [LLM: verify]." },
-                { "title": "조직/팀명", "description": "이메일에 등장하는 조직명·팀명은 사내 명칭일 수 있으며, 외부에 알려진 조직과 동일하다고 가정하지 않는다. 추정 시 [LLM: verify]." },
-                { "title": "인물 역할", "description": "발신자·수신자의 직책이나 역할을 이메일 내용만으로 추론할 때는 [LLM: verify]. Person 노드의 Name / Account 필드에 명시된 정보만 사실로 서술할 수 있다." },
-                { "title": "날짜/일정 추론", "description": "이메일이나 Event 노드에 명시된 날짜 외에 일정을 추론하거나 연도를 가정할 때는 [LLM: verify]. Event.Schedule 필드에 없는 날짜는 지어내지 않는다." },
-                { "title": "첨부파일 내용", "description": "Attachment 엔티티에 Filename만 사실로 언급하고, 파일의 내용을 추론하거나 요약하지 않는다. 내용 추정 시 [LLM: verify]." }
-            ],
-            "closing_note": "데이터에 명시된 사실(엔티티 필드값, 관계 description)은 [LLM: verify] 없이 서술할 수 있다. 데이터에 없는 내용을 보완하거나 추론할 때만 이 태그를 사용한다."
+        {
+          "name": "Importance Score",
+          "description": "An integer score between 0-100 that indicates how important the point is in answering the user's question. An 'I don't know' type of response should have a score of 0."
         }
+      ],
+      "importance_score_rules": {
+        "highest_priority": "If the data includes a community report with a numeric `rank` field (scale 0-10), use that as the primary signal: base_score = rank × 10. Then adjust ±10 based on how directly the point answers the user's question. Example: rank=8.5 → base 85, highly relevant to query → final 90~95",
+        "field_modifiers_up": [
+          "Email.Attachments 가 None/없음이 아님 → +5",
+          "Topic.Priority = \"high\" → +10",
+          "Topic.Priority = \"mid\" → +3",
+          "sent_by + sent_to 엣지가 모두 존재 (직접 소통) → +5",
+          "Email.Summary 또는 Topic.Summary에 요청/확인/검토/제출/부탁 등 액션 키워드 포함 → +10",
+          "Event.Status = \"tentative\" (미확정 일정 = 미해결) → +8"
+        ],
+        "field_modifiers_down": [
+          "Email.Tone = \"notification\" 또는 \"alert\" → -20",
+          "Topic.Domain이 인증/결제/보안/마케팅 관련 → -20",
+          "마케팅·광고성 메일 → -30"
+        ],
+        "fallback": [
+          "80-100 : 사람 간 직접 소통 + 액션아이템 포함",
+          "60-79  : 반복 프로젝트/협업 Topic",
+          "40-59  : 구독·결제·서비스 알림",
+          "10-39  : 자동발송 트랜잭션 메일",
+          "0-9    : 마케팅·광고·일회성 알림"
+        ]
+      },
+      "extraction_rules": [
+        {
+          "title": "엣지 조합 — 하나의 풍부한 key point로 합치기",
+          "body": "동일한 Email 노드에 sent_by + sent_to + discusses 엣지가 함께 존재하면, 세 엣지를 각각 별개 포인트로 쪼개지 말고 아래 형식으로 하나로 합칠 것:\n  \"[발신자 실명]이 [수신자 실명]에게 [Topic.Summary] 관련 메일을 보냈다.\"\ncc_to 엣지가 있으면 문장 뒤에 \"(참조: [이름])\"을 덧붙인다."
+        },
+        {
+          "title": "첨부파일 — 별도 key point로 추출",
+          "body": "has_attachment 관계가 존재하는 경우, 첨부파일 존재 사실을 독립적인 key point로 추출할 것:\n  \"[이메일 제목] 메일에 [파일명] 첨부파일이 포함되어 있다.\""
+        },
+        {
+          "title": "미확정 일정 — 미해결 항목으로 분류",
+          "body": "Event.Status = \"tentative\"인 Event와 schedules 엣지가 있는 Email은 해당 key point description 앞에 \"[미확정]\" 태그를 붙일 것:\n  \"[미확정] [이메일 제목]에서 [Event.Schedule] [Event.Location] 일정이 언급되었으나 확정되지 않았다.\""
+        },
+        {
+          "title": "다중 계정 Person — 실명으로 통합",
+          "body": "Person 노드의 description에 특정 이메일 주소가 포함되어 있으면, 해당 이메일 주소를 Account로 가진 다른 Person 노드는 동일인으로 간주한다. 동일인으로 판단되는 경우 실명이 있는 노드의 이름으로 통합하여 언급한다."
+        },
+        {
+          "title": "Topic.Priority — 중요도 맥락 명시",
+          "body": "Topic.Priority = \"high\"인 Topic이 discusses 엣지로 연결된 Email은 key point description에 \"(우선순위: 높음)\"을 포함할 것."
+        },
+        {
+          "title": "Community 필드 활용",
+          "body": "community report에 `category` 또는 `purpose` 필드가 있으면:\n- category → 해당 이메일 클러스터의 성격을 분류하는 데 사용\n- purpose  → 이 클러스터가 무엇을 위한 것인지 한 문장으로 설명하는 데 사용\n이 필드들을 key point의 맥락 설명에 적극 활용할 것."
+        },
+        {
+          "title": "메일 개수 카운팅",
+          "body": "메일 개수를 셀 때는 반드시 type=EMAIL인 엔티티 수만 카운트한다. sent_to / sent_by 엣지 수를 메일 개수로 혼동하지 않는다. 동일 Email 노드에 연결된 sent_to 엣지가 여러 개여도 메일은 1통이다."
+        },
+        {
+          "title": "날짜 기반 필터링",
+          "body": "사용자가 특정 날짜 또는 날짜 범위를 명시한 경우, Email.Date 필드가 해당 날짜와 일치하는 Email 엔티티만 key point로 추출한다. Email.Date가 None인 경우 해당 이메일은 \"날짜 정보 없음\"으로 별도 언급한다."
+        }
+      ],
+      "output_format": "{{\n    \"points\": [\n        {{\"description\": \"Description of point 1 [Data: Reports (report ids)]\", \"score\": score_value}},\n        {{\"description\": \"Description of point 2 [Data: Reports (report ids)]\", \"score\": score_value}}\n    ]\n}}",
+      "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\"."
     },
-    "summarize_attachment": {}
+    "reduce": {
+      "role_intro": "You are a helpful assistant responding to questions about a personal email archive\nby synthesizing perspectives from multiple analysts.",
+      "response_rules_heading": "-Email Archive Response Rules-",
+      "response_rules_intro": "When the answer is based on email archive data, apply ALL of the following rules:",
+      "goal": "Generate a response of the target length and format that responds to the user's question, summarizing all the reports from multiple analysts who focused on different parts of the dataset.",
+      "note_ranked": "Note that the analysts' reports provided below are ranked in the **descending order of importance**.",
+      "merge_instruction": "The final response should remove all irrelevant information from the analysts' reports and merge the cleaned information into a comprehensive answer that provides explanations of all the key points and implications appropriate for the response length and format.",
+      "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\".",
+      "preserve_references_note": "The response should also preserve all the data references previously included in the analysts' reports, but do not mention the roles of multiple analysts in the analysis process.",
+      "category_grouping_rule": {
+        "title": "카테고리 그룹핑 금지",
+        "body": "위 STRUCTURED ANSWER FORMAT을 그대로 따르며, 주제들을 category나 다른 기준으로 묶어 별도 섹션으로 나누지 말고 하나의 평평한 번호 목록으로만 작성한다. 아래 카테고리 분류는 참고용 맥락일 뿐, 답변에 섹션 제목으로 노출하지 않는다."
+      },
+      "response_rules_before_category": [
+        {
+          "title": "STRUCTURED ANSWER FORMAT",
+          "body": "Begin the answer with exactly this one line and nothing else before it: '요즘 메일함에서는 아래와 같은 주제들이 자주 다뤄졌습니다.' Then leave exactly one blank line.\nAfter the intro line, list each distinct topic as a flat numbered item ('1.', '2.', '3.', ...) — do NOT group items under category headers, sections, or a 'main topics' / 'other topics' split; do NOT add a summary header block (participant list, date range, etc.) before the intro line. The number and '주제:' are on the same line; '내용:' goes on its own line indented with exactly 3 spaces:\nN. 주제: <a short noun phrase naming the topic/cluster, a few words>\n   내용: <1-2 sentences in polite Korean (-습니다/-입니다 endings) summarizing what this topic is about, based only on the analyst reports>\nLeave exactly one blank line between numbered items, and nothing after the last item's '내용:' line — no closing remark, no '[Data: ...]' citation tags, no checklists, no extra sections of any kind.\nIf the reports do not contain enough information to identify any topic, do not use the numbered format at all — just state plainly in one polite Korean sentence that the 메일함 data does not contain enough information to answer."
+        }
+      ],
+      "response_rules_after_category": []
+    },
+    "knowledge": {
+      "intro": "The response may also include relevant real-world knowledge outside the dataset, but it must be explicitly annotated with a verification tag [LLM: verify].",
+      "example": "\"This is an example sentence supported by real-world knowledge [LLM: verify].\"",
+      "caution_intro": "When applying real-world knowledge to email archive data, be especially cautious about the following cases — these are where assumptions most commonly go wrong:",
+      "caution_cases": [
+        {
+          "title": "서비스/플랫폼명",
+          "description": "이메일에 등장하는 서비스 이름(예: \"VocaRush\", \"코딩라운지\")은 외부에 알려진 서비스가 아닐 수 있다. 이름만으로 기능이나 성격을 추정할 때는 [LLM: verify]."
+        },
+        {
+          "title": "조직/팀명",
+          "description": "이메일에 등장하는 조직명·팀명은 사내 명칭일 수 있으며, 외부에 알려진 조직과 동일하다고 가정하지 않는다. 추정 시 [LLM: verify]."
+        },
+        {
+          "title": "인물 역할",
+          "description": "발신자·수신자의 직책이나 역할을 이메일 내용만으로 추론할 때는 [LLM: verify]. Person 노드의 Name / Account 필드에 명시된 정보만 사실로 서술할 수 있다."
+        },
+        {
+          "title": "날짜/일정 추론",
+          "description": "이메일이나 Event 노드에 명시된 날짜 외에 일정을 추론하거나 연도를 가정할 때는 [LLM: verify]. Event.Schedule 필드에 없는 날짜는 지어내지 않는다."
+        },
+        {
+          "title": "첨부파일 내용",
+          "description": "Attachment 엔티티에 Filename만 사실로 언급하고, 파일의 내용을 추론하거나 요약하지 않는다. 내용 추정 시 [LLM: verify]."
+        }
+      ],
+      "closing_note": "데이터에 명시된 사실(엔티티 필드값, 관계 description)은 [LLM: verify] 없이 서술할 수 있다. 데이터에 없는 내용을 보완하거나 추론할 때만 이 태그를 사용한다."
+    }
+  },
+  "summarize_attachment": {}
 }

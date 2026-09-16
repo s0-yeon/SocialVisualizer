@@ -1843,6 +1843,44 @@ def send_mail_subjects_by_ids():
 
     return jsonify({"subjects": subjects})
 
+# 메신저 federated_local_search 근거메신저 보기용 — 블록 ID("2022-08-21_01" 형태)로
+# 그 대화 블록 원문을 반환한다. (mail-body-by-ids의 메신저 버전)
+# get_chatroom_day_messages/get_chatroom_name(통계 DB, extract_statics 파이프라인 결과물)를
+# 처음엔 재사용했으나, graphrag로만 인덱싱되고 통계 DB엔 없는 계정(예: 이 테스트 계정들)에서
+# "채팅방을 찾을 수 없습니다"로 항상 실패했다 — 인덱싱과 통계 추출은 서로 다른 파이프라인이라
+# 통계 DB에 없을 수 있음. 대신 graphrag가 실제로 읽은 원본 documents.parquet을 직접 파싱하는
+# _parse_message_blocks_from_parquet()를 써서 DB 의존을 아예 없앴다 — 이러면 하루 전체가 아니라
+# 인용된 그 블록(ID)만 정확히 보여줄 수 있다는 부수 이점도 있음.
+@app.route("/messenger-body-by-ids", methods=["POST"])
+def send_messenger_body_by_ids():
+    from util.message_statics import _parse_message_blocks_from_parquet
+
+    data = request.json or {}
+    # .get(key, "")는 키가 아예 없을 때만 기본값을 쓰고, 값이 명시적으로 null(None)이면
+    # 그대로 None을 반환한다 — account 역매칭 실패 시 프론트가 account: null을 보내는
+    # 경우가 있어 (or "")로 한 번 더 방어한다.
+    account = (data.get("account") or "").strip()
+    mail_id = (data.get("mail_id") or "").strip()  # 메신저 블록 ID, 예: "2022-08-21_01"
+
+    if not account:
+        return jsonify({"error": "account is required"}), 400
+    if not mail_id:
+        return jsonify({"error": "mail_id is required"}), 400
+
+    paths = UserPaths(BASE_DIR, account, "messenger")
+    blocks = _parse_message_blocks_from_parquet(paths)
+    block = next((b for b in blocks if b.get("block_id") == mail_id), None)
+    if block is None:
+        return jsonify({"error": "대화를 찾을 수 없습니다."}), 404
+
+    return jsonify({
+        "id": mail_id,
+        "account": account,
+        "room_name": block.get("chatroom_name") or account,
+        "date": block.get("block_date") or "",
+        "messages": block.get("messages") or [],
+    })
+
 # 날짜 범위 내 발신 메일을 상대방별로 집계해 반환한다
 @app.route("/mail-person-sent-stats", methods=["POST"])
 def send_mail_person_sent_stats():

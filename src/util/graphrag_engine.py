@@ -270,6 +270,20 @@ def _build_global_engine(output_dir: str, graphrag_root: str) -> tuple[GlobalSea
             "include_community_rank": True,
             "community_weight_name": "occurrence weight",  # build_community_context()의 실제 기본 가중치 속성명과 일치
         },
+        # 라이브러리 기본값("multiple paragraphs")을 쓰던 걸 local과 동일한 원칙으로 오버라이드.
+        # 5.1b 확정 포맷(번호 순서 리스트+"주제:"/"내용:" 라벨+존댓말 일관)을 명시적으로 요구
+        # (2026-09-10, SFT 학습 데이터 재구축 중 이 포맷이 실제로는 프로덕션에 반영 안 돼 있던
+        # 걸 발견 — gen_global_sft.py의 RESPONSE_TYPE도 이 문자열과 동일하게 맞춰야 함).
+        response_type=(
+            "번호가 매겨진 순서 리스트(1, 2, 3...)로 작성한다. 항목 사이는 실제 줄바꿈으로 구분하고, "
+            "한 줄에 여러 항목을 \" - \"로 이어붙이지 않는다. 각 항목은 반드시 아래 두 줄로만 구성한다:\n"
+            "주제: <그 주제를 한 줄로 요약한 제목>\n"
+            "내용: <그 주제에 대한 설명을 두세 문장으로 서술>\n"
+            "제목/날짜/계정/채팅방/ID 같은 다른 필드는 추가하지 않는다. "
+            "서두 문장부터 리스트 항목 전부까지 존댓말(-습니다/-입니다)로 일관되게 작성하고 반말은 쓰지 않는다. "
+            "마크다운 굵게(**)나 헤더(#) 기호는 쓰지 않는다. "
+            "항목은 중요도(importance score/rank)가 높은 순서로 배치한다."
+        ),
     )
     return engine, model
 
@@ -281,16 +295,26 @@ def get_engines(user_id: str, output_dir: str, graphrag_root: str) -> tuple[Loca
     if mtime == 0.0:
         raise RuntimeError(f"인덱스가 아직 생성되지 않았습니다: {output_dir}")
 
-    with _cache_lock:  # 동시 접근 방지
+    with _cache_lock:  # 동시 접근 방지 (캐시 딕셔너리 읽기만 — 아래 참고)
         cached = _engine_cache.get(user_id)
 
         if cached and cached["mtime"] == mtime:
             return cached["local"], cached["global"]
 
-        # 캐시 miss 또는 인덱스 갱신 감지 (index/update 실행 후 mtime 변경): 새로 빌드
-        print(f"[ENGINE] 빌드 시작: {user_id}")
-        local_engine,  local_model  = _build_local_engine(output_dir, graphrag_root)
-        global_engine, global_model = _build_global_engine(output_dir, graphrag_root)
+    # 캐시 miss 또는 인덱스 갱신 감지 (index/update 실행 후 mtime 변경): 새로 빌드.
+    # 빌드 자체(parquet 읽기, 임베딩/모델 초기화 등 — 계정 하나당 0.5~1초대)는 락 밖에서
+    # 수행한다. 예전엔 이 무거운 작업까지 _cache_lock 블록 안에서 했는데, 연합 검색이
+    # 계정별로 get_engines를 스레드풀에서 동시에 호출해도(asyncio.to_thread + gather)
+    # 전역 락 하나에 전부 걸려 사실상 순차 실행되던 게 진짜 원인이었다 — federated
+    # local/global search가 "병렬화"해도 계정 14개 기준 엔진 빌드 단계만 9~11초씩
+    # 그대로 누적됐던 이유. 같은 user_id를 두 요청이 동시에 처음 빌드하는 드문 경합은
+    # 중복 빌드(결과 자체는 둘 다 정답이라 문제 없음, 캐시엔 마지막에 쓴 것만 남음)로
+    # 끝나는데, 매 요청마다 전체를 직렬화하는 비용보다는 훨씬 싸다.
+    print(f"[ENGINE] 빌드 시작: {user_id}")
+    local_engine,  local_model  = _build_local_engine(output_dir, graphrag_root)
+    global_engine, global_model = _build_global_engine(output_dir, graphrag_root)
+
+    with _cache_lock:
         _engine_cache[user_id] = {
             "local":         local_engine,
             "global":        global_engine,
@@ -298,8 +322,8 @@ def get_engines(user_id: str, output_dir: str, graphrag_root: str) -> tuple[Loca
             "global_model":  global_model,
             "mtime":         mtime,
         }
-        print(f"[ENGINE] 빌드 완료: {user_id}")
-        return local_engine, global_engine
+    print(f"[ENGINE] 빌드 완료: {user_id}")
+    return local_engine, global_engine
 
 
 # 지정한 method(local/global) 엔진의 누적 토큰 사용량을 반환하고 초기화한다

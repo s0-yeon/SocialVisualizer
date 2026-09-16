@@ -239,17 +239,21 @@
   color: #2a3f54;
   word-break: break-word;
 }
+/* 텍스트 줄이 짧으면 버튼이 옆에 붙고 길면 다음 줄로 밀리는 등, 내용 길이에 따라
+   버튼 위치가 들쭉날쭉해 보이는 문제가 있었음(가로 flex + wrap 조합) — 항상 텍스트
+   아래 자기 줄에 오도록 세로 방향으로 고정해서 어떤 답변이 와도 배치가 일정하게 함. */
 .gw-answer-line-with-source {
   display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
   line-height: 1.9;
   font-size: 1.15rem;
   color: #2a3f54;
 }
 .gw-answer-line-with-source .gw-view-source-mail-btn {
-  margin-top: 3px;
+  align-self: flex-start;
+  margin-top: 2px;
 }
 .gw-answer-line-text {
   flex: 1 1 auto;
@@ -320,6 +324,13 @@
   padding: 38px 36px 34px;
   margin-left: 32px;
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.2);
+  /* 답변이 길면 서랍이 항상 프레임 맨 위(align-items: flex-start)에 고정돼서, 답변
+     아래쪽 항목의 버튼을 누르면 서랍 내용을 보려고 위로 스크롤해야 하는 문제가 있었음 —
+     sticky로 바꿔서 페이지를 어디까지 스크롤했든 서랍이 뷰포트 상단 근처를 계속 따라오게
+     함(같은 flex 행 안에서 위치만 뷰포트 기준으로 붙잡아두는 것이라 레이아웃 자체는 그대로). */
+  position: sticky;
+  top: 24px;
+  align-self: flex-start;
 }
 .gw-mail-drawer-close {
   position: absolute;

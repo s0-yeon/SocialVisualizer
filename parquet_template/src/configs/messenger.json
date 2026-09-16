@@ -1,411 +1,807 @@
 {
-    "config": "messenger",
-    "description": "A knowledge graph extracted from KakaoTalk chat data — centered on ChatRoom, with conversations split by Date",
-    "entity_types": [
-        { "name": "Person", "format": "Name: <display name as shown in KakaoTalk>" },
-        { "name": "Keyword", "format": "Term: <core keyword>" },
-        { "name": "ChatRoom", "format": "Name: <chat room name>" },
-        { "name": "Event", "format": "EventName: <event_title> | Schedule: <YYYY-MM-DD HH:MM/None> | Location: <place/None>" },
-        { "name": "Date", "format": "Value: <YYYY-MM-DD> | Day: <day of week>" },
-        { "name": "NamedEntity", "format": "Type: <장소/조직/제품·서비스/작품/인물/기타> | Description: <one-sentence description>" },
-        { "name": "Attachment", "format": "Type: <file type>" }
+  "config": "messenger",
+  "description": "A knowledge graph extracted from KakaoTalk chat data — centered on ChatRoom, with conversations split by Date",
+  "entity_types": [
+    {
+      "name": "Person",
+      "format": "Name: <display name as shown in KakaoTalk>"
+    },
+    {
+      "name": "Keyword",
+      "format": "Term: <core keyword>"
+    },
+    {
+      "name": "ChatRoom",
+      "format": "Name: <chat room name>"
+    },
+    {
+      "name": "Event",
+      "format": "EventName: <event_title> | Schedule: <YYYY-MM-DD HH:MM/None> | Location: <place/None>"
+    },
+    {
+      "name": "Date",
+      "format": "Value: <YYYY-MM-DD> | Day: <day of week>"
+    },
+    {
+      "name": "NamedEntity",
+      "format": "Type: <장소/조직/제품·서비스/작품/인물/기타> | Description: <one-sentence description>"
+    },
+    {
+      "name": "Attachment",
+      "format": "Type: <file type>"
+    }
+  ],
+  "relationship_types": [
+    {
+      "name": "participates_in",
+      "source": "Person",
+      "target": "ChatRoom",
+      "when": "When that person is a participant in this chat room's conversation"
+    },
+    {
+      "name": "active_on",
+      "source": "ChatRoom",
+      "target": "Date",
+      "when": "When that chat room had a conversation on this date"
+    },
+    {
+      "name": "spoke_on",
+      "source": "Person",
+      "target": "Date",
+      "when": "When that person sent a message on this date"
+    },
+    {
+      "name": "mentioned_on",
+      "source": "Keyword",
+      "target": "Date",
+      "when": "When that keyword was discussed in this date's conversation"
+    },
+    {
+      "name": "mentioned_on",
+      "source": "NamedEntity",
+      "target": "Date",
+      "when": "When that named entity was mentioned in this date's conversation"
+    },
+    {
+      "name": "scheduled_on",
+      "source": "Event",
+      "target": "Date",
+      "when": "When that event was mentioned in this date's conversation"
+    },
+    {
+      "name": "shared_on",
+      "source": "Attachment",
+      "target": "Date",
+      "when": "When that attachment was shared in this date's conversation"
+    },
+    {
+      "name": "interacts_with",
+      "source": "Person",
+      "target": "Person",
+      "when": "When two people directly converse with each other within the same day's conversation — replying to, addressing, or having a back-and-forth exchange with one another"
+    }
+  ],
+  "free_form_relationships": true,
+  "grounding_rules": [
+    "Do NOT extract one-time codes, OTPs, temporary tokens, or any ephemeral numeric/alphanumeric strings shared in chat as entities.",
+    "CRITICAL: Only extract entities that represent meaningful, persistent people, terms, events, or named things — not one-off chit-chat.",
+    "CRITICAL: An entity MUST NOT be created if any of its core fields (name, type, or description) cannot be populated with a valid, meaningful value.",
+    "CRITICAL: Strings representing absence of value such as 'None', 'NONE', 'null', '없음', '-' MUST NOT be used as entity names under any type.",
+    "Do NOT create duplicate entities.",
+    "CRITICAL: Every extracted entity MUST be connected to at least one of ChatRoom or Date (directly or through another entity) — do NOT extract isolated entities floating with no connection to the conversation's room/date context. EXCEPTION: If this chunk has no visible '채팅방:'/'날짜:' header (a headerless continuation chunk, per the chunking rule below), you cannot see the ChatRoom/Date to connect to. In that case, do NOT skip a genuinely significant Keyword/Event/NamedEntity/Attachment just because you can't anchor it to ChatRoom/Date — instead connect it to the Person who mentioned/sent it via a free-form relationship (e.g. type 'mentioned_by', description explaining what they mentioned) so it isn't floating. Person-to-Person 'interacts_with' and Person entities themselves are unaffected by this — they never needed a ChatRoom/Date anchor.",
+    "A Person entity uses the display name exactly as shown in KakaoTalk as its identifier — do not refuse to create one just because there's no email address.",
+    "If the same person appears multiple times as name variants mixed with typos/emoji, merge them into a single Person when it's unambiguously the same person from context. If unsure, keep them as separate entities.",
+    "Do NOT extract the subject of system notification messages like '님이 들어왔습니다' (has entered) or '님이 나갔습니다' (has left) as a Person entity.",
+    "Do not confuse Keyword with NamedEntity — classify proper nouns (a specific place/organization/product/work name other than the chat room itself, and the name of a person who is only mentioned but never sends a message directly) as NamedEntity, and general topic/subject words as Keyword.",
+    "CRITICAL: The given text is a chunk that may start mid-message, cut off by a chunk boundary in the middle of a 'HH:MM 이름: 메시지' line — e.g. a timestamp cut down to a bare trailing number like '13 이름: ...', or a sender name cut down to a bare trailing fragment like '님: ...' or '준: ...'. If the very first line of the given text does not look like a complete, well-formed 'HH:MM 이름: 메시지' line (valid HH:MM timestamp followed by a plausible full name), treat it as a truncated fragment: do NOT create any entity (Person, ChatRoom, or otherwise) from that fragment alone, and do NOT use it as a name/value anywhere. Only extract from that first line if the same name/value it would produce is already independently confirmed by a later, complete line in the same text."
+  ],
+  "citation_rule": [
+    "Points supported by data should list their data references as follows:",
+    "\"This is an example sentence supported by data references [Data: <dataset name> (record ids); <dataset name> (record ids)].\"",
+    "Do not list more than 5 record ids in a single reference. Instead, list the top 5 most relevant record ids and add \"+more\" to indicate that there are more.",
+    "Do not include information where the supporting evidence is not provided."
+  ],
+  "category_taxonomy": [
+    {
+      "name": "일상 대화",
+      "description": "Private small talk/catching up with friends, family, etc."
+    },
+    {
+      "name": "프로젝트/협업",
+      "description": "Conversations involving substantive collaboration such as work, study groups, or team projects"
+    },
+    {
+      "name": "모임/약속",
+      "description": "Event-centered conversation such as scheduling and making plans to meet"
+    },
+    {
+      "name": "공지/알림",
+      "description": "A room mostly consisting of group announcements or system notifications, with little substantive conversation"
+    }
+  ],
+  "extract_graph": {
+    "goal": "Given a day's worth of KakaoTalk chat messages from a single chat room and a list of entity types, identify all entities and the relationships between them. The conversation is naturally organized around two hub concepts: the ChatRoom it happened in, and the Date it happened on. Output both entities and relationships using the specified formats.",
+    "entity_type_rules": {
+      "ChatRoom": [
+        "GATE (check this FIRST, before anything else about ChatRoom): scan the given text for the literal substring '채팅방:'. If you cannot point to that exact substring actually present in the given text, you MUST NOT output a ChatRoom entity at all this time — zero ChatRoom entities is the correct answer for such a chunk. Never invent, paraphrase, guess, or derive a ChatRoom name from message content, timestamps, sender lines, stray words, or anything else. This happens routinely — a long day's conversation is often split across multiple chunks, so only the first chunk of that day has the '채팅방:/날짜:/참여자:' header; later chunks are pure 'HH:MM 이름: 메시지' continuations with no header, and for those the right output has NO ChatRoom entity.",
+        "If (and only if) '채팅방:' is literally present: the ChatRoom entity's 'name' MUST be exactly the value copied from that field — copy the characters, do not paraphrase or summarize them.",
+        "When the '채팅방:' field is present, always create the ChatRoom entity for it — the same room name will appear identically across many blocks and gets merged into a single entity automatically, so extract it consistently every time rather than skipping it as 'already known'.",
+        "CRITICAL EXCEPTION — check this by COUNTING, not by comparing names: count the number of names listed in the '참여자:' field. If it is exactly 2 (a 1:1 chat), you MUST append ' (채팅방)' to the ChatRoom entity's name — ALWAYS, unconditionally, every single time you extract this ChatRoom in a 1:1 chat, whether or not the room name happens to visually resemble either participant's name. Do NOT decide this by checking 'does the room name match a Person name' — that check is unreliable; counting participants is not. (Reason: in a 1:1 KakaoTalk chat the room name is very often the other participant's display name, e.g. 채팅방: 과외 학생 어머님 with 참여자: 이하은, 과외 학생 어머님 — so ChatRoom name becomes '과외 학생 어머님 (채팅방)'. Identically-named ChatRoom/Person entities collide downstream, so this is never optional in a 2-participant room.) Apply the suffix consistently every time this exact room appears across blocks, so it still merges into one ChatRoom entity. The Person entity itself always keeps the plain display name, unchanged — never suffix a Person."
+      ],
+      "Date": [
+        "The 'name' of a Date entity MUST be the date portion only (YYYY-MM-DD), taken from the '날짜:' field — drop the time-of-day part.",
+        "'Day' MUST be the Korean day-of-week (월요일/화요일/수요일/목요일/금요일/토요일/일요일) corresponding to that date.",
+        "Always create exactly one Date entity per block."
+      ],
+      "Person": [
+        "The 'name' of a Person entity MUST be the display name exactly as it appears before each message (e.g. '09:15 홍길동: ...' → name is '홍길동').",
+        "CRITICAL: A Person's 'name' must be ONLY the short display-name segment between the timestamp and the ':' — NEVER the timestamp itself, NEVER the ':' character, and NEVER the message content after it. If the name you are about to output contains a digit-colon pattern (like 'HH:MM') or looks like a full sentence/question, you mis-parsed the line — go back and re-extract just the name segment. This applies even in a headerless continuation chunk (no 채팅방:/날짜: visible) — the message-line format 'HH:MM 이름: 메시지' and how to split it never changes.",
+        "CRITICAL: In a 1:1 chat, the ChatRoom name is often identical (or nearly identical) to the other participant's display name (e.g. 채팅방: 과외 학생 어머님, and messages sent as '과외 학생 어머님: ...'). Do NOT treat 'I already created a ChatRoom entity with this name' as a reason to skip creating the Person entity — if a name precedes ':' in a message line, it MUST also get its own Person entity, even when that exact same name/string is already used as the ChatRoom entity's name.",
+        "CRITICAL: Do NOT create a Person entity from a system/notification line (marked with '[알림]', e.g. '~님이 들어왔습니다').",
+        "CRITICAL: Do NOT create a Person entity for a name that only appears mentioned inside another person's message content (e.g. '민수한테 물어봐') when that name never itself appears as a message sender (i.e., never precedes ':' in a message line) within the given text. Extract such mentioned-only names as a NamedEntity (type: 인물) instead — see NamedEntity rules.",
+        "Integrate multiple mentions of the same person (including minor typos/emoji variants) into a single entity when the identity is unambiguous from context; if there is any doubt, keep them as separate entities.",
+        "When two Person entities directly converse with each other in the given text (one replies to, addresses, or has a back-and-forth exchange with the other), extract an 'interacts_with' relationship between them IN ADDITION TO their individual participates_in/spoke_on edges — do not extract only one or the other.",
+        "In the description of an 'interacts_with' relationship, note any observable interaction cues present in the text — speech level (반말/존댓말), nicknames or terms of address (애칭/호칭), and the tone of the exchange (e.g. 장난스러움, 격식적임, 다정함) — since these hint at how close the two people are. Do not invent cues that aren't actually observable in the text.",
+        "CRITICAL: The description of an 'interacts_with' relationship MUST start with a relationship-category tag in the exact format '[관계: <카테고리>] ' (followed by a space), where <카테고리> is the single best-fitting one of: 가족, 연인, 친구, 동료, 사제, 지인. Base it strictly on observable cues (반말/존댓말, 애칭, 대화 주제, 격식 수준, 채팅방 이름/맥락) — mostly task/project-oriented with neutral or polite tone between peers → 동료; casual and personal but not clearly family/romantic → 친구; a clear teaching/instructional hierarchy (선생님/교수님/과외 선생님 addressed as such, student or student's parent on the other side, lesson/coursework-centered) → 사제; cues are ambiguous or too thin to tell → 지인 (do not guess 가족/연인/사제 without a clear basis). After the tag, continue with the descriptive sentence as before."
+      ],
+      "Keyword": [
+        "Extract concise, reusable terms or short phrases that were actually discussed — not full sentences.",
+        "Do NOT extract one-time codes, greetings, single-character reactions (e.g. 'ㅇㅇ', 'ㅋㅋ'), or filler words as Keywords.",
+        "CRITICAL: Do NOT create a Keyword entity if there is no clearly discussed term in the conversation."
+      ],
+      "Event": [
+        "The 'name' (title) of an Event entity MUST be a concise event title.",
+        "Extract ONLY if explicit date or time information is present in the conversation.",
+        "CRITICAL: Do NOT create an Event entity if the 'Schedule' attribute cannot be populated with an explicit date/time."
+      ],
+      "NamedEntity": [
+        "Extract proper nouns mentioned in the conversation that don't belong to ChatRoom/Event — e.g. place names, organization names, product or service names, titles of creative works, and people who are only mentioned but never send a message themselves in the given text.",
+        "'type' MUST be a short category label such as '장소', '조직', '제품/서비스', '작품', '인물', '기타'.",
+        "A person's name that is mentioned inside someone else's message but never appears as an actual message sender in the given text MUST be extracted here with type '인물' — NOT as a Person entity. This keeps 'actually participated' (Person) cleanly separate from 'merely mentioned' (NamedEntity).",
+        "Do NOT extract common/generic nouns as NamedEntity — use Keyword for those instead."
+      ],
+      "Attachment": [
+        "Extract ONLY when a file or photo share is explicitly mentioned in the conversation (e.g. '사진', '파일: 문서.pdf', '이모티콘').",
+        "The 'name' (title) MUST be the file name if one is given in the text, otherwise a short label such as '사진' or '이모티콘'.",
+        "'Type' MUST be the file type/extension if known, otherwise a general category like '이미지' or '문서'."
+      ]
+    },
+    "integrated_document_rules": null,
+    "relationship_rules": [
+      "Only create a relationship when it is clearly and directly supported by the conversation text — do not infer relationships that aren't explicitly grounded.",
+      "CRITICAL: 'participates_in' and 'spoke_on' relationships MUST only connect a Person who is confirmed as an actual message sender in the given text (their name precedes ':' in a message line) — never a person who is only mentioned inside another message's content.",
+      "Prefer connecting mentioned entities (Keyword/Event/NamedEntity/Attachment) to the Date they were mentioned on, and connecting Person/ChatRoom to that same Date, rather than building long indirect chains. The one exception is a direct Person-to-Person 'interacts_with' relationship when two people actually converse with each other — extract that in addition to (not instead of) their individual spoke_on/participates_in edges.",
+      "Relationship strength MUST be a float between 1.0 and 10.0. Explicit/central to the conversation: 7.0+ / Brief mention: 4.0 or below.",
+      "Do NOT create duplicate relationships with the same source-target-type combination.",
+      "Relationship descriptions MUST be in Korean and MUST be a meaningful sentence — NEVER use the relationship type name itself as the description.",
+      "CRITICAL: A relationship's source and target MUST NEVER be the exact same name string — no self-relationships, ever, for any relationship type (participates_in, spoke_on, interacts_with, etc.). Before outputting a relationship, check: is source == target? If so, discard it entirely; do not output it. (This can otherwise slip in when a ChatRoom name that should have had a suffix like ' (채팅방)' gets written without it, making it look identical to a Person's name — the fix is to not create that relationship at all when source and target collide, not to guess which one is 'right'.)",
+      "REAL MISTAKE TO AVOID — this exact error has actually happened, do not repeat it: in a 1:1 chat named 채팅방: 김도현 (participants 김도현, 이하은), a wrong output was: (\"relationship\"<|>김도현<|>김도현<|>김도현 채팅방에서 대화가 있었다.<|>10) — this is INVALID (source==target, and the ChatRoom's required ' (채팅방)' suffix from the 1:1-chat rule above was dropped). The correct output for that same fact is: (\"relationship\"<|>김도현<|>김도현 (채팅방)<|>김도현은 김도현 (채팅방) 채팅방의 대화 참여자다.<|>9) — note the target carries the suffix, making it distinct from the Person's name. Apply the ' (채팅방)' suffix to a 1:1 room's ChatRoom name EVERY time you reference it in ANY relationship (participates_in, active_on, etc.), not just when first creating the entity."
     ],
-    "relationship_types" : [
-        { "name": "participates_in", "source": "Person", "target": "ChatRoom", "when": "When that person is a participant in this chat room's conversation" },
-        { "name": "active_on", "source": "ChatRoom", "target": "Date", "when": "When that chat room had a conversation on this date" },
-        { "name": "spoke_on", "source": "Person", "target": "Date", "when": "When that person sent a message on this date" },
-        { "name": "mentioned_on", "source": "Keyword", "target": "Date", "when": "When that keyword was discussed in this date's conversation" },
-        { "name": "mentioned_on", "source": "NamedEntity", "target": "Date", "when": "When that named entity was mentioned in this date's conversation" },
-        { "name": "scheduled_on", "source": "Event", "target": "Date", "when": "When that event was mentioned in this date's conversation" },
-        { "name": "shared_on", "source": "Attachment", "target": "Date", "when": "When that attachment was shared in this date's conversation" },
-        { "name": "interacts_with", "source": "Person", "target": "Person", "when": "When two people directly converse with each other within the same day's conversation — replying to, addressing, or having a back-and-forth exchange with one another" }
+    "examples": [
+      {
+        "entity_types": [
+          "ChatRoom",
+          "Date",
+          "Person",
+          "Event"
+        ],
+        "text": "============================================================\n[대화 1]\n\nID: 2024-01-01_01\n채팅방: 가족톡\n날짜: 2024-01-01\n참여자: 홍길동, 김영희\n\n[대화 내용]\n09:15 홍길동: 오늘 저녁에 다 같이 밥 먹을까?\n09:16 김영희: 좋아! 몇 시?\n09:17 홍길동: 7시 강남역에서 보자\n09:18 김영희: 콜!\n============================================================",
+        "entities": [
+          {
+            "name": "가족톡",
+            "type": "ChatRoom",
+            "description": "Name: 가족톡"
+          },
+          {
+            "name": "2024-01-01",
+            "type": "Date",
+            "description": "Value: 2024-01-01 | Day: 월요일"
+          },
+          {
+            "name": "홍길동",
+            "type": "Person",
+            "description": "Name: 홍길동"
+          },
+          {
+            "name": "김영희",
+            "type": "Person",
+            "description": "Name: 김영희"
+          },
+          {
+            "name": "강남역 저녁 약속",
+            "type": "Event",
+            "description": "EventName: 강남역 저녁 약속 | Schedule: 2024-01-01 19:00 | Location: 강남역"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "홍길동",
+            "target": "가족톡",
+            "type": "participates_in",
+            "description": "홍길동은 가족톡 채팅방의 대화 참여자다.",
+            "strength": 9
+          },
+          {
+            "source": "김영희",
+            "target": "가족톡",
+            "type": "participates_in",
+            "description": "김영희는 가족톡 채팅방의 대화 참여자다.",
+            "strength": 9
+          },
+          {
+            "source": "가족톡",
+            "target": "2024-01-01",
+            "type": "active_on",
+            "description": "가족톡에서 2024-01-01에 대화가 있었다.",
+            "strength": 10
+          },
+          {
+            "source": "홍길동",
+            "target": "2024-01-01",
+            "type": "spoke_on",
+            "description": "홍길동이 2024-01-01에 저녁 약속을 제안하는 메시지를 보냈다.",
+            "strength": 9
+          },
+          {
+            "source": "김영희",
+            "target": "2024-01-01",
+            "type": "spoke_on",
+            "description": "김영희가 2024-01-01에 약속에 응답하는 메시지를 보냈다.",
+            "strength": 9
+          },
+          {
+            "source": "강남역 저녁 약속",
+            "target": "2024-01-01",
+            "type": "scheduled_on",
+            "description": "2024-01-01 대화에서 저녁 7시 강남역 약속이 언급되었다.",
+            "strength": 10
+          },
+          {
+            "source": "홍길동",
+            "target": "김영희",
+            "type": "interacts_with",
+            "description": "[관계: 가족] 홍길동과 김영희가 서로 반말로 저녁 약속을 빠르게 주고받으며 정했다.",
+            "strength": 7
+          }
+        ]
+      },
+      {
+        "entity_types": [
+          "ChatRoom",
+          "Date",
+          "Person",
+          "Keyword"
+        ],
+        "text": "============================================================\n[대화 2]\n\nID: 2024-02-03_01\n채팅방: 스터디방\n날짜: 2024-02-03\n참여자: 박서연, 최민수\n\n[대화 내용]\n20:00 박서연: 다음 주 발표 자료 어디까지 했어?\n20:02 최민수: 절반 정도 했어, 이번 주말까지 마무리할게\n20:03 박서연: 오케이 나도 같이 검토해볼게\n20:15 최민수님이 들어왔습니다.\n============================================================",
+        "entities": [
+          {
+            "name": "스터디방",
+            "type": "ChatRoom",
+            "description": "Name: 스터디방"
+          },
+          {
+            "name": "2024-02-03",
+            "type": "Date",
+            "description": "Value: 2024-02-03 | Day: 토요일"
+          },
+          {
+            "name": "박서연",
+            "type": "Person",
+            "description": "Name: 박서연"
+          },
+          {
+            "name": "최민수",
+            "type": "Person",
+            "description": "Name: 최민수"
+          },
+          {
+            "name": "발표 자료 준비",
+            "type": "Keyword",
+            "description": "Term: 발표 자료 준비"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "박서연",
+            "target": "스터디방",
+            "type": "participates_in",
+            "description": "박서연은 스터디방 채팅방의 대화 참여자다.",
+            "strength": 8
+          },
+          {
+            "source": "최민수",
+            "target": "스터디방",
+            "type": "participates_in",
+            "description": "최민수는 스터디방 채팅방의 대화 참여자다.",
+            "strength": 8
+          },
+          {
+            "source": "스터디방",
+            "target": "2024-02-03",
+            "type": "active_on",
+            "description": "스터디방에서 2024-02-03에 대화가 있었다.",
+            "strength": 10
+          },
+          {
+            "source": "박서연",
+            "target": "2024-02-03",
+            "type": "spoke_on",
+            "description": "박서연이 2024-02-03에 발표 자료 진행 상황을 물었다.",
+            "strength": 8
+          },
+          {
+            "source": "최민수",
+            "target": "2024-02-03",
+            "type": "spoke_on",
+            "description": "최민수가 2024-02-03에 발표 자료 준비 현황을 공유했다.",
+            "strength": 8
+          },
+          {
+            "source": "발표 자료 준비",
+            "target": "2024-02-03",
+            "type": "mentioned_on",
+            "description": "2024-02-03 대화에서 발표 자료 준비 상황이 논의되었다.",
+            "strength": 8
+          }
+        ]
+      },
+      {
+        "entity_types": [
+          "ChatRoom",
+          "Date",
+          "Person",
+          "Attachment",
+          "NamedEntity"
+        ],
+        "text": "============================================================\n[대화 3]\n\nID: 2024-04-15_01\n채팅방: 스터디방\n날짜: 2024-04-15\n참여자: 최지유\n\n[대화 내용]\n15:34 최지유: 자료구조 과제 제출합니다.\n15:34 최지유: 파일: HW3_2471239.pdf\n============================================================",
+        "entities": [
+          {
+            "name": "스터디방",
+            "type": "ChatRoom",
+            "description": "Name: 스터디방"
+          },
+          {
+            "name": "2024-04-15",
+            "type": "Date",
+            "description": "Value: 2024-04-15 | Day: 월요일"
+          },
+          {
+            "name": "최지유",
+            "type": "Person",
+            "description": "Name: 최지유"
+          },
+          {
+            "name": "HW3_2471239.pdf",
+            "type": "Attachment",
+            "description": "Type: 문서"
+          },
+          {
+            "name": "자료구조",
+            "type": "NamedEntity",
+            "description": "Type: 기타 | Description: 학교 강의 과목명으로 언급된 자료구조 수업"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "최지유",
+            "target": "스터디방",
+            "type": "participates_in",
+            "description": "최지유는 스터디방 채팅방의 대화 참여자다.",
+            "strength": 8
+          },
+          {
+            "source": "스터디방",
+            "target": "2024-04-15",
+            "type": "active_on",
+            "description": "스터디방에서 2024-04-15에 대화가 있었다.",
+            "strength": 10
+          },
+          {
+            "source": "최지유",
+            "target": "2024-04-15",
+            "type": "spoke_on",
+            "description": "최지유가 2024-04-15에 과제 제출 메시지를 보냈다.",
+            "strength": 8
+          },
+          {
+            "source": "HW3_2471239.pdf",
+            "target": "2024-04-15",
+            "type": "shared_on",
+            "description": "2024-04-15 대화에서 자료구조 과제 파일이 공유되었다.",
+            "strength": 9
+          },
+          {
+            "source": "자료구조",
+            "target": "2024-04-15",
+            "type": "mentioned_on",
+            "description": "2024-04-15 대화에서 자료구조 과목이 언급되었다.",
+            "strength": 6
+          }
+        ]
+      },
+      {
+        "entity_types": [
+          "ChatRoom",
+          "Date",
+          "Person"
+        ],
+        "text": "동아리방\n08:19 강민재: 완전 인정\n08:20 이하은: 이걸로 하자\n08:21 이하은: 파일: 포스터시안.pdf\n08:22 조은우: 오 예쁘다",
+        "entities": [
+          {
+            "name": "강민재",
+            "type": "Person",
+            "description": "Name: 강민재"
+          },
+          {
+            "name": "이하은",
+            "type": "Person",
+            "description": "Name: 이하은"
+          },
+          {
+            "name": "조은우",
+            "type": "Person",
+            "description": "Name: 조은우"
+          }
+        ],
+        "relationships": [
+          {
+            "source": "이하은",
+            "target": "조은우",
+            "type": "interacts_with",
+            "description": "[관계: 친구] 이하은이 포스터 시안을 공유하자 조은우가 예쁘다고 반응하며 편하게 대화했다.",
+            "strength": 6
+          }
+        ]
+      }
+    ]
+  },
+  "summarize_descriptions": {
+    "goal": "You are a helpful assistant responsible for generating a comprehensive summary of the data provided below. Given one or two entities, and a list of descriptions, all related to the same entity or group of entities. Please concatenate all of these into a single, comprehensive description. Make sure to include information collected from all the descriptions. If the provided descriptions are contradictory, please resolve the contradictions and provide a single, coherent summary. Make sure it is written in third person, and include the entity names so we have the full context.",
+    "additional_rules": [
+      "This step only merges descriptions that already share the exact same entity name — it does NOT merge Person entities whose names differ due to typos/emoji variants. Cross-mention name normalization can only happen within a single day's conversation at extraction time (see extract_graph Person rules); name variants that appear on different dates are not resolved at this stage.",
+      "It's normal for ChatRoom and Date to reappear with the same name/value across multiple blocks — merge them into one even if the same description repeats every time.",
+      "CRITICAL: Do NOT create an entity if its description is 'None' or contains no meaningful information.",
+      "Output language: Write in Korean. However, keep proper nouns and service names in their original form.",
+      "CRITICAL: When 'Entities' lists two Person names AND the Description List entries are full sentences (not 'Name:'/'Term:'/... format), this is a relationship (interacts_with) summary — see Example 3. Do NOT output just 'Name: <person1>, <person2>' in that case; that discards the entire relationship content.",
+      "CRITICAL: In a relationship summary (Case B), each Description List entry starts with a '[관계: <카테고리>] ' tag (카테고리 is one of 가족/연인/친구/동료/사제/지인). Pick the single most representative category across all entries (majority vote; if tied, prefer whichever is more specific than 지인) and prefix your merged output with exactly one consolidated '[관계: <카테고리>] ' tag, followed by the synthesized paragraph. Do NOT keep multiple tags, drop the tag, or leave the tag out even if only one description is being merged."
     ],
-    "free_form_relationships": true,
-    "grounding_rules": [
-        "Do NOT extract one-time codes, OTPs, temporary tokens, or any ephemeral numeric/alphanumeric strings shared in chat as entities.",
-        "CRITICAL: Only extract entities that represent meaningful, persistent people, terms, events, or named things — not one-off chit-chat.",
-        "CRITICAL: An entity MUST NOT be created if any of its core fields (name, type, or description) cannot be populated with a valid, meaningful value.",
-        "CRITICAL: Strings representing absence of value such as 'None', 'NONE', 'null', '없음', '-' MUST NOT be used as entity names under any type.",
-        "Do NOT create duplicate entities.",
-        "CRITICAL: Every extracted entity MUST be connected to at least one of ChatRoom or Date (directly or through another entity) — do NOT extract isolated entities floating with no connection to the conversation's room/date context. EXCEPTION: If this chunk has no visible '채팅방:'/'날짜:' header (a headerless continuation chunk, per the chunking rule below), you cannot see the ChatRoom/Date to connect to. In that case, do NOT skip a genuinely significant Keyword/Event/NamedEntity/Attachment just because you can't anchor it to ChatRoom/Date — instead connect it to the Person who mentioned/sent it via a free-form relationship (e.g. type 'mentioned_by', description explaining what they mentioned) so it isn't floating. Person-to-Person 'interacts_with' and Person entities themselves are unaffected by this — they never needed a ChatRoom/Date anchor.",
-        "A Person entity uses the display name exactly as shown in KakaoTalk as its identifier — do not refuse to create one just because there's no email address.",
-        "If the same person appears multiple times as name variants mixed with typos/emoji, merge them into a single Person when it's unambiguously the same person from context. If unsure, keep them as separate entities.",
-        "Do NOT extract the subject of system notification messages like '님이 들어왔습니다' (has entered) or '님이 나갔습니다' (has left) as a Person entity.",
-        "Do not confuse Keyword with NamedEntity — classify proper nouns (a specific place/organization/product/work name other than the chat room itself, and the name of a person who is only mentioned but never sends a message directly) as NamedEntity, and general topic/subject words as Keyword.",
-        "CRITICAL: The given text is a chunk that may start mid-message, cut off by a chunk boundary in the middle of a 'HH:MM 이름: 메시지' line — e.g. a timestamp cut down to a bare trailing number like '13 이름: ...', or a sender name cut down to a bare trailing fragment like '님: ...' or '준: ...'. If the very first line of the given text does not look like a complete, well-formed 'HH:MM 이름: 메시지' line (valid HH:MM timestamp followed by a plausible full name), treat it as a truncated fragment: do NOT create any entity (Person, ChatRoom, or otherwise) from that fragment alone, and do NOT use it as a name/value anywhere. Only extract from that first line if the same name/value it would produce is already independently confirmed by a later, complete line in the same text."
+    "examples": [
+      {
+        "type": "ChatRoom",
+        "entity_name": "가족톡",
+        "description_list": [
+          "Name: 가족톡",
+          "Name: 가족톡"
+        ],
+        "output": "Name: 가족톡"
+      },
+      {
+        "type": "Person",
+        "entity_name": "홍길동",
+        "description_list": [
+          "Name: 홍길동",
+          "Name: 길동이"
+        ],
+        "output": "Name: 홍길동"
+      },
+      {
+        "type": "Relationship",
+        "entity_name": "이하은, 임준호",
+        "description_list": [
+          "[관계: 동료] 이하은과 임준호가 반말로 발표 준비와 진행 상황을 주고받으며 협업했다.",
+          "[관계: 동료] 임준호가 리허설 시점을 물었고 이하은이 발표 전날 저녁을 제안하며 자연스럽게 주고받았다.",
+          "[관계: 친구] 이하은이 진행상황과 오류를 편하게 물었고 임준호가 바로 답하며 서로 협업하는 흐름이 이어졌다."
+        ],
+        "output": "[관계: 동료] 이하은과 임준호는 서로 반말을 사용하는 편한 관계로, 발표 준비와 리허설 일정, 진행 상황과 오류 확인 등을 자주 주고받으며 협업했다. 임준호가 리허설 시점을 묻자 이하은이 발표 전날 저녁을 제안하는 등 실무적인 조율이 자연스럽게 이루어졌다."
+      }
+    ]
+  },
+  "extract_claims": {
+    "target_activity": "You are an intelligent assistant that helps a human analyst to analyze claims against certain entities presented in a text document.",
+    "goal": "Given a text document that is potentially relevant to this activity, an entity specification, and a claim description, extract all entities that match the entity specification and all claims against those entities.",
+    "claim_fields": [
+      {
+        "name": "Subject",
+        "description": "name of the entity that is subject of the claim, capitalized. The subject entity is one that committed the action described in the claim. Subject needs to be one of the named entities identified in step 1."
+      },
+      {
+        "name": "Object",
+        "description": "name of the entity that is object of the claim, capitalized. The object entity is one that either reports/handles or is affected by the action described in the claim. If object entity is unknown, use **NONE**."
+      },
+      {
+        "name": "Claim Type",
+        "description": "overall category of the claim, capitalized. Name it in a way that can be repeated across multiple text inputs, so that similar claims share the same claim type."
+      },
+      {
+        "name": "Claim Status",
+        "description": "**TRUE**, **FALSE**, or **SUSPECTED**. TRUE means the claim is confirmed, FALSE means the claim is found to be False, SUSPECTED means the claim is not verified."
+      },
+      {
+        "name": "Claim Description",
+        "description": "Detailed description explaining the reasoning behind the claim, together with all the related evidence and references."
+      },
+      {
+        "name": "Claim Date",
+        "description": "Period (start_date, end_date) when the claim was made. Both start_date and end_date should be in ISO-8601 format. If the claim was made on a single date rather than a date range, set the same date for both start_date and end_date. If date is unknown, return **NONE**."
+      },
+      {
+        "name": "Claim Source Text",
+        "description": "List of **all** quotes from the original text that are relevant to the claim."
+      }
     ],
-    "citation_rule": [
-        "Points supported by data should list their data references as follows:",
-        "\"This is an example sentence supported by data references [Data: <dataset name> (record ids); <dataset name> (record ids)].\"",
-        "Do not list more than 5 record ids in a single reference. Instead, list the top 5 most relevant record ids and add \"+more\" to indicate that there are more.",
-        "Do not include information where the supporting evidence is not provided."
+    "examples": [
+      {
+        "entity_specification": "organization",
+        "claim_description": "red flags associated with an entity",
+        "text": "According to an article on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B. The company is owned by Person C who was suspected of engaging in corruption activities in 2015.",
+        "claims": [
+          {
+            "subject": "COMPANY A",
+            "object": "GOVERNMENT AGENCY B",
+            "type": "ANTI-COMPETITIVE PRACTICES",
+            "status": "TRUE",
+            "start_date": "2022-01-10T00:00:00",
+            "end_date": "2022-01-10T00:00:00",
+            "description": "Company A was found to engage in anti-competitive practices because it was fined for bid rigging in multiple public tenders published by Government Agency B according to an article published on 2022/01/10",
+            "source": "According to an article published on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B."
+          }
+        ]
+      }
+    ]
+  },
+  "community_reports": {
+    "category_field_scope": "the primary purpose of the conversations in this cluster",
+    "importance_rating_scope": "this chat cluster is to the user's activity",
+    "goal_intro": "You are an AI assistant that helps a human analyst explore and understand their personal KakaoTalk chat archive. Your goal is to produce structured summaries of chat communities that help the user quickly grasp who is involved, what topics recur, and why this group of conversations matters.",
+    "goal": "Write a comprehensive report of a community, given a list of entities that belong to the community as well as their relationships. The community is derived from a personal KakaoTalk chat archive, typically centered around a ChatRoom and organized by Date. The report will help the user understand the nature and importance of this chat cluster.",
+    "report_sections": {
+      "title_rule": "A short but specific name for the community. Prefer using the ChatRoom name or a recurring Keyword when available. Write in Korean.",
+      "summary_rule": "An executive summary written in Korean describing: (1) which ChatRoom(s) and date range this community covers (2) who the key participants are (3) what the conversations in this cluster are generally about. Keep it under 3 sentences.",
+      "purpose_rule": "State the core function/purpose of this community in a single sentence. Include the unique characteristic that distinguishes it from other communities. (e.g., \"스터디 발표 자료 준비 진행 상황을 공유하는 대화\", \"가족 간 일상 안부와 약속을 나누는 대화\")",
+      "rating_explanation_rule": "A single sentence in Korean explaining the score."
+    },
+    "rating_criteria": [
+      {
+        "range": "8-10",
+        "description": "Conversations where concrete plans or decisions were made (including confirmed schedules, role assignments, important agreements)"
+      },
+      {
+        "range": "5-8",
+        "description": "Substantive everyday/collaborative conversation with a recurring keyword"
+      },
+      {
+        "range": "2-5",
+        "description": "Conversation mostly consisting of simple greetings/small talk"
+      },
+      {
+        "range": "0-2",
+        "description": "Conversation with only system messages (join/leave) or almost no substantive content"
+      }
     ],
-    "category_taxonomy": [
-        { "name": "일상 대화", "description": "Private small talk/catching up with friends, family, etc." },
-        { "name": "프로젝트/협업", "description": "Conversations involving substantive collaboration such as work, study groups, or team projects" },
-        { "name": "모임/약속", "description": "Event-centered conversation such as scheduling and making plans to meet" },
-        { "name": "공지/알림", "description": "A room mostly consisting of group announcements or system notifications, with little substantive conversation" }
+    "finding_angles": [
+      "Community identity — what ChatRoom or Keyword represents this cluster",
+      "Key dates — the most important Date and what was discussed that day",
+      "People and participation — who mainly participates in the conversation",
+      "Recurring keywords — Keywords that appear repeatedly",
+      "Events and schedules — Events mentioned in the conversation",
+      "Notable mentions — NamedEntity mentioned or Attachment shared"
     ],
-    "extract_graph": {
-        "goal": "Given a day's worth of KakaoTalk chat messages from a single chat room and a list of entity types, identify all entities and the relationships between them. The conversation is naturally organized around two hub concepts: the ChatRoom it happened in, and the Date it happened on. Output both entities and relationships using the specified formats.",
-        "entity_type_rules": {
-            "ChatRoom": [
-                "GATE (check this FIRST, before anything else about ChatRoom): scan the given text for the literal substring '채팅방:'. If you cannot point to that exact substring actually present in the given text, you MUST NOT output a ChatRoom entity at all this time — zero ChatRoom entities is the correct answer for such a chunk. Never invent, paraphrase, guess, or derive a ChatRoom name from message content, timestamps, sender lines, stray words, or anything else. This happens routinely — a long day's conversation is often split across multiple chunks, so only the first chunk of that day has the '채팅방:/날짜:/참여자:' header; later chunks are pure 'HH:MM 이름: 메시지' continuations with no header, and for those the right output has NO ChatRoom entity.",
-                "If (and only if) '채팅방:' is literally present: the ChatRoom entity's 'name' MUST be exactly the value copied from that field — copy the characters, do not paraphrase or summarize them.",
-                "When the '채팅방:' field is present, always create the ChatRoom entity for it — the same room name will appear identically across many blocks and gets merged into a single entity automatically, so extract it consistently every time rather than skipping it as 'already known'.",
-                "CRITICAL EXCEPTION — check this by COUNTING, not by comparing names: count the number of names listed in the '참여자:' field. If it is exactly 2 (a 1:1 chat), you MUST append ' (채팅방)' to the ChatRoom entity's name — ALWAYS, unconditionally, every single time you extract this ChatRoom in a 1:1 chat, whether or not the room name happens to visually resemble either participant's name. Do NOT decide this by checking 'does the room name match a Person name' — that check is unreliable; counting participants is not. (Reason: in a 1:1 KakaoTalk chat the room name is very often the other participant's display name, e.g. 채팅방: 과외 학생 어머님 with 참여자: 이하은, 과외 학생 어머님 — so ChatRoom name becomes '과외 학생 어머님 (채팅방)'. Identically-named ChatRoom/Person entities collide downstream, so this is never optional in a 2-participant room.) Apply the suffix consistently every time this exact room appears across blocks, so it still merges into one ChatRoom entity. The Person entity itself always keeps the plain display name, unchanged — never suffix a Person."
-            ],
-            "Date": [
-                "The 'name' of a Date entity MUST be the date portion only (YYYY-MM-DD), taken from the '날짜:' field — drop the time-of-day part.",
-                "'Day' MUST be the Korean day-of-week (월요일/화요일/수요일/목요일/금요일/토요일/일요일) corresponding to that date.",
-                "Always create exactly one Date entity per block."
-            ],
-            "Person": [
-                "The 'name' of a Person entity MUST be the display name exactly as it appears before each message (e.g. '09:15 홍길동: ...' → name is '홍길동').",
-                "CRITICAL: A Person's 'name' must be ONLY the short display-name segment between the timestamp and the ':' — NEVER the timestamp itself, NEVER the ':' character, and NEVER the message content after it. If the name you are about to output contains a digit-colon pattern (like 'HH:MM') or looks like a full sentence/question, you mis-parsed the line — go back and re-extract just the name segment. This applies even in a headerless continuation chunk (no 채팅방:/날짜: visible) — the message-line format 'HH:MM 이름: 메시지' and how to split it never changes.",
-                "CRITICAL: In a 1:1 chat, the ChatRoom name is often identical (or nearly identical) to the other participant's display name (e.g. 채팅방: 과외 학생 어머님, and messages sent as '과외 학생 어머님: ...'). Do NOT treat 'I already created a ChatRoom entity with this name' as a reason to skip creating the Person entity — if a name precedes ':' in a message line, it MUST also get its own Person entity, even when that exact same name/string is already used as the ChatRoom entity's name.",
-                "CRITICAL: Do NOT create a Person entity from a system/notification line (marked with '[알림]', e.g. '~님이 들어왔습니다').",
-                "CRITICAL: Do NOT create a Person entity for a name that only appears mentioned inside another person's message content (e.g. '민수한테 물어봐') when that name never itself appears as a message sender (i.e., never precedes ':' in a message line) within the given text. Extract such mentioned-only names as a NamedEntity (type: 인물) instead — see NamedEntity rules.",
-                "Integrate multiple mentions of the same person (including minor typos/emoji variants) into a single entity when the identity is unambiguous from context; if there is any doubt, keep them as separate entities.",
-                "When two Person entities directly converse with each other in the given text (one replies to, addresses, or has a back-and-forth exchange with the other), extract an 'interacts_with' relationship between them IN ADDITION TO their individual participates_in/spoke_on edges — do not extract only one or the other.",
-                "In the description of an 'interacts_with' relationship, note any observable interaction cues present in the text — speech level (반말/존댓말), nicknames or terms of address (애칭/호칭), and the tone of the exchange (e.g. 장난스러움, 격식적임, 다정함) — since these hint at how close the two people are. Do not invent cues that aren't actually observable in the text.",
-                "CRITICAL: The description of an 'interacts_with' relationship MUST start with a relationship-category tag in the exact format '[관계: <카테고리>] ' (followed by a space), where <카테고리> is the single best-fitting one of: 가족, 연인, 친구, 동료, 사제, 지인. Base it strictly on observable cues (반말/존댓말, 애칭, 대화 주제, 격식 수준, 채팅방 이름/맥락) — mostly task/project-oriented with neutral or polite tone between peers → 동료; casual and personal but not clearly family/romantic → 친구; a clear teaching/instructional hierarchy (선생님/교수님/과외 선생님 addressed as such, student or student's parent on the other side, lesson/coursework-centered) → 사제; cues are ambiguous or too thin to tell → 지인 (do not guess 가족/연인/사제 without a clear basis). After the tag, continue with the descriptive sentence as before."
-            ],
-            "Keyword": [
-                "Extract concise, reusable terms or short phrases that were actually discussed — not full sentences.",
-                "Do NOT extract one-time codes, greetings, single-character reactions (e.g. 'ㅇㅇ', 'ㅋㅋ'), or filler words as Keywords.",
-                "CRITICAL: Do NOT create a Keyword entity if there is no clearly discussed term in the conversation."
-            ],
-            "Event": [
-                "The 'name' (title) of an Event entity MUST be a concise event title.",
-                "Extract ONLY if explicit date or time information is present in the conversation.",
-                "CRITICAL: Do NOT create an Event entity if the 'Schedule' attribute cannot be populated with an explicit date/time."
-            ],
-            "NamedEntity": [
-                "Extract proper nouns mentioned in the conversation that don't belong to ChatRoom/Event — e.g. place names, organization names, product or service names, titles of creative works, and people who are only mentioned but never send a message themselves in the given text.",
-                "'type' MUST be a short category label such as '장소', '조직', '제품/서비스', '작품', '인물', '기타'.",
-                "A person's name that is mentioned inside someone else's message but never appears as an actual message sender in the given text MUST be extracted here with type '인물' — NOT as a Person entity. This keeps 'actually participated' (Person) cleanly separate from 'merely mentioned' (NamedEntity).",
-                "Do NOT extract common/generic nouns as NamedEntity — use Keyword for those instead."
-            ],
-            "Attachment": [
-                "Extract ONLY when a file or photo share is explicitly mentioned in the conversation (e.g. '사진', '파일: 문서.pdf', '이모티콘').",
-                "The 'name' (title) MUST be the file name if one is given in the text, otherwise a short label such as '사진' or '이모티콘'.",
-                "'Type' MUST be the file type/extension if known, otherwise a general category like '이미지' or '문서'."
-            ]
+    "output_format": "{{\n    \"title\": <report_title>,\n    \"summary\": <executive_summary>,\n    \"category\": <top_level_category>,\n    \"purpose\": <single_sentence_purpose>,\n    \"rating\": <importance_rating>,\n    \"rating_explanation\": <rating_explanation>,\n    \"findings\": [\n        {{\n            \"summary\": <insight_summary>,\n            \"explanation\": <insight_explanation>\n        }}\n    ]\n}}",
+    "additional_rules_intro": "Only extract entities that represent recurring, meaningful concepts — include only things that could plausibly reappear with the same meaning in other conversations.",
+    "examples": [
+      {
+        "entities": [
+          {
+            "id": 1,
+            "entity": "스터디방",
+            "description": "Name: 스터디방"
+          },
+          {
+            "id": 2,
+            "entity": "2024-02-03",
+            "description": "Value: 2024-02-03 | Day: 토요일"
+          },
+          {
+            "id": 3,
+            "entity": "박서연",
+            "description": "Name: 박서연"
+          },
+          {
+            "id": 4,
+            "entity": "최민수",
+            "description": "Name: 최민수"
+          },
+          {
+            "id": 5,
+            "entity": "발표 자료 준비",
+            "description": "Term: 발표 자료 준비"
+          }
+        ],
+        "relationships": [
+          {
+            "id": 1,
+            "source": "박서연",
+            "target": "스터디방",
+            "description": "박서연은 스터디방 채팅방의 대화 참여자다."
+          },
+          {
+            "id": 2,
+            "source": "최민수",
+            "target": "스터디방",
+            "description": "최민수는 스터디방 채팅방의 대화 참여자다."
+          },
+          {
+            "id": 3,
+            "source": "스터디방",
+            "target": "2024-02-03",
+            "description": "스터디방에서 2024-02-03에 대화가 있었다."
+          },
+          {
+            "id": 4,
+            "source": "발표 자료 준비",
+            "target": "2024-02-03",
+            "description": "2024-02-03 대화에서 발표 자료 준비 상황이 논의되었다."
+          }
+        ],
+        "output": "{{\n    \"title\": \"스터디방 — 발표 자료 준비\",\n    \"summary\": \"스터디방에서 박서연과 최민수가 2024-02-03에 발표 자료 준비 상황을 확인하는 대화 클러스터다. 두 사람이 번갈아 진행 상황을 공유하고 검토를 약속하는 실질적인 협업 대화다.\",\n    \"category\": \"프로젝트/협업\",\n    \"purpose\": \"스터디 발표 자료 준비 진행 상황을 공유하고 검토를 조율하는 대화\",\n    \"rating\": 6.5,\n    \"rating_explanation\": \"반복적으로 등장하는 발표 준비라는 키워드가 있는 실질적인 협업 대화이기 때문이다.\",\n    \"findings\": [\n        {{\n            \"summary\": \"'발표 자료 준비' 키워드로 묶인 협업 대화\",\n            \"explanation\": \"박서연과 최민수가 발표 자료 진행 상황을 공유하고 검토를 약속하는 실질적인 논의가 이뤄졌다. [Data: Entities (5); Relationships (4)]\"\n        }},\n        {{\n            \"summary\": \"두 명의 활발한 참여자: 박서연, 최민수\",\n            \"explanation\": \"두 사람 모두 스터디방에서 메시지를 주고받으며 적극적으로 참여했다. [Data: Entities (3, 4); Relationships (1, 2)]\"\n        }}\n    ]\n}}"
+      }
+    ]
+  },
+  "local_search": {
+    "date_field_note": "Note: Date entities contain date information in the 'Value' field (format 'YYYY-MM-DD') within their description. When filtering by date, match against this field.",
+    "answering_rules": [
+      "If the user requests N items but fewer than N matching records exist, return ONLY the records that actually match. NEVER pad the result with non-matching records to reach the requested count.",
+      "If no records match the query condition, explicitly state that no matching data was found. Do NOT return unrelated records as substitutes.",
+      "The provided data tables are the ONLY source of factual information.",
+      "Do NOT infer, guess, assume, or speculate beyond what is explicitly supported by the data tables.",
+      "Do NOT fill in missing details using general knowledge, common sense, or external assumptions.",
+      "General knowledge may be used ONLY to rephrase or clarify facts that are already explicitly supported by the data tables. It MUST NOT introduce new facts or claims.",
+      "Do NOT include any statement that cannot be directly supported by the provided data.",
+      "If the data tables do not contain sufficient information to answer the question, respond explicitly that the information is not available.",
+      "Do NOT make anything up.",
+      "When the user asks for a LIST of items (e.g., conversations on a specific date, all messages from a person), you MUST enumerate ALL matching records found in the data tables — do NOT stop at the first match.",
+      "If multiple Date entities fall within the requested range, ALL of them must be included in the response.",
+      "Before generating any response, scan ALL rows in the provided data tables completely. Do not stop scanning after finding the first match.",
+      "Pay equal attention to ALL entities in the data tables, regardless of their position in the list.",
+      "Do NOT skip or ignore any entity that matches the query condition.",
+      "When answering date range queries, do NOT limit the response to the most recent matches. ALL Date entities within the specified range MUST be included regardless of recency."
+    ],
+    "citation_extra_rules": [
+      "Do NOT use the generic '[Data: ...]' citation format described above. Instead, follow the STRUCTURED ANSWER FORMAT below exactly — it OVERRIDES the generic citation style for this answer.",
+      "STRUCTURED ANSWER FORMAT — begin the answer with exactly this one line and nothing else before it: '관련 대화 내용을 찾아 정리해드립니다.' Then leave exactly one blank line.",
+      "After the intro line, list every conversation block that supports the answer as a numbered item ('1.', '2.', '3.', ...). The number and '메시지:' are on the same line; the other 4 fields each go on their OWN line indented with exactly 3 spaces, in this exact order:",
+      "N. 메시지: <a short title, a few words, summarizing what this item is about>",
+      "   날짜: <the item's date, format 'YYYY-MM-DD HH:MM' if a time is known, otherwise 'YYYY-MM-DD'>",
+      "   채팅방: <the chat room name, copied exactly from the '채팅방:' field of the source data>",
+      "   내용: <1-2 sentences in polite Korean (-습니다/-입니다 endings) describing what happened. When quoting what someone actually said, put the exact quoted words in single quotes ('...') followed by '라고 말했습니다' or '라고 물어봤습니다', e.g. \"아빠가 '토요일 저녁 어때'라고 물어봤습니다.\">",
+      "   ID: <the exact block identifier from the 'ID:' field of the source data (format 'YYYY-MM-DD_NN', e.g. '2024-12-25_02'). Copy it exactly, character for character — do NOT invent, guess, renumber, or omit it.>",
+      "Leave exactly one blank line between numbered items, and nothing after the last item's 'ID:' line.",
+      "Every numbered item MUST include all 5 fields without exception, even when the answer only has one item — never omit the 'ID:' line.",
+      "Never reuse the same 'ID:' value for two different numbered items, and never invent an ID that does not literally appear in the source data as shown.",
+      "Do NOT add any other text, heading, closing remark, or transition sentence outside of the fixed intro line and the numbered items themselves.",
+      "If no matching conversation block is found, do NOT use the numbered format at all — respond with exactly this one sentence and nothing else: '문의하신 내용과 관련된 대화 내용을 찾지 못했습니다.'",
+      "'ID:' in each item refers to the block/email identifier field in the source data, NOT an index or the item's own numbered position (do not write 'ID: 1', 'ID: 2', etc.)."
+    ],
+    "citation_example": "관련 대화 내용을 찾아 정리해드립니다.\n\n1. 메시지: 저녁 약속\n   날짜: 2024-12-25 13:50\n   채팅방: 가족방\n   내용: 아빠가 '토요일 저녁 어때'라고 물어봤습니다. 가족이 주말 저녁 식사 일정을 조율하는 대화였습니다.\n   ID: 2024-12-25_02\n\n2. 메시지: 저녁 메뉴 상의\n   날짜: 2024-12-25 14:10\n   채팅방: 가족방\n   내용: 엄마가 '저녁 뭐 먹을까'라고 물었고, 가족들이 각자 원하는 메뉴를 제안했습니다.\n   ID: 2024-12-25_03",
+    "output_instructions": [
+      "Produce the response strictly based on the provided data tables.",
+      "Follow the STRUCTURED ANSWER FORMAT given in the citation rules above exactly — do not fall back to plain prose or generic Markdown bullets when the answer cites specific data.",
+      "Style the response in plain text, not Markdown (no '**', '#', or other Markdown symbols).",
+      "If no supported answer can be produced, respond with one plain polite Korean sentence stating that the available data does not contain sufficient information to answer the question — do not use the numbered format in that case.",
+      "Do NOT generate verbose preambles or restate the question — the only fixed lead-in is the single intro line required by the STRUCTURED ANSWER FORMAT.",
+      "Respond in the same language as the user's question.",
+      "Korean questions MUST be answered in Korean.",
+      "When answering in Korean, ALWAYS use polite formal speech (존댓말/합쇼체, e.g. sentence endings like '-습니다', '-입니다', '-했습니다') in the '내용:' field and the intro line. NEVER use casual/informal speech (반말) regardless of the tone of the source data.",
+      "NEVER repeat the same numbered item (same ID, or same near-duplicate content) more than once — before finishing, review the list and remove duplicates so every item covers a genuinely distinct block.",
+      "Do NOT pad the response with generic filler items just to lengthen the answer — every item must be a specific, distinctive result that clearly supports the answer."
+    ]
+  },
+  "global_search": {
+    "map": {
+      "data_source_intro": "The data originates from a personal KakaoTalk chat archive and contains the following entity\ntypes extracted by an entity extraction pipeline:",
+      "extraction_rules_heading": "-KakaoTalk-Specific Key Point Extraction Rules-",
+      "extraction_rules_intro": "When extracting key points from KakaoTalk chat archive data, apply ALL of the following rules:",
+      "goal": "Generate a response consisting of a list of key points that responds to the user's question, summarizing all relevant information in the input data tables. You should use the data provided in the data tables below as the primary context for generating the response. If you don't know the answer or if the input data tables do not contain sufficient information to provide an answer, just say so. Do not make anything up.",
+      "key_point_elements": [
+        {
+          "name": "Description",
+          "description": "A comprehensive description of the point."
         },
-        "integrated_document_rules": null,
-        "relationship_rules": [
-            "Only create a relationship when it is clearly and directly supported by the conversation text — do not infer relationships that aren't explicitly grounded.",
-            "CRITICAL: 'participates_in' and 'spoke_on' relationships MUST only connect a Person who is confirmed as an actual message sender in the given text (their name precedes ':' in a message line) — never a person who is only mentioned inside another message's content.",
-            "Prefer connecting mentioned entities (Keyword/Event/NamedEntity/Attachment) to the Date they were mentioned on, and connecting Person/ChatRoom to that same Date, rather than building long indirect chains. The one exception is a direct Person-to-Person 'interacts_with' relationship when two people actually converse with each other — extract that in addition to (not instead of) their individual spoke_on/participates_in edges.",
-            "Relationship strength MUST be a float between 1.0 and 10.0. Explicit/central to the conversation: 7.0+ / Brief mention: 4.0 or below.",
-            "Do NOT create duplicate relationships with the same source-target-type combination.",
-            "Relationship descriptions MUST be in Korean and MUST be a meaningful sentence — NEVER use the relationship type name itself as the description.",
-            "CRITICAL: A relationship's source and target MUST NEVER be the exact same name string — no self-relationships, ever, for any relationship type (participates_in, spoke_on, interacts_with, etc.). Before outputting a relationship, check: is source == target? If so, discard it entirely; do not output it. (This can otherwise slip in when a ChatRoom name that should have had a suffix like ' (채팅방)' gets written without it, making it look identical to a Person's name — the fix is to not create that relationship at all when source and target collide, not to guess which one is 'right'.)",
-            "REAL MISTAKE TO AVOID — this exact error has actually happened, do not repeat it: in a 1:1 chat named 채팅방: 김도현 (participants 김도현, 이하은), a wrong output was: (\"relationship\"<|>김도현<|>김도현<|>김도현 채팅방에서 대화가 있었다.<|>10) — this is INVALID (source==target, and the ChatRoom's required ' (채팅방)' suffix from the 1:1-chat rule above was dropped). The correct output for that same fact is: (\"relationship\"<|>김도현<|>김도현 (채팅방)<|>김도현은 김도현 (채팅방) 채팅방의 대화 참여자다.<|>9) — note the target carries the suffix, making it distinct from the Person's name. Apply the ' (채팅방)' suffix to a 1:1 room's ChatRoom name EVERY time you reference it in ANY relationship (participates_in, active_on, etc.), not just when first creating the entity."
-        ],
-        "examples": [
-            {
-                "entity_types": ["ChatRoom", "Date", "Person", "Event"],
-                "text": "============================================================\n[대화 1]\n\nID: 2024-01-01_01\n채팅방: 가족톡\n날짜: 2024-01-01\n참여자: 홍길동, 김영희\n\n[대화 내용]\n09:15 홍길동: 오늘 저녁에 다 같이 밥 먹을까?\n09:16 김영희: 좋아! 몇 시?\n09:17 홍길동: 7시 강남역에서 보자\n09:18 김영희: 콜!\n============================================================",
-                "entities": [
-                    { "name": "가족톡", "type": "ChatRoom", "description": "Name: 가족톡" },
-                    { "name": "2024-01-01", "type": "Date", "description": "Value: 2024-01-01 | Day: 월요일" },
-                    { "name": "홍길동", "type": "Person", "description": "Name: 홍길동" },
-                    { "name": "김영희", "type": "Person", "description": "Name: 김영희" },
-                    { "name": "강남역 저녁 약속", "type": "Event", "description": "EventName: 강남역 저녁 약속 | Schedule: 2024-01-01 19:00 | Location: 강남역" }
-                ],
-                "relationships": [
-                    { "source": "홍길동", "target": "가족톡", "type": "participates_in", "description": "홍길동은 가족톡 채팅방의 대화 참여자다.", "strength": 9 },
-                    { "source": "김영희", "target": "가족톡", "type": "participates_in", "description": "김영희는 가족톡 채팅방의 대화 참여자다.", "strength": 9 },
-                    { "source": "가족톡", "target": "2024-01-01", "type": "active_on", "description": "가족톡에서 2024-01-01에 대화가 있었다.", "strength": 10 },
-                    { "source": "홍길동", "target": "2024-01-01", "type": "spoke_on", "description": "홍길동이 2024-01-01에 저녁 약속을 제안하는 메시지를 보냈다.", "strength": 9 },
-                    { "source": "김영희", "target": "2024-01-01", "type": "spoke_on", "description": "김영희가 2024-01-01에 약속에 응답하는 메시지를 보냈다.", "strength": 9 },
-                    { "source": "강남역 저녁 약속", "target": "2024-01-01", "type": "scheduled_on", "description": "2024-01-01 대화에서 저녁 7시 강남역 약속이 언급되었다.", "strength": 10 },
-                    { "source": "홍길동", "target": "김영희", "type": "interacts_with", "description": "[관계: 가족] 홍길동과 김영희가 서로 반말로 저녁 약속을 빠르게 주고받으며 정했다.", "strength": 7 }
-                ]
-            },
-            {
-                "entity_types": ["ChatRoom", "Date", "Person", "Keyword"],
-                "text": "============================================================\n[대화 2]\n\nID: 2024-02-03_01\n채팅방: 스터디방\n날짜: 2024-02-03\n참여자: 박서연, 최민수\n\n[대화 내용]\n20:00 박서연: 다음 주 발표 자료 어디까지 했어?\n20:02 최민수: 절반 정도 했어, 이번 주말까지 마무리할게\n20:03 박서연: 오케이 나도 같이 검토해볼게\n20:15 최민수님이 들어왔습니다.\n============================================================",
-                "entities": [
-                    { "name": "스터디방", "type": "ChatRoom", "description": "Name: 스터디방" },
-                    { "name": "2024-02-03", "type": "Date", "description": "Value: 2024-02-03 | Day: 토요일" },
-                    { "name": "박서연", "type": "Person", "description": "Name: 박서연" },
-                    { "name": "최민수", "type": "Person", "description": "Name: 최민수" },
-                    { "name": "발표 자료 준비", "type": "Keyword", "description": "Term: 발표 자료 준비" }
-                ],
-                "relationships": [
-                    { "source": "박서연", "target": "스터디방", "type": "participates_in", "description": "박서연은 스터디방 채팅방의 대화 참여자다.", "strength": 8 },
-                    { "source": "최민수", "target": "스터디방", "type": "participates_in", "description": "최민수는 스터디방 채팅방의 대화 참여자다.", "strength": 8 },
-                    { "source": "스터디방", "target": "2024-02-03", "type": "active_on", "description": "스터디방에서 2024-02-03에 대화가 있었다.", "strength": 10 },
-                    { "source": "박서연", "target": "2024-02-03", "type": "spoke_on", "description": "박서연이 2024-02-03에 발표 자료 진행 상황을 물었다.", "strength": 8 },
-                    { "source": "최민수", "target": "2024-02-03", "type": "spoke_on", "description": "최민수가 2024-02-03에 발표 자료 준비 현황을 공유했다.", "strength": 8 },
-                    { "source": "발표 자료 준비", "target": "2024-02-03", "type": "mentioned_on", "description": "2024-02-03 대화에서 발표 자료 준비 상황이 논의되었다.", "strength": 8 }
-                ]
-            },
-            {
-                "entity_types": ["ChatRoom", "Date", "Person", "Attachment", "NamedEntity"],
-                "text": "============================================================\n[대화 3]\n\nID: 2024-04-15_01\n채팅방: 스터디방\n날짜: 2024-04-15\n참여자: 최지유\n\n[대화 내용]\n15:34 최지유: 자료구조 과제 제출합니다.\n15:34 최지유: 파일: HW3_2471239.pdf\n============================================================",
-                "entities": [
-                    { "name": "스터디방", "type": "ChatRoom", "description": "Name: 스터디방" },
-                    { "name": "2024-04-15", "type": "Date", "description": "Value: 2024-04-15 | Day: 월요일" },
-                    { "name": "최지유", "type": "Person", "description": "Name: 최지유" },
-                    { "name": "HW3_2471239.pdf", "type": "Attachment", "description": "Type: 문서" },
-                    { "name": "자료구조", "type": "NamedEntity", "description": "Type: 기타 | Description: 학교 강의 과목명으로 언급된 자료구조 수업" }
-                ],
-                "relationships": [
-                    { "source": "최지유", "target": "스터디방", "type": "participates_in", "description": "최지유는 스터디방 채팅방의 대화 참여자다.", "strength": 8 },
-                    { "source": "스터디방", "target": "2024-04-15", "type": "active_on", "description": "스터디방에서 2024-04-15에 대화가 있었다.", "strength": 10 },
-                    { "source": "최지유", "target": "2024-04-15", "type": "spoke_on", "description": "최지유가 2024-04-15에 과제 제출 메시지를 보냈다.", "strength": 8 },
-                    { "source": "HW3_2471239.pdf", "target": "2024-04-15", "type": "shared_on", "description": "2024-04-15 대화에서 자료구조 과제 파일이 공유되었다.", "strength": 9 },
-                    { "source": "자료구조", "target": "2024-04-15", "type": "mentioned_on", "description": "2024-04-15 대화에서 자료구조 과목이 언급되었다.", "strength": 6 }
-                ]
-            },
-            {
-                "entity_types": ["ChatRoom", "Date", "Person"],
-                "text": "동아리방\n08:19 강민재: 완전 인정\n08:20 이하은: 이걸로 하자\n08:21 이하은: 파일: 포스터시안.pdf\n08:22 조은우: 오 예쁘다",
-                "entities": [
-                    { "name": "강민재", "type": "Person", "description": "Name: 강민재" },
-                    { "name": "이하은", "type": "Person", "description": "Name: 이하은" },
-                    { "name": "조은우", "type": "Person", "description": "Name: 조은우" }
-                ],
-                "relationships": [
-                    { "source": "이하은", "target": "조은우", "type": "interacts_with", "description": "[관계: 친구] 이하은이 포스터 시안을 공유하자 조은우가 예쁘다고 반응하며 편하게 대화했다.", "strength": 6 }
-                ]
-            }
-        ]
-    },
-    "summarize_descriptions": {
-        "goal": "You are a helpful assistant responsible for generating a comprehensive summary of the data provided below. Given one or two entities, and a list of descriptions, all related to the same entity or group of entities. Please concatenate all of these into a single, comprehensive description. Make sure to include information collected from all the descriptions. If the provided descriptions are contradictory, please resolve the contradictions and provide a single, coherent summary. Make sure it is written in third person, and include the entity names so we have the full context.",
-        "additional_rules": [
-            "This step only merges descriptions that already share the exact same entity name — it does NOT merge Person entities whose names differ due to typos/emoji variants. Cross-mention name normalization can only happen within a single day's conversation at extraction time (see extract_graph Person rules); name variants that appear on different dates are not resolved at this stage.",
-            "It's normal for ChatRoom and Date to reappear with the same name/value across multiple blocks — merge them into one even if the same description repeats every time.",
-            "CRITICAL: Do NOT create an entity if its description is 'None' or contains no meaningful information.",
-            "Output language: Write in Korean. However, keep proper nouns and service names in their original form.",
-            "CRITICAL: When 'Entities' lists two Person names AND the Description List entries are full sentences (not 'Name:'/'Term:'/... format), this is a relationship (interacts_with) summary — see Example 3. Do NOT output just 'Name: <person1>, <person2>' in that case; that discards the entire relationship content.",
-            "CRITICAL: In a relationship summary (Case B), each Description List entry starts with a '[관계: <카테고리>] ' tag (카테고리 is one of 가족/연인/친구/동료/사제/지인). Pick the single most representative category across all entries (majority vote; if tied, prefer whichever is more specific than 지인) and prefix your merged output with exactly one consolidated '[관계: <카테고리>] ' tag, followed by the synthesized paragraph. Do NOT keep multiple tags, drop the tag, or leave the tag out even if only one description is being merged."
-        ],
-        "examples": [
-            {
-                "type": "ChatRoom",
-                "entity_name": "가족톡",
-                "description_list": [
-                    "Name: 가족톡",
-                    "Name: 가족톡"
-                ],
-                "output": "Name: 가족톡"
-            },
-            {
-                "type": "Person",
-                "entity_name": "홍길동",
-                "description_list": [
-                    "Name: 홍길동",
-                    "Name: 길동이"
-                ],
-                "output": "Name: 홍길동"
-            },
-            {
-                "type": "Relationship",
-                "entity_name": "이하은, 임준호",
-                "description_list": [
-                    "[관계: 동료] 이하은과 임준호가 반말로 발표 준비와 진행 상황을 주고받으며 협업했다.",
-                    "[관계: 동료] 임준호가 리허설 시점을 물었고 이하은이 발표 전날 저녁을 제안하며 자연스럽게 주고받았다.",
-                    "[관계: 친구] 이하은이 진행상황과 오류를 편하게 물었고 임준호가 바로 답하며 서로 협업하는 흐름이 이어졌다."
-                ],
-                "output": "[관계: 동료] 이하은과 임준호는 서로 반말을 사용하는 편한 관계로, 발표 준비와 리허설 일정, 진행 상황과 오류 확인 등을 자주 주고받으며 협업했다. 임준호가 리허설 시점을 묻자 이하은이 발표 전날 저녁을 제안하는 등 실무적인 조율이 자연스럽게 이루어졌다."
-            }
-        ]
-    },
-    "extract_claims": {
-        "target_activity": "You are an intelligent assistant that helps a human analyst to analyze claims against certain entities presented in a text document.",
-        "goal": "Given a text document that is potentially relevant to this activity, an entity specification, and a claim description, extract all entities that match the entity specification and all claims against those entities.",
-        "claim_fields": [
-            { "name": "Subject", "description": "name of the entity that is subject of the claim, capitalized. The subject entity is one that committed the action described in the claim. Subject needs to be one of the named entities identified in step 1." },
-            { "name": "Object", "description": "name of the entity that is object of the claim, capitalized. The object entity is one that either reports/handles or is affected by the action described in the claim. If object entity is unknown, use **NONE**." },
-            { "name": "Claim Type", "description": "overall category of the claim, capitalized. Name it in a way that can be repeated across multiple text inputs, so that similar claims share the same claim type." },
-            { "name": "Claim Status", "description": "**TRUE**, **FALSE**, or **SUSPECTED**. TRUE means the claim is confirmed, FALSE means the claim is found to be False, SUSPECTED means the claim is not verified." },
-            { "name": "Claim Description", "description": "Detailed description explaining the reasoning behind the claim, together with all the related evidence and references." },
-            { "name": "Claim Date", "description": "Period (start_date, end_date) when the claim was made. Both start_date and end_date should be in ISO-8601 format. If the claim was made on a single date rather than a date range, set the same date for both start_date and end_date. If date is unknown, return **NONE**." },
-            { "name": "Claim Source Text", "description": "List of **all** quotes from the original text that are relevant to the claim." }
-        ],
-        "examples": [
-            {
-                "entity_specification": "organization",
-                "claim_description": "red flags associated with an entity",
-                "text": "According to an article on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B. The company is owned by Person C who was suspected of engaging in corruption activities in 2015.",
-                "claims": [
-                    {
-                        "subject": "COMPANY A", "object": "GOVERNMENT AGENCY B", "type": "ANTI-COMPETITIVE PRACTICES", "status": "TRUE",
-                        "start_date": "2022-01-10T00:00:00", "end_date": "2022-01-10T00:00:00",
-                        "description": "Company A was found to engage in anti-competitive practices because it was fined for bid rigging in multiple public tenders published by Government Agency B according to an article published on 2022/01/10",
-                        "source": "According to an article published on 2022/01/10, Company A was fined for bid rigging while participating in multiple public tenders published by Government Agency B."
-                    }
-                ]
-            }
-        ]
-    },
-    "community_reports": {
-        "category_field_scope": "the primary purpose of the conversations in this cluster",
-        "importance_rating_scope": "this chat cluster is to the user's activity",
-        "goal_intro": "You are an AI assistant that helps a human analyst explore and understand their personal KakaoTalk chat archive. Your goal is to produce structured summaries of chat communities that help the user quickly grasp who is involved, what topics recur, and why this group of conversations matters.",
-        "goal": "Write a comprehensive report of a community, given a list of entities that belong to the community as well as their relationships. The community is derived from a personal KakaoTalk chat archive, typically centered around a ChatRoom and organized by Date. The report will help the user understand the nature and importance of this chat cluster.",
-        "report_sections": {
-            "title_rule": "A short but specific name for the community. Prefer using the ChatRoom name or a recurring Keyword when available. Write in Korean.",
-            "summary_rule": "An executive summary written in Korean describing: (1) which ChatRoom(s) and date range this community covers (2) who the key participants are (3) what the conversations in this cluster are generally about. Keep it under 3 sentences.",
-            "purpose_rule": "State the core function/purpose of this community in a single sentence. Include the unique characteristic that distinguishes it from other communities. (e.g., \"스터디 발표 자료 준비 진행 상황을 공유하는 대화\", \"가족 간 일상 안부와 약속을 나누는 대화\")",
-            "rating_explanation_rule": "A single sentence in Korean explaining the score."
-        },
-        "rating_criteria": [
-            { "range": "8-10", "description": "Conversations where concrete plans or decisions were made (including confirmed schedules, role assignments, important agreements)" },
-            { "range": "5-8", "description": "Substantive everyday/collaborative conversation with a recurring keyword" },
-            { "range": "2-5", "description": "Conversation mostly consisting of simple greetings/small talk" },
-            { "range": "0-2", "description": "Conversation with only system messages (join/leave) or almost no substantive content" }
-        ],
-        "finding_angles": [
-            "Community identity — what ChatRoom or Keyword represents this cluster",
-            "Key dates — the most important Date and what was discussed that day",
-            "People and participation — who mainly participates in the conversation",
-            "Recurring keywords — Keywords that appear repeatedly",
-            "Events and schedules — Events mentioned in the conversation",
-            "Notable mentions — NamedEntity mentioned or Attachment shared"
-        ],
-        "output_format": "{{\n    \"title\": <report_title>,\n    \"summary\": <executive_summary>,\n    \"category\": <top_level_category>,\n    \"purpose\": <single_sentence_purpose>,\n    \"rating\": <importance_rating>,\n    \"rating_explanation\": <rating_explanation>,\n    \"findings\": [\n        {{\n            \"summary\": <insight_summary>,\n            \"explanation\": <insight_explanation>\n        }}\n    ]\n}}",
-        "additional_rules_intro": "Only extract entities that represent recurring, meaningful concepts — include only things that could plausibly reappear with the same meaning in other conversations.",
-        "examples": [
-            {
-                "entities": [
-                    { "id": 1, "entity": "스터디방", "description": "Name: 스터디방" },
-                    { "id": 2, "entity": "2024-02-03", "description": "Value: 2024-02-03 | Day: 토요일" },
-                    { "id": 3, "entity": "박서연", "description": "Name: 박서연" },
-                    { "id": 4, "entity": "최민수", "description": "Name: 최민수" },
-                    { "id": 5, "entity": "발표 자료 준비", "description": "Term: 발표 자료 준비" }
-                ],
-                "relationships": [
-                    { "id": 1, "source": "박서연", "target": "스터디방", "description": "박서연은 스터디방 채팅방의 대화 참여자다." },
-                    { "id": 2, "source": "최민수", "target": "스터디방", "description": "최민수는 스터디방 채팅방의 대화 참여자다." },
-                    { "id": 3, "source": "스터디방", "target": "2024-02-03", "description": "스터디방에서 2024-02-03에 대화가 있었다." },
-                    { "id": 4, "source": "발표 자료 준비", "target": "2024-02-03", "description": "2024-02-03 대화에서 발표 자료 준비 상황이 논의되었다." }
-                ],
-                "output": "{{\n    \"title\": \"스터디방 — 발표 자료 준비\",\n    \"summary\": \"스터디방에서 박서연과 최민수가 2024-02-03에 발표 자료 준비 상황을 확인하는 대화 클러스터다. 두 사람이 번갈아 진행 상황을 공유하고 검토를 약속하는 실질적인 협업 대화다.\",\n    \"category\": \"프로젝트/협업\",\n    \"purpose\": \"스터디 발표 자료 준비 진행 상황을 공유하고 검토를 조율하는 대화\",\n    \"rating\": 6.5,\n    \"rating_explanation\": \"반복적으로 등장하는 발표 준비라는 키워드가 있는 실질적인 협업 대화이기 때문이다.\",\n    \"findings\": [\n        {{\n            \"summary\": \"'발표 자료 준비' 키워드로 묶인 협업 대화\",\n            \"explanation\": \"박서연과 최민수가 발표 자료 진행 상황을 공유하고 검토를 약속하는 실질적인 논의가 이뤄졌다. [Data: Entities (5); Relationships (4)]\"\n        }},\n        {{\n            \"summary\": \"두 명의 활발한 참여자: 박서연, 최민수\",\n            \"explanation\": \"두 사람 모두 스터디방에서 메시지를 주고받으며 적극적으로 참여했다. [Data: Entities (3, 4); Relationships (1, 2)]\"\n        }}\n    ]\n}}"
-            }
-        ]
-    },
-    "local_search": {
-        "date_field_note": "Note: Date entities contain date information in the 'Value' field (format 'YYYY-MM-DD') within their description. When filtering by date, match against this field.",
-        "answering_rules": [
-            "If the user requests N items but fewer than N matching records exist, return ONLY the records that actually match. NEVER pad the result with non-matching records to reach the requested count.",
-            "If no records match the query condition, explicitly state that no matching data was found. Do NOT return unrelated records as substitutes.",
-            "The provided data tables are the ONLY source of factual information.",
-            "Do NOT infer, guess, assume, or speculate beyond what is explicitly supported by the data tables.",
-            "Do NOT fill in missing details using general knowledge, common sense, or external assumptions.",
-            "General knowledge may be used ONLY to rephrase or clarify facts that are already explicitly supported by the data tables. It MUST NOT introduce new facts or claims.",
-            "Do NOT include any statement that cannot be directly supported by the provided data.",
-            "If the data tables do not contain sufficient information to answer the question, respond explicitly that the information is not available.",
-            "Do NOT make anything up.",
-            "When the user asks for a LIST of items (e.g., conversations on a specific date, all messages from a person), you MUST enumerate ALL matching records found in the data tables — do NOT stop at the first match.",
-            "If multiple Date entities fall within the requested range, ALL of them must be included in the response.",
-            "Before generating any response, scan ALL rows in the provided data tables completely. Do not stop scanning after finding the first match.",
-            "Pay equal attention to ALL entities in the data tables, regardless of their position in the list.",
-            "Do NOT skip or ignore any entity that matches the query condition.",
-            "When answering date range queries, do NOT limit the response to the most recent matches. ALL Date entities within the specified range MUST be included regardless of recency."
-        ],
-        "citation_extra_rules": [
-            "Record ids refer to the record ID, NOT the index.",
-            "When citing a Date entity, use the exact 'Value' field from the entity description (YYYY-MM-DD). Do NOT paraphrase or abbreviate it."
-        ],
-        "citation_example": "\"박서연은 발표 자료 준비 진행 상황을 반복적으로 공유했습니다 [Data: Sources (15, 16), Reports (1), Entities (5, 7); Relationships (23)].\"",
-        "output_instructions": [
-            "Produce the response strictly based on the provided data tables.",
-            "Organize the response into clear sections as appropriate for the target length and format.",
-            "Style the response in Markdown.",
-            "If no supported answer can be produced, clearly state that the available data does not contain sufficient information to answer the question.",
-            "Do NOT generate verbose preambles or restate the question.",
-            "Begin the answer directly with the relevant data.",
-            "Omit sections that have no supporting data — do not write empty headers.",
-            "Respond in the same language as the user's question.",
-            "Korean questions MUST be answered in Korean.",
-            "When answering in Korean, ALWAYS use polite formal speech (존댓말/합쇼체, e.g. sentence endings like '-습니다', '-입니다', '-했습니다'). NEVER use casual/informal speech (반말) regardless of the tone of the source data.",
-            "When the answer consists of multiple points, format it as a real Markdown bulleted list — each bullet MUST start on its own new line with '- ', never run multiple bullets together in one paragraph.",
-            "NEVER repeat the same category, topic, or near-duplicate bullet point more than once. Before finishing, review the list and merge or remove duplicates so every bullet covers a genuinely distinct point.",
-            "Do NOT pad the response with generic filler examples (e.g. repeatedly citing generic replies like '네' or '그렇습니다' as if they were meaningful examples) just to lengthen the answer — every example cited must be a specific, distinctive expression that clearly supports its bullet.",
-            "When referencing a specific day's conversation in your response, always include the date in the format \"날짜: <YYYY-MM-DD>\"."
-        ]
-    },
-    "global_search": {
-        "map": {
-            "data_source_intro": "The data originates from a personal KakaoTalk chat archive and contains the following entity\ntypes extracted by an entity extraction pipeline:",
-            "extraction_rules_heading": "-KakaoTalk-Specific Key Point Extraction Rules-",
-            "extraction_rules_intro": "When extracting key points from KakaoTalk chat archive data, apply ALL of the following rules:",
-            "goal": "Generate a response consisting of a list of key points that responds to the user's question, summarizing all relevant information in the input data tables. You should use the data provided in the data tables below as the primary context for generating the response. If you don't know the answer or if the input data tables do not contain sufficient information to provide an answer, just say so. Do not make anything up.",
-            "key_point_elements": [
-                { "name": "Description", "description": "A comprehensive description of the point." },
-                { "name": "Importance Score", "description": "An integer score between 0-100 that indicates how important the point is in answering the user's question. An 'I don't know' type of response should have a score of 0." }
-            ],
-            "importance_score_rules": {
-                "highest_priority": "If the data includes a community report with a numeric `rank` field (scale 0-10), use that as the primary signal: base_score = rank × 10. Then adjust ±10 based on how directly the point answers the user's question. Example: rank=7 → base 70, highly relevant to query → final 80~85",
-                "field_modifiers_up": [
-                    "2 or more participation/utterance edges to the same ChatRoom/Date → +5",
-                    "A Keyword/NamedEntity/Event connected to the Date also exists (substantive discussion) → +5",
-                    "Message content includes action keywords like decide/confirm/ask/request → +10",
-                    "Event has an explicit schedule → +8"
-                ],
-                "field_modifiers_down": [
-                    "Only 1 Person spoke on that Date (self-memo-like) → -15",
-                    "Date with only system messages ([알림]) → -20"
-                ],
-                "fallback": [
-                    "80-100 : Conversation where concrete plans/decisions were made",
-                    "60-79  : Substantive conversation with a recurring Keyword",
-                    "40-59  : Everyday greetings/small talk",
-                    "10-39  : Conversation with few participants or thin content",
-                    "0-9    : Conversation with only system messages"
-                ]
-            },
-            "extraction_rules": [
-                { "title": "Participants — merge into one rich key point", "body": "If the same Date has multiple utterance edges, don't split each participant into a separate point — merge them into one using the format below:\n  \"[ChatRoom명] [날짜] 대화에서 [참여자1, 참여자2]가 [Keyword/내용] 관련 대화를 나눴다.\"" },
-                { "title": "Keywords — extract as a separate key point", "body": "When a Keyword is connected to a Date, extract that topic as an independent key point:\n  \"[날짜] 대화에서 [Keyword]에 대한 논의가 있었다.\"" },
-                { "title": "Schedules — extract as a mention fact", "body": "For a Date with an Event and a scheduled_on edge, create a key point in the format below:\n  \"[날짜] 대화에서 [Event.EventName] 일정([Event.Schedule], [Event.Location])이 언급되었다.\"" },
-                { "title": "Using Community fields", "body": "If the community report has a `category` or `purpose` field:\n- category → use it to classify the nature of this conversation cluster\n- purpose  → use it to explain in one sentence what this cluster is for\nActively use these fields in the key point's context explanation." },
-                { "title": "Counting conversations", "body": "When counting conversations (days), count only entities with type=DATE. Do not confuse the number of utterance edges with the conversation count." }
-            ],
-            "output_format": "{{\n    \"points\": [\n        {{\"description\": \"Description of point 1 [Data: Reports (report ids)]\", \"score\": score_value}},\n        {{\"description\": \"Description of point 2 [Data: Reports (report ids)]\", \"score\": score_value}}\n    ]\n}}",
-            "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\"."
-        },
-        "reduce": {
-            "role_intro": "You are a helpful assistant responding to questions about a personal KakaoTalk chat archive\nby synthesizing perspectives from multiple analysts.",
-            "response_rules_heading": "-KakaoTalk Chat Archive Response Rules-",
-            "response_rules_intro": "When the answer is based on KakaoTalk chat archive data, apply ALL of the following rules:",
-            "goal": "Generate a response of the target length and format that responds to the user's question, summarizing all the reports from multiple analysts who focused on different parts of the dataset.",
-            "note_ranked": "Note that the analysts' reports provided below are ranked in the **descending order of importance**.",
-            "merge_instruction": "The final response should remove all irrelevant information from the analysts' reports and merge the cleaned information into a comprehensive answer that provides explanations of all the key points and implications appropriate for the response length and format.",
-            "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\".",
-            "preserve_references_note": "The response should also preserve all the data references previously included in the analysts' reports, but do not mention the roles of multiple analysts in the analysis process.",
-            "category_grouping_rule": { "title": "Grouping by CATEGORY", "body": "If two or more communities share the same category, group and describe them together.\nArrange the sections in the following priority order:" },
-            "response_rules_before_category": [
-                { "title": "Top-of-response meta header (always include)", "body": "Include a summary header in the format below as a markdown blockquote at the very top of the response. If a piece of information isn't in the data, omit only that line — never guess or make it up.\n\n> **관련 채팅방:** N개\n> **주요 참여자:** [실명, 쉼표 구분]\n> **기간:** YYYY-MM-DD ~ YYYY-MM-DD\n\n- Criteria for 주요 참여자 (key participants): only include a Person directly connected to a ChatRoom/Date via a 'participates_in' or 'spoke_on' relationship. Never include a name that only appears via a 'mentioned_on' relationship, or one only mentioned as a NamedEntity/Keyword — those are not conversation participants.\n- Criteria for 기간 (period): use the minimum and maximum Value (YYYY-MM-DD) among all Date entities appearing in the context as the start/end. Aggregate directly from the Date entities' Value field — not a date found in a community report's summary text. Omit this line only when there are no Date entities in the context at all." },
-                { "title": "Separate a highlighted section for important communities", "body": "If any key points have importance score ≥ 70 (or community report rank ≥ 7.0), split the body into the two sections below:\n\n#### 주요 대화\n(high-score items — concrete plans/decisions, etc.)\n\n#### 기타 대화\n(low-score items — everyday chit-chat, system messages, etc.)\n\nIf all scores are similar or rank info is unavailable, this split may be omitted." }
-            ],
-            "response_rules_after_category": [
-                { "title": "Sort chronologically", "body": "* Describe conversations that share the same Keyword grouped together as a thread.\n* Describe mentioned Events sorted in date order." },
-                { "title": "Unified person mentions", "body": "If the same person appears across multiple communities, introduce them once without repeating the description, and refer to them only by name afterward." },
-                { "title": "Conversation-count phrasing", "body": "For a community where the key points confirm only 1 Date entity, do not use plural phrasing." },
-                { "title": "Date-based query response", "body": "When the user specifies a particular date:\n* Filter based on Date.Value.\n* If there is no matching conversation, state explicitly: \"해당 날짜의 대화가 데이터에 없습니다.\"" },
-                { "title": "Using Community Report fields", "body": "If the context includes a community report:\n* report.category → use to classify the nature of the conversation cluster\n* report.purpose  → use as a one-sentence summary when describing the cluster\n* report.rank     → criterion for importance (describe rank ≥ 7.0 first)" }
-            ]
-        },
-        "knowledge": {
-            "intro": "The response may also include relevant real-world knowledge outside the dataset, but it must be explicitly annotated with a verification tag [LLM: verify].",
-            "example": "\"This is an example sentence supported by real-world knowledge [LLM: verify].\"",
-            "caution_intro": "When applying real-world knowledge to chat archive data, be especially cautious about the following cases — these are where assumptions most commonly go wrong:",
-            "caution_cases": [
-                { "title": "Inferring personal relationships", "description": "Use [LLM: verify] when asserting participants' actual relationship (family, friends, colleagues, etc.) based solely on conversation content." },
-                { "title": "Inferring a person's role", "description": "Use [LLM: verify] when inferring a speaker's title or role from conversation content alone. Only information explicitly stated in the Person node's Name field may be stated as fact." },
-                { "title": "Inferring dates/schedules", "description": "Use [LLM: verify] when inferring a schedule beyond what's stated in the Event node, or assuming a year. Do not make up a date that isn't in the Event.Schedule field." },
-                { "title": "Inferring NamedEntity", "description": "Use [LLM: verify] when assuming a place/organization/product name mentioned as a NamedEntity is the same as a publicly known one." }
-            ],
-            "closing_note": "Facts explicitly stated in the data (entity field values, relationship descriptions) may be stated without [LLM: verify]. Use this tag only when supplementing or inferring content not present in the data."
+        {
+          "name": "Importance Score",
+          "description": "An integer score between 0-100 that indicates how important the point is in answering the user's question. An 'I don't know' type of response should have a score of 0."
         }
+      ],
+      "importance_score_rules": {
+        "highest_priority": "If the data includes a community report with a numeric `rank` field (scale 0-10), use that as the primary signal: base_score = rank × 10. Then adjust ±10 based on how directly the point answers the user's question. Example: rank=7 → base 70, highly relevant to query → final 80~85",
+        "field_modifiers_up": [
+          "2 or more participation/utterance edges to the same ChatRoom/Date → +5",
+          "A Keyword/NamedEntity/Event connected to the Date also exists (substantive discussion) → +5",
+          "Message content includes action keywords like decide/confirm/ask/request → +10",
+          "Event has an explicit schedule → +8"
+        ],
+        "field_modifiers_down": [
+          "Only 1 Person spoke on that Date (self-memo-like) → -15",
+          "Date with only system messages ([알림]) → -20"
+        ],
+        "fallback": [
+          "80-100 : Conversation where concrete plans/decisions were made",
+          "60-79  : Substantive conversation with a recurring Keyword",
+          "40-59  : Everyday greetings/small talk",
+          "10-39  : Conversation with few participants or thin content",
+          "0-9    : Conversation with only system messages"
+        ]
+      },
+      "extraction_rules": [
+        {
+          "title": "Participants — merge into one rich key point",
+          "body": "If the same Date has multiple utterance edges, don't split each participant into a separate point — merge them into one using the format below:\n  \"[ChatRoom명] [날짜] 대화에서 [참여자1, 참여자2]가 [Keyword/내용] 관련 대화를 나눴다.\""
+        },
+        {
+          "title": "Keywords — extract as a separate key point",
+          "body": "When a Keyword is connected to a Date, extract that topic as an independent key point:\n  \"[날짜] 대화에서 [Keyword]에 대한 논의가 있었다.\""
+        },
+        {
+          "title": "Schedules — extract as a mention fact",
+          "body": "For a Date with an Event and a scheduled_on edge, create a key point in the format below:\n  \"[날짜] 대화에서 [Event.EventName] 일정([Event.Schedule], [Event.Location])이 언급되었다.\""
+        },
+        {
+          "title": "Using Community fields",
+          "body": "If the community report has a `category` or `purpose` field:\n- category → use it to classify the nature of this conversation cluster\n- purpose  → use it to explain in one sentence what this cluster is for\nActively use these fields in the key point's context explanation."
+        },
+        {
+          "title": "Counting conversations",
+          "body": "When counting conversations (days), count only entities with type=DATE. Do not confuse the number of utterance edges with the conversation count."
+        }
+      ],
+      "output_format": "{{\n    \"points\": [\n        {{\"description\": \"Description of point 1 [Data: Reports (report ids)]\", \"score\": score_value}},\n        {{\"description\": \"Description of point 2 [Data: Reports (report ids)]\", \"score\": score_value}}\n    ]\n}}",
+      "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\"."
     },
-    "summarize_attachment": null
+    "reduce": {
+      "role_intro": "You are a helpful assistant responding to questions about a personal KakaoTalk chat archive\nby synthesizing perspectives from multiple analysts.",
+      "response_rules_heading": "-KakaoTalk Chat Archive Response Rules-",
+      "response_rules_intro": "When the answer is based on KakaoTalk chat archive data, apply ALL of the following rules:",
+      "goal": "Generate a response of the target length and format that responds to the user's question, summarizing all the reports from multiple analysts who focused on different parts of the dataset.",
+      "note_ranked": "Note that the analysts' reports provided below are ranked in the **descending order of importance**.",
+      "merge_instruction": "The final response should remove all irrelevant information from the analysts' reports and merge the cleaned information into a comprehensive answer that provides explanations of all the key points and implications appropriate for the response length and format.",
+      "modal_verb_note": "The response shall preserve the original meaning and use of modal verbs such as \"shall\", \"may\" or \"will\".",
+      "preserve_references_note": "The response should also preserve all the data references previously included in the analysts' reports, but do not mention the roles of multiple analysts in the analysis process.",
+      "category_grouping_rule": {
+        "title": "카테고리 그룹핑 금지",
+        "body": "위 STRUCTURED ANSWER FORMAT을 그대로 따르며, 주제들을 category나 다른 기준으로 묶어 별도 섹션으로 나누지 말고 하나의 평평한 번호 목록으로만 작성한다. 아래 카테고리 분류는 참고용 맥락일 뿐, 답변에 섹션 제목으로 노출하지 않는다."
+      },
+      "response_rules_before_category": [
+        {
+          "title": "STRUCTURED ANSWER FORMAT",
+          "body": "Begin the answer with exactly this one line and nothing else before it: '요즘 대화방에서는 아래와 같은 주제들이 자주 나왔습니다.' Then leave exactly one blank line.\nAfter the intro line, list each distinct topic as a flat numbered item ('1.', '2.', '3.', ...) — do NOT group items under category headers, sections, or a 'main topics' / 'other topics' split; do NOT add a summary header block (participant list, date range, etc.) before the intro line. The number and '주제:' are on the same line; '내용:' goes on its own line indented with exactly 3 spaces:\nN. 주제: <a short noun phrase naming the topic/cluster, a few words>\n   내용: <1-2 sentences in polite Korean (-습니다/-입니다 endings) summarizing what this topic is about, based only on the analyst reports>\nLeave exactly one blank line between numbered items, and nothing after the last item's '내용:' line — no closing remark, no '[Data: ...]' citation tags, no checklists, no extra sections of any kind.\nIf the reports do not contain enough information to identify any topic, do not use the numbered format at all — just state plainly in one polite Korean sentence that the 대화방 data does not contain enough information to answer."
+        }
+      ],
+      "response_rules_after_category": []
+    },
+    "knowledge": {
+      "intro": "The response may also include relevant real-world knowledge outside the dataset, but it must be explicitly annotated with a verification tag [LLM: verify].",
+      "example": "\"This is an example sentence supported by real-world knowledge [LLM: verify].\"",
+      "caution_intro": "When applying real-world knowledge to chat archive data, be especially cautious about the following cases — these are where assumptions most commonly go wrong:",
+      "caution_cases": [
+        {
+          "title": "Inferring personal relationships",
+          "description": "Use [LLM: verify] when asserting participants' actual relationship (family, friends, colleagues, etc.) based solely on conversation content."
+        },
+        {
+          "title": "Inferring a person's role",
+          "description": "Use [LLM: verify] when inferring a speaker's title or role from conversation content alone. Only information explicitly stated in the Person node's Name field may be stated as fact."
+        },
+        {
+          "title": "Inferring dates/schedules",
+          "description": "Use [LLM: verify] when inferring a schedule beyond what's stated in the Event node, or assuming a year. Do not make up a date that isn't in the Event.Schedule field."
+        },
+        {
+          "title": "Inferring NamedEntity",
+          "description": "Use [LLM: verify] when assuming a place/organization/product name mentioned as a NamedEntity is the same as a publicly known one."
+        }
+      ],
+      "closing_note": "Facts explicitly stated in the data (entity field values, relationship descriptions) may be stated without [LLM: verify]. Use this tag only when supplementing or inferring content not present in the data."
+    }
+  },
+  "summarize_attachment": null
 }
