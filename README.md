@@ -12,6 +12,20 @@
 
 ---
 
+## 🏆 수상 경력
+
+- **제22회 한성공학경진대회 대상**
+
+<table>
+  <tr>
+    <td width="30%"><img alt="hansung-enginerring-award" src="./docs/images/award-1.jpg"></td>
+    <td width="30%"><img alt="hansung-enginerring-2026_09_17" src="./docs/images/award-2.jpg"></td>
+  </tr>
+</table>
+
+
+---
+
 ## 📚 가이드
 
 <table>
